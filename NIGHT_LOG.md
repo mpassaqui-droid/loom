@@ -28,7 +28,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [ ] A4. Arpèges (`arp up/down/updown` sur un accord)
 
 ### B. Génératif & rythme
-- [ ] B1. Rythmes euclidiens `e(3,8)`, `e(5,8,2)` (pulses, steps, rotation)
+- [x] B1. Rythmes euclidiens `e(k,n)` et `e(k,n,rot)` — distribution Bjorklund + rotation, mixable avec tokens normaux
 - [ ] B2. Probabilité par pas (`x?` joue parfois, `x?70` 70%)
 - [ ] B3. Seed déterministe (`seed: 42`) pour que l'aléatoire soit reproductible
 - [ ] B4. Ratchets / répétitions (`x*3`), mutations
@@ -57,4 +57,6 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 ## Journal (le plus récent en haut)
 _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
+- **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
+- **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
 - **[init]** git initialisé, baseline commitée sur `main`, branche `night-build` créée. 20 tests core verts. Plan posé.
