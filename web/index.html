@@ -241,13 +241,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const step=key.scale[((idx%len)+len)%len];
     return 12*(key.octave+oct+wrap+1)+key.tonic+step+acc;}
   function tokenToFreq(tok,key){if(key&&isDegree(tok))return midiToFreq(degreeToMidi(tok,key));return noteToFreq(tok);}
+  // euclidean rhythms: e(k,n) or e(k,n,rot) -> x/. sequence
+  function euclid(k,n,rot){if(n<=0)return[];k=Math.min(k,n);let v=[];for(let i=0;i<n;i++)v.push((i*k)%n<k);
+    rot=((rot%n)+n)%n;return v.slice(rot).concat(v.slice(0,rot));}
+  function expandEuclid(tok){const m=/^e\((\d+),(\d+)(?:,(-?\d+))?\)$/.exec(tok);if(!m)return null;
+    return euclid(+m[1],+m[2],m[3]?+m[3]:0).map(b=>b?"x":".");}
 
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const name=line.slice(0,i).trim().toLowerCase();
     if(name==="key"||name==="scale")continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
-    const tokens=segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"));if(!tokens.length)continue;
+    let tokens=[];for(const t of segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"))){
+      const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
+    if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
@@ -323,6 +330,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues chromatic, plus world scales: hijaz hijazkar nahawand kurd ajam bhairav yaman todi slendro pelog hirajoshi insen iwato egyptian). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>. Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
+    "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");
 

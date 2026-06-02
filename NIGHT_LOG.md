@@ -22,7 +22,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 ## Plan (coché au fur et à mesure)
 
 ### A. Théorie musicale
-- [ ] A1. Gammes du monde (maqam hijaz/bayati, raga, gamelan slendro/pelog, blues, harmonic/melodic minor, whole-tone…)
+- [x] A1. Gammes du monde (hijaz, hijazkar, nahawand, kurd, ajam, bhairav, yaman, todi, slendro, pelog, hirajoshi, insen, iwato, egyptian, blues, harmonic/melodic minor, whole-tone, chromatic) — presets HIJAZ, RAGA
 - [ ] A2. Accords `chord: Cm7` — un token joue plusieurs notes (triades, 7th, sus, add)
 - [ ] A3. Progressions d'accords + degrés d'accords romains (I IV V vi…)
 - [ ] A4. Arpèges (`arp up/down/updown` sur un accord)
@@ -52,6 +52,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 
 ### F. Interface
 - [ ] F1. Galerie de thèmes terminal (CRT vert, ambre, C64, DOS, Mac, moderne) + sélecteur
+- [ ] F2. Bouton COURS : tutoriel explicatif intégré (apprendre LOOM pas à pas, exemples cliquables)
 
 ## Journal (le plus récent en haut)
 _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_

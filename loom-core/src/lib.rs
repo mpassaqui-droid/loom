@@ -51,6 +51,43 @@ pub struct Event {
 /// Names that introduce a *directive* (key/scale/…), not a playable voice.
 const DIRECTIVES: [&str; 2] = ["key", "scale"];
 
+/// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
+/// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.
+fn euclid(k: usize, n: usize, rot: i32) -> Vec<bool> {
+    if n == 0 { return Vec::new(); }
+    let k = k.min(n);
+    let mut v: Vec<bool> = (0..n).map(|i| (i * k) % n < k).collect();
+    let r = rot.rem_euclid(n as i32) as usize;
+    v.rotate_left(r);
+    v
+}
+
+/// If a token is a euclidean generator `e(k,n)` or `e(k,n,rot)`, expand it into
+/// its `x`/`.` step sequence. Returns None for any other token.
+fn expand_euclid_token(tok: &str) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("e(")?.strip_suffix(')')?;
+    let nums: Vec<&str> = inner.split(',').collect();
+    if nums.len() < 2 || nums.len() > 3 { return None; }
+    let k: usize = nums[0].trim().parse().ok()?;
+    let n: usize = nums[1].trim().parse().ok()?;
+    let rot: i32 = if nums.len() == 3 { nums[2].trim().parse().ok()? } else { 0 };
+    Some(euclid(k, n, rot).into_iter()
+        .map(|b| if b { "x".to_string() } else { ".".to_string() })
+        .collect())
+}
+
+/// Expand any euclidean tokens in a pattern in place.
+fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(tokens.len());
+    for t in tokens {
+        match expand_euclid_token(&t) {
+            Some(seq) => out.extend(seq),
+            None => out.push(t),
+        }
+    }
+    out
+}
+
 /// Parse LOOM source text into voices.
 pub fn parse(src: &str) -> Vec<Voice> {
     let mut out = Vec::new();
@@ -69,6 +106,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
             .filter(|t| !t.starts_with('@') && !t.starts_with('>'))
             .map(|t| t.to_string())
             .collect();
+        let tokens = expand_euclid(tokens);
         if tokens.is_empty() { continue; }
 
         let is_drum = DRUMS.contains(&name.as_str());
@@ -476,6 +514,20 @@ mod tests {
         // 3rd of C minor is eb, 7th is bb — straight from the scale, no b syntax
         assert!(close(token_to_freq("3", Some(&k)), note_to_freq("eb3")));
         assert!(close(token_to_freq("7", Some(&k)), note_to_freq("bb3")));
+    }
+
+    #[test]
+    fn euclidean_expands_to_tresillo() {
+        let v = parse("kick: e(3,8)");
+        assert_eq!(v[0].tokens, ["x",".",".","x",".",".","x","."]);
+    }
+
+    #[test]
+    fn euclidean_rotation_and_mixing() {
+        // rotation shifts the pattern; euclid tokens can sit next to plain ones
+        let v = parse("hat: e(2,4,1) x");
+        // E(2,4) = x . x . ; rotate left 1 = . x . x ; then a trailing x
+        assert_eq!(v[0].tokens, [".","x",".","x","x"]);
     }
 
     #[test]
