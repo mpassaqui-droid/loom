@@ -1,0 +1,5 @@
+[package]
+name = "loom-core"
+version = "0.1.0"
+edition = "2021"
+description = "The LOOM language: parser, pattern verbs, per-bar event scheduling. Zero deps."

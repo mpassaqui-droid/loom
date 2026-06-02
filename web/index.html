@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOOM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0b0f0b;--green:#5cff4a;--dim:#2b6b22;--glow:#9dff8a;--amber:#ffc04a;--cyan:#5fe6ff;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:var(--bg);color:var(--green);
+    font-family:'VT323',monospace;font-size:24px;line-height:1.35;
+    padding:22px 16px 48px;max-width:620px;margin:0 auto;
+    text-shadow:0 0 2px rgba(92,255,74,0.4);
+  }
+  /* very subtle CRT — does NOT sit on top of text legibility */
+  body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
+    background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,0.08) 3px 4px);}
+  h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
+    text-shadow:0 0 12px var(--green);letter-spacing:3px;margin-bottom:6px;}
+  .sub{color:var(--dim);font-size:20px;margin-bottom:20px;}
+  .blink{animation:blink 1.1s steps(1) infinite;}@keyframes blink{50%{opacity:0;}}
+
+  .card{border:1px solid var(--dim);border-radius:3px;padding:14px;margin-bottom:16px;background:rgba(40,80,30,0.12);}
+  .card.cyan{border-color:var(--cyan);background:rgba(30,70,80,0.12);}
+  .head{color:var(--dim);font-size:18px;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;}
+  .card.cyan .head{color:var(--cyan);}
+
+  textarea{width:100%;height:210px;background:transparent;border:none;outline:none;resize:vertical;
+    color:var(--glow);font-family:'VT323',monospace;font-size:23px;line-height:1.5;caret-color:var(--amber);}
+
+  /* transport */
+  .transport{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
+  button{font-family:'Press Start 2P',monospace;font-size:13px;cursor:pointer;
+    background:var(--bg);color:var(--green);border:1px solid var(--green);
+    padding:14px 18px;text-shadow:0 0 4px var(--green);transition:.08s;border-radius:3px;}
+  button:active,button:hover{background:var(--green);color:var(--bg);text-shadow:none;}
+  button.stop{border-color:var(--amber);color:var(--amber);text-shadow:0 0 4px var(--amber);}
+  button.stop:active,button.stop:hover{background:var(--amber);color:var(--bg);}
+  button.go{border-color:var(--cyan);color:var(--cyan);text-shadow:0 0 4px var(--cyan);}
+  button.go:active,button.go:hover{background:var(--cyan);color:var(--bg);}
+  button.tiny{font-size:11px;padding:11px 12px;}
+  .bpm{display:flex;align-items:center;gap:8px;font-size:21px;margin-left:auto;}
+  input[type=number]{width:64px;background:transparent;border:1px solid var(--dim);color:var(--glow);
+    font-family:'VT323',monospace;font-size:21px;padding:7px;text-align:center;border-radius:3px;}
+
+  /* knobs grid — readable, never cramped */
+  .knobs{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;margin-bottom:18px;}
+  .knob{display:flex;flex-direction:column;gap:5px;}
+  .knob .lbl{display:flex;justify-content:space-between;font-size:18px;color:var(--dim);
+    text-transform:uppercase;letter-spacing:1px;}
+  .knob .lbl b{color:var(--amber);font-weight:normal;}
+  input[type=range]{width:100%;height:26px;accent-color:var(--green);}
+
+  .presets{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+
+  /* vibe */
+  .vibe-row{display:flex;gap:8px;}
+  input[type=text],input[type=password]{flex:1;background:transparent;border:1px solid var(--cyan);
+    color:var(--cyan);font-family:'VT323',monospace;font-size:22px;padding:11px;outline:none;
+    caret-color:var(--cyan);border-radius:3px;}
+  .keyrow{margin-top:10px;}
+  .keyrow input{border-color:var(--dim);color:var(--green);font-size:19px;}
+  .opt{color:var(--dim);font-size:17px;margin-top:6px;}
+
+  /* visualizer */
+  .row{display:flex;align-items:center;gap:3px;margin-bottom:7px;}
+  .vname{width:74px;color:var(--amber);font-size:19px;text-transform:uppercase;flex:none;}
+  .cells{display:flex;gap:4px;flex-wrap:wrap;}
+  .cell{width:22px;height:22px;border:1px solid var(--dim);background:transparent;border-radius:2px;}
+  .cell.on{background:rgba(92,255,74,0.18);}
+  .cell.play{outline:2px solid var(--amber);}
+  .cell.hit{background:var(--glow)!important;box-shadow:0 0 8px var(--green);}
+
+  #console{color:var(--dim);font-size:19px;margin-top:14px;min-height:26px;}
+  #console .err{color:var(--amber);}#console .ai{color:var(--cyan);}
+
+  details{margin-top:20px;color:var(--dim);font-size:19px;}
+  summary{cursor:pointer;color:var(--green);}
+  details b{color:var(--green);}
+  .sharebox{display:flex;gap:8px;margin-top:12px;}
+  .sharebox input{border-color:var(--dim);color:var(--green);font-size:18px;}
+</style>
+<script src="https://js.puter.com/v2/"></script>
+</head>
+<body>
+  <h1>LOOM</h1>
+  <div class="sub" style="color:var(--amber);font-size:22px;">&#9656; VERSION 6 &middot; IA GRATUITE <span class="blink">_</span></div>
+
+  <div class="card cyan">
+    <div class="head">vibe &mdash; describe it, ai writes it (free)</div>
+    <div class="vibe-row">
+      <input type="text" id="vibeIn" placeholder="ex: dark dnb beat, rolling bass">
+      <button class="go" id="vibeBtn">VIBE</button>
+    </div>
+    <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
+    <div class="opt">leave the key blank to use the free brain.</div>
+  </div>
+
+  <div class="card">
+    <div class="head">pattern.loom</div>
+    <textarea id="editor" spellcheck="false"># x = hit  . = rest  | = verbs/timbre  1-7 = scale degrees
+key:   c minor
+kick:  x . . . x . . .
+snare: . . x . . . x .
+hat:   x x x x x x x x | every 4 fast 2
+lead:  1 3 5 1' 5 3 1 . | pulse
+bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
+  </div>
+
+  <div class="transport">
+    <button id="run">&#9658; RUN</button>
+    <button id="stop" class="stop">&#9632; STOP</button>
+    <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
+  </div>
+
+  <div class="knobs">
+    <div class="knob"><div class="lbl">SWING <b id="vSwing">0</b></div><input type="range" id="swing" min="0" max="60" value="0"></div>
+    <div class="knob"><div class="lbl">ECHO <b id="vEcho">15</b></div><input type="range" id="echo" min="0" max="100" value="15"></div>
+    <div class="knob"><div class="lbl">SPACE <b id="vSpace">20</b></div><input type="range" id="space" min="0" max="100" value="20"></div>
+    <div class="knob"><div class="lbl">VOL <b id="vVol">60</b></div><input type="range" id="vol" min="0" max="100" value="60"></div>
+  </div>
+
+  <div class="presets">
+    <button class="tiny" data-p="chip">CHIP</button>
+    <button class="tiny" data-p="techno">TECHNO</button>
+    <button class="tiny" data-p="dnb">DNB</button>
+    <button class="tiny" data-p="ambient">AMBIENT</button>
+  </div>
+  <div class="presets" style="margin-top:-10px">
+    <span style="color:var(--dim);font-size:16px;align-self:center;margin-right:2px">scales &#9656;</span>
+    <button class="tiny" data-p="major">MAJOR</button>
+    <button class="tiny" data-p="dorian">DORIAN</button>
+    <button class="tiny" data-p="phrygian">PHRYGIAN</button>
+    <button class="tiny" data-p="penta">PENTA</button>
+    <button class="tiny" data-p="harmonic">HARMONIC</button>
+  </div>
+
+  <div id="grid"></div>
+  <div id="console">[ idle ] press RUN to begin</div>
+
+  <details>
+    <summary>syntax + share</summary>
+    <p style="margin-top:10px">
+    <b>drums</b>: kick snare hat clap &mdash; use x and .<br>
+    <b>melody</b>: any other name &mdash; notes like c2 eb3 g4<br>
+    <b>key</b>: <i>key: c minor</i> &middot; then melody can use degrees 1-7 (1=tonic) &middot; octave marks ' and , &middot; alter with suffix: 7# 3b 5b<br>
+    <b>verbs</b> (after |): rev &middot; fast N &middot; slow N &middot; every N &lt;verb&gt;<br>
+    <b>timbre</b> (after |): saw sine tri pulse square &middot; gain N &middot; oct N (octave par défaut des degrés)
+    </p>
+    <div class="sharebox">
+      <input type="text" id="shareIn" placeholder="share code" spellcheck="false">
+      <button class="tiny" id="exportBtn">EXPORT</button>
+      <button class="tiny" id="importBtn">IMPORT</button>
+    </div>
+  </details>
+
+<script>
+(function(){
+  "use strict";
+  const $=id=>document.getElementById(id);
+  const editor=$("editor"),grid=$("grid"),con=$("console");
+  let ctx=null,master=null,bus=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null;
+  let voices=[],key=null,playing=false,cycleLen=2,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null;
+  const LOOKAHEAD=0.18,TICK=25;
+  const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp"]);
+  const WAVES={sine:"sine",square:"square",saw:"sawtooth",sawtooth:"sawtooth",tri:"triangle",triangle:"triangle",pulse:"square"};
+  function log(m,c){con.innerHTML=c?'<span class="'+c+'">'+m+'</span>':m;}
+
+  function makeImpulse(sec,decay){const r=ctx.sampleRate,len=Math.floor(r*sec),b=ctx.createBuffer(2,len,r);
+    for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);}return b;}
+  function initAudio(){if(ctx)return;
+    ctx=new(window.AudioContext||window.webkitAudioContext)();
+    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();
+    delay=ctx.createDelay(1);delay.delayTime.value=0.2;fb=ctx.createGain();fb.gain.value=0.3;
+    echoSend=ctx.createGain();echoSend.gain.value=+$("echo").value/100;
+    delay.connect(fb);fb.connect(delay);bus.connect(delay);delay.connect(echoSend);echoSend.connect(master);
+    conv=ctx.createConvolver();conv.buffer=makeImpulse(2.2,2.5);
+    spaceSend=ctx.createGain();spaceSend.gain.value=+$("space").value/100*0.9;
+    bus.connect(conv);conv.connect(spaceSend);spaceSend.connect(master);
+    bus.connect(master);master.connect(ctx.destination);
+    const len=Math.floor(ctx.sampleRate*0.4);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
+    const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
+  function noise(){const s=ctx.createBufferSource();s.buffer=noiseBuf;return s;}
+
+  function kick(t){const o=ctx.createOscillator(),g=ctx.createGain();o.type="triangle";
+    o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+0.12);
+    g.gain.setValueAtTime(0.9,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.2);o.connect(g).connect(bus);o.start(t);o.stop(t+0.22);}
+  function snare(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="highpass";f.frequency.value=1400;
+    g.gain.setValueAtTime(0.55,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.13);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.15);}
+  function hat(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="highpass";f.frequency.value=7000;
+    g.gain.setValueAtTime(0.28,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.045);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.06);}
+  function clap(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="bandpass";f.frequency.value=1800;f.Q.value=1.2;
+    g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.1);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.12);}
+  function tone(t,freq,dur,wave,gain){const o=ctx.createOscillator(),g=ctx.createGain();o.type=wave||"square";o.frequency.value=freq;
+    const d=Math.min(dur*0.9,0.4);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(gain||0.22,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.001,t+d);o.connect(g).connect(bus);o.start(t);o.stop(t+d+0.02);}
+  function midiToFreq(midi){return 440*Math.pow(2,(midi-69)/12);}
+  function noteToFreq(n){const m=/^([a-gA-G])([#b]?)(-?\d)$/.exec(n);if(!m)return null;
+    const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
+    const midi=12*(parseInt(m[3],10)+1)+s;return midiToFreq(midi);}
+
+  // --- music theory layer (mirrors loom-core): key + scale + degrees -------
+  const SCALES={
+    major:[0,2,4,5,7,9,11],ionian:[0,2,4,5,7,9,11],
+    minor:[0,2,3,5,7,8,10],aeolian:[0,2,3,5,7,8,10],
+    dorian:[0,2,3,5,7,9,10],phrygian:[0,1,3,5,7,8,10],
+    lydian:[0,2,4,6,7,9,11],mixolydian:[0,2,4,5,7,9,10],locrian:[0,1,3,5,6,8,10],
+    pentatonic:[0,2,4,7,9],majpent:[0,2,4,7,9],minpent:[0,3,5,7,10]};
+  const DEFAULT_OCTAVE=3;
+  function tonicPc(w){const m=/^([a-gA-G])([#b]?)/.exec(w);if(!m)return null;
+    const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
+    return((s%12)+12)%12;}
+  function parseKey(text){let tonic=null,scaleName=null;
+    for(let raw of text.split("\n")){const line=raw.trim();if(!line||line.startsWith("#"))continue;
+      const i=line.indexOf(":");if(i===-1)continue;
+      const name=line.slice(0,i).trim().toLowerCase();const words=line.slice(i+1).trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if(name==="key"){const t=tonicPc(words[0]||"");if(t!==null)tonic=t;if(words[1])scaleName=words[1];}
+      else if(name==="scale"){if(words[0])scaleName=words[0];}}
+    if(tonic===null&&scaleName===null)return null;
+    const scale=SCALES[scaleName]||SCALES.major;
+    return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE};}
+  function isDegree(tok){return /^[1-7][#b]?[',]*$/.test(tok);}
+  function degreeToMidi(tok,key){const d=parseInt(tok[0],10);let i=1,acc=0;
+    if(tok[1]==="#"){acc=1;i=2;}else if(tok[1]==="b"){acc=-1;i=2;}
+    let oct=0;for(const c of tok.slice(i)){if(c==="'")oct++;else if(c===",")oct--;else return null;}
+    const len=key.scale.length,idx=d-1;const wrap=Math.floor(idx/len);
+    const step=key.scale[((idx%len)+len)%len];
+    return 12*(key.octave+oct+wrap+1)+key.tonic+step+acc;}
+  function tokenToFreq(tok,key){if(key&&isDegree(tok))return midiToFreq(degreeToMidi(tok,key));return noteToFreq(tok);}
+
+  function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
+    if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
+    const name=line.slice(0,i).trim().toLowerCase();
+    if(name==="key"||name==="scale")continue;
+    const segs=line.slice(i+1).split("|").map(s=>s.trim());
+    const tokens=segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"));if(!tokens.length)continue;
+    let wave="square",gain=0.22,oct=null;const verbs=[];
+    for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
+      if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
+      else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}else verbs.push(seg);}
+    out.push({name,tokens,verbs,wave,gain,oct,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+  function applyOne(tokens,v,bar){const p=v.trim().split(/\s+/),c=p[0];
+    if(c==="rev")return tokens.slice().reverse();
+    if(c==="fast"){const n=parseInt(p[1])||2;let r=[];for(let i=0;i<n;i++)r=r.concat(tokens);return r;}
+    if(c==="slow"){const n=parseInt(p[1])||2;return(bar%n===0)?tokens:tokens.map(()=>".");}
+    if(c==="every"){const n=parseInt(p[1])||2;if(((bar%n)+n)%n===n-1)return applyOne(tokens,p.slice(2).join(" "),bar);return tokens;}
+    return tokens;}
+  function effective(v,bar){let t=v.tokens.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);return t;}
+
+  function buildGrid(){grid.innerHTML="";for(const v of voices){const row=document.createElement("div");row.className="row";
+    const nm=document.createElement("div");nm.className="vname";nm.textContent=v.name;
+    const cells=document.createElement("div");cells.className="cells";v.cells=[];
+    v.tokens.forEach(tok=>{const c=document.createElement("span");c.className="cell";
+      if(tok!=="."&&tok!=="~")c.classList.add("on");cells.appendChild(c);v.cells.push(c);});
+    row.appendChild(nm);row.appendChild(cells);grid.appendChild(row);}}
+
+  function trigger(v,tok,t){if(tok==="."||tok==="~")return;
+    if(v.type==="drum"){const n=v.name;if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
+      else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);}
+    else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
+      const f=tok==="x"?noteToFreq("c3"):tokenToFreq(tok,k);if(f)tone(t,f,cycleLen/v.tokens.length,v.wave,v.gain);}}
+  function scheduleBar(barT,bar){const sw=+$("swing").value/100;
+    for(const v of voices){const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
+      for(let i=0;i<n;i++){let t=barT+i*step;if(i%2===1)t+=sw*step;trigger(v,eff[i],t);}}}
+  function tick(){if(!playing)return;while(nextBarTime<ctx.currentTime+LOOKAHEAD){scheduleBar(nextBarTime,barCount);nextBarTime+=cycleLen;barCount++;}schedTimer=setTimeout(tick,TICK);}
+  function animate(){if(playing&&ctx){const e=ctx.currentTime-transportStart;const phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;
+    for(const v of voices){const n=v.tokens.length;if(!n)continue;const cur=Math.floor(phase*n)%n;
+      v.cells.forEach((c,i)=>{c.classList.toggle("play",i===cur);
+        if(i===cur&&v.tokens[i]!=="."&&v.tokens[i]!=="~"){c.classList.add("hit");setTimeout(()=>c.classList.remove("hit"),90);}});}}
+    requestAnimationFrame(animate);}
+
+  function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
+    const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
+    voices=parsed;key=parseKey(editor.value);buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    if(delay)delay.delayTime.value=cycleLen/8;
+    if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
+    log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");}
+  function stop(){playing=false;if(schedTimer)clearTimeout(schedTimer);
+    voices.forEach(v=>v.cells.forEach(c=>c.classList.remove("play","hit")));log("[ stopped ]");}
+
+  const PRESETS={
+    chip:"kick:  x . . . x . . .\nsnare: . . x . . . x .\nhat:   x x x x x x x x | every 4 fast 2\nlead:  c3 e3 g3 c4 g3 e3 c3 . | pulse",
+    techno:"kick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x .\nbass:  c2 . . . c2 . . . eb2 . . . g2 . . . | saw",
+    dnb:"kick:  x . . . . . . . . . x . . . . .\nsnare: . . . . x . . . . . . . x . . .\nhat:   x x x x x x x x x x x x x x x x\nbass:  c2 . . . . . eb1 . . . g1 . . . . . | saw | every 4 rev",
+    ambient:"pad:   c3 . . . e3 . . . g3 . . . b3 . . . | sine | slow 2\nbass:  c2 . . . . . . . | sine | gain 0.3\nlead:  . . g4 . . . e4 . . . c4 . . . . . | tri",
+    // --- scale showcases: melodies written in degrees 1-7, the scale colors them ---
+    major:"# happy & bright. degrees 1-7, 1=tonic.\nkey:   c major\nkick:  x . . . x . . .\nsnare: . . x . . . x .\nhat:   x x x x x x x x\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 3 2 1 . | pulse",
+    dorian:"# cool minor with a bright 6th (jazzy/celtic).\nkey:   d dorian\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x . | every 4 fast 2\nbass:  1, . . . 5, . . . 6, . . . 5, . . . | saw\nlead:  1 . 3 . 5 6 5 3 | tri | gain 0.2",
+    phrygian:"# dark & spanish: the flat 2nd does the magic.\nkey:   e phrygian\nkick:  x . . . x . . .\nsnare: . . . . x . . .\nhat:   x . x . x . x x\nbass:  1, . 2, . 1, . 7, . | saw | gain 0.4\nlead:  1 2 1 7, 1 . 3 2 | pulse | gain 0.18",
+    penta:"# 5-note scale: every note sounds right.\nkey:   c minpent\nkick:  x . . . x . . .\nsnare: . . x . . . x .\nhat:   x x x x x x x x | every 4 fast 2\nbass:  1, . . 3, . . 5, . | saw\nlead:  1 3 4 5 4 3 1 5, | tri | gain 0.2",
+    harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2"};
+  document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{editor.value=PRESETS[b.dataset.p];run();}));
+
+  function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
+    try{$("shareIn").value="LOOM1:"+btoa(unescape(encodeURIComponent(JSON.stringify(st))));$("shareIn").select();log("[ export ] code ready - copy it","ai");}catch(e){log("[ export ] "+e.message,"err");}}
+  function importCode(){let s=$("shareIn").value.trim();if(s.startsWith("LOOM1:"))s=s.slice(6);
+    try{const st=JSON.parse(decodeURIComponent(escape(atob(s))));editor.value=st.c;
+      if(st.bpm)$("bpm").value=st.bpm;if(st.sw){$("swing").value=st.sw;$("vSwing").textContent=st.sw;}
+      if(st.ec){$("echo").value=st.ec;$("vEcho").textContent=st.ec;}if(st.sp){$("space").value=st.sp;$("vSpace").textContent=st.sp;}
+      if(st.vo){$("vol").value=st.vo;$("vVol").textContent=st.vo;}run();log("[ import ] loaded","ai");}catch(e){log("[ import ] invalid code","err");}}
+
+  const SYS=["You are the composition engine for LOOM, a live-coding music language.",
+    "Output ONLY valid LOOM code. No explanations, no markdown fences, no backticks.","GRAMMAR:",
+    "- One voice per line: name: pattern | verb | verb",
+    "- Drum voices use x (hit) and . (rest). Drum names: kick, snare, hat, clap.",
+    "- Melodic voices use any other name (bass, lead, arp, pad). Tokens are note names like c2 eb2 g3 a4 (a-g, optional # or b, octave 1-5). . means rest.",
+    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
+    "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
+    "- Verbs after | : rev, fast N, slow N, every N <verb>. Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
+    "- Comments start with #.",
+    "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");
+
+  function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);}
+  async function callFree(prompt){
+    if(window.puter&&puter.ai&&puter.ai.chat){
+      try{const resp=await withTimeout(puter.ai.chat(prompt,{model:"gpt-4o-mini"}),30000);
+        const t=(resp&&resp.message&&resp.message.content)||(typeof resp==="string"?resp:(resp&&resp.text)||"");
+        if(t&&String(t).trim())return t;}catch(_){}
+    }
+    const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),30000);
+    try{const res=await fetch("https://text.pollinations.ai/"+encodeURIComponent(prompt)+"?model=openai",{signal:ctl.signal});
+      if(!res.ok)throw new Error("HTTP "+res.status);const raw=await res.text();
+      try{const j=JSON.parse(raw);return (j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||j.content||raw;}
+      catch(_){return raw;}}
+    finally{clearTimeout(to);}
+  }
+  async function vibe(){const req=$("vibeIn").value.trim();if(!req){log("[ vibe ] ecris d'abord ce que tu veux","err");return;}
+    const key=$("apiKey").value.trim();log("[ vibe ] reflexion... (jusqu'a 30s)","ai");
+    const btn=$("vibeBtn");btn.disabled=true;const old=btn.textContent;btn.textContent="...";
+    const userMsg="Current LOOM code:\n"+editor.value+"\n\nRequest: "+req+"\n\nReturn the full updated LOOM program. Code only.";
+    const prompt=SYS+"\n\nCURRENT CODE:\n"+editor.value+"\n\nREQUEST: "+req+"\n\nReturn ONLY the full updated LOOM program, code only:";
+    let text="";
+    try{
+      if(key){
+        const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),30000);
+        const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctl.signal,
+          headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,system:SYS,messages:[{role:"user",content:userMsg}]})});
+        clearTimeout(to);const data=await res.json();if(data.error)throw new Error(data.error.message||"api error");
+        text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      }else{
+        text=await callFree(prompt);
+      }
+      text=String(text).replace(/```[a-z]*\n?/gi,"").replace(/```/g,"").trim();
+      if(!text){log("[ vibe ] pas de reponse - reessaie","err");}
+      else{editor.value=text;run();log("[ vibe ] ok // "+req,"ai");}
+    }catch(e){
+      if(e.name==="AbortError"||e.message==="timeout")log("[ vibe ] trop lent (>30s) - reessaie, ou ajoute une cle","err");
+      else log("[ vibe ] erreur: "+e.message+" - reessaie","err");
+    }
+    btn.disabled=false;btn.textContent=old;}
+
+  // wiring
+  $("run").addEventListener("click",run);
+  $("stop").addEventListener("click",stop);
+  $("vibeBtn").addEventListener("click",vibe);
+  $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
+  $("exportBtn").addEventListener("click",exportCode);
+  $("importBtn").addEventListener("click",importCode);
+  function bind(id,vid,fn){$(id).addEventListener("input",e=>{$(vid).textContent=e.target.value;fn&&fn(e.target.value);});}
+  bind("swing","vSwing");
+  bind("echo","vEcho",v=>{if(echoSend)echoSend.gain.value=v/100;});
+  bind("space","vSpace",v=>{if(spaceSend)spaceSend.gain.value=v/100*0.9;});
+  bind("vol","vVol",v=>{if(master)master.gain.value=v/100*0.8;});
+  editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
+  animate();
+})();
+</script>
+</body>
+</html>
