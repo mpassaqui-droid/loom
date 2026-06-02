@@ -137,6 +137,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="phrygian">PHRYGIAN</button>
     <button class="tiny" data-p="penta">PENTA</button>
     <button class="tiny" data-p="harmonic">HARMONIC</button>
+    <button class="tiny" data-p="hijaz">HIJAZ</button>
+    <button class="tiny" data-p="raga">RAGA</button>
   </div>
 
   <div id="grid"></div>
@@ -209,7 +211,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     minor:[0,2,3,5,7,8,10],aeolian:[0,2,3,5,7,8,10],
     dorian:[0,2,3,5,7,9,10],phrygian:[0,1,3,5,7,8,10],
     lydian:[0,2,4,6,7,9,11],mixolydian:[0,2,4,5,7,9,10],locrian:[0,1,3,5,6,8,10],
-    pentatonic:[0,2,4,7,9],majpent:[0,2,4,7,9],minpent:[0,3,5,7,10]};
+    pentatonic:[0,2,4,7,9],majpent:[0,2,4,7,9],minpent:[0,3,5,7,10],
+    harmonic_minor:[0,2,3,5,7,8,11],harmonicminor:[0,2,3,5,7,8,11],
+    melodic_minor:[0,2,3,5,7,9,11],melodicminor:[0,2,3,5,7,9,11],
+    whole_tone:[0,2,4,6,8,10],wholetone:[0,2,4,6,8,10],
+    blues:[0,3,5,6,7,10],chromatic:[0,1,2,3,4,5,6,7,8,9,10,11],
+    hijaz:[0,1,4,5,7,8,10],hijazkar:[0,1,4,5,7,8,11],double_harmonic:[0,1,4,5,7,8,11],byzantine:[0,1,4,5,7,8,11],
+    nahawand:[0,2,3,5,7,8,10],kurd:[0,1,3,5,7,8,10],ajam:[0,2,4,5,7,9,11],
+    bhairav:[0,1,4,5,7,8,11],yaman:[0,2,4,6,7,9,11],todi:[0,1,3,6,7,8,11],
+    slendro:[0,2,5,7,10],pelog:[0,1,3,7,8],hirajoshi:[0,2,3,7,8],insen:[0,1,5,7,10],iwato:[0,1,5,6,10],egyptian:[0,2,5,7,10]};
   const DEFAULT_OCTAVE=3;
   function tonicPc(w){const m=/^([a-gA-G])([#b]?)/.exec(w);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
@@ -292,7 +302,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     dorian:"# cool minor with a bright 6th (jazzy/celtic).\nkey:   d dorian\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x . | every 4 fast 2\nbass:  1, . . . 5, . . . 6, . . . 5, . . . | saw\nlead:  1 . 3 . 5 6 5 3 | tri | gain 0.2",
     phrygian:"# dark & spanish: the flat 2nd does the magic.\nkey:   e phrygian\nkick:  x . . . x . . .\nsnare: . . . . x . . .\nhat:   x . x . x . x x\nbass:  1, . 2, . 1, . 7, . | saw | gain 0.4\nlead:  1 2 1 7, 1 . 3 2 | pulse | gain 0.18",
     penta:"# 5-note scale: every note sounds right.\nkey:   c minpent\nkick:  x . . . x . . .\nsnare: . . x . . . x .\nhat:   x x x x x x x x | every 4 fast 2\nbass:  1, . . 3, . . 5, . | saw\nlead:  1 3 4 5 4 3 1 5, | tri | gain 0.2",
-    harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2"};
+    harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2",
+    hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
+    raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2"};
   document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{editor.value=PRESETS[b.dataset.p];run();}));
 
   function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
@@ -308,7 +320,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- One voice per line: name: pattern | verb | verb",
     "- Drum voices use x (hit) and . (rest). Drum names: kick, snare, hat, clap.",
     "- Melodic voices use any other name (bass, lead, arp, pad). Tokens are note names like c2 eb2 g3 a4 (a-g, optional # or b, octave 1-5). . means rest.",
-    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
+    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues chromatic, plus world scales: hijaz hijazkar nahawand kurd ajam bhairav yaman todi slendro pelog hirajoshi insen iwato egyptian). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>. Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
     "- Comments start with #.",

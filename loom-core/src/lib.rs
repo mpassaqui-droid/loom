@@ -252,6 +252,30 @@ pub fn scale_intervals(name: &str) -> Option<Vec<i32>> {
         "locrian"                     => vec![0, 1, 3, 5, 6, 8, 10],
         "pentatonic" | "majpent"      => vec![0, 2, 4, 7, 9],
         "minpent"                     => vec![0, 3, 5, 7, 10],
+        // extra Western scales
+        "harmonic_minor" | "harmonicminor" => vec![0, 2, 3, 5, 7, 8, 11],
+        "melodic_minor" | "melodicminor"   => vec![0, 2, 3, 5, 7, 9, 11],
+        "whole_tone" | "wholetone"         => vec![0, 2, 4, 6, 8, 10],
+        "blues"                            => vec![0, 3, 5, 6, 7, 10],
+        "chromatic"                        => (0..12).collect(),
+        // Maqam family (12-TET approximations; true quarter tones are a future
+        // microtonal layer — see NIGHT_LOG). Tonic-based interval sets.
+        "hijaz"                            => vec![0, 1, 4, 5, 7, 8, 10],
+        "hijazkar" | "double_harmonic" | "byzantine" => vec![0, 1, 4, 5, 7, 8, 11],
+        "nahawand"                         => vec![0, 2, 3, 5, 7, 8, 10], // ~ minor
+        "kurd"                             => vec![0, 1, 3, 5, 7, 8, 10], // ~ phrygian
+        "ajam"                             => vec![0, 2, 4, 5, 7, 9, 11], // ~ major
+        // Raga (approximations)
+        "bhairav"                          => vec![0, 1, 4, 5, 7, 8, 11],
+        "yaman"                            => vec![0, 2, 4, 6, 7, 9, 11], // ~ lydian
+        "todi"                             => vec![0, 1, 3, 6, 7, 8, 11],
+        // Gamelan & Asian pentatonics (approximated in 12-TET)
+        "slendro"                          => vec![0, 2, 5, 7, 10],
+        "pelog"                            => vec![0, 1, 3, 7, 8],
+        "hirajoshi"                        => vec![0, 2, 3, 7, 8],
+        "insen"                            => vec![0, 1, 5, 7, 10],
+        "iwato"                            => vec![0, 1, 5, 6, 10],
+        "egyptian"                         => vec![0, 2, 5, 7, 10],
         _ => return None,
     };
     Some(s)
@@ -452,6 +476,23 @@ mod tests {
         // 3rd of C minor is eb, 7th is bb — straight from the scale, no b syntax
         assert!(close(token_to_freq("3", Some(&k)), note_to_freq("eb3")));
         assert!(close(token_to_freq("7", Some(&k)), note_to_freq("bb3")));
+    }
+
+    #[test]
+    fn world_scales_resolve() {
+        // harmonic minor has a natural 7th (leading tone): C..B
+        let hm = parse_key("key: c harmonic_minor").unwrap();
+        assert!(close(token_to_freq("7", Some(&hm)), note_to_freq("b3")));
+        // whole-tone: C D E F# ... degree 4 = f#
+        let wt = parse_key("key: c whole_tone").unwrap();
+        assert!(close(token_to_freq("4", Some(&wt)), note_to_freq("f#3")));
+        // hijaz: C Db E F G Ab Bb — the b2 then major-3rd gap is its signature
+        let hj = parse_key("key: c hijaz").unwrap();
+        assert!(close(token_to_freq("2", Some(&hj)), note_to_freq("db3")));
+        assert!(close(token_to_freq("3", Some(&hj)), note_to_freq("e3")));
+        // blues scale has the b5 "blue note" as degree 4
+        let bl = parse_key("key: c blues").unwrap();
+        assert!(close(token_to_freq("4", Some(&bl)), note_to_freq("gb3")));
     }
 
     #[test]
