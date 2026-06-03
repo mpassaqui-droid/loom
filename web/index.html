@@ -184,6 +184,17 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="pump">PUMP</button>
   </div>
 
+  <div class="card" id="songsCard">
+    <div class="head">mes morceaux</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="songName" placeholder="nom du morceau" style="flex:1;min-width:110px;border-color:var(--dim);color:var(--green)">
+      <button class="tiny" id="saveSong">SAVE</button>
+      <select id="songList" style="background:var(--bg);color:var(--green);border:1px solid var(--dim);font-family:'VT323',monospace;font-size:19px;padding:8px;border-radius:3px;flex:1;min-width:110px"></select>
+      <button class="tiny" id="loadSong">LOAD</button>
+      <button class="tiny" id="delSong">DEL</button>
+    </div>
+  </div>
+
   <div id="grid"></div>
   <div id="console">[ idle ] press RUN to begin</div>
 
@@ -667,13 +678,29 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   document.querySelectorAll("#themes button").forEach(b=>b.addEventListener("click",()=>applyTheme(b.dataset.theme)));
   try{const saved=localStorage.getItem("loom-theme");if(saved&&THEMES[saved])applyTheme(saved);}catch(_){}
 
-  function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
-    try{$("shareIn").value="LOOM1:"+btoa(unescape(encodeURIComponent(JSON.stringify(st))));$("shareIn").select();log("[ export ] code ready - copy it","ai");}catch(e){log("[ export ] "+e.message,"err");}}
+  function captureState(){return {c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};}
+  function applyState(st){if(st.c!=null)editor.value=st.c;
+    if(st.bpm)$("bpm").value=st.bpm;if(st.sw){$("swing").value=st.sw;$("vSwing").textContent=st.sw;}
+    if(st.ec){$("echo").value=st.ec;$("vEcho").textContent=st.ec;}if(st.sp){$("space").value=st.sp;$("vSpace").textContent=st.sp;}
+    if(st.vo){$("vol").value=st.vo;$("vVol").textContent=st.vo;}run();}
+  function exportCode(){try{$("shareIn").value="LOOM1:"+btoa(unescape(encodeURIComponent(JSON.stringify(captureState()))));$("shareIn").select();log("[ export ] code ready - copy it","ai");}catch(e){log("[ export ] "+e.message,"err");}}
   function importCode(){let s=$("shareIn").value.trim();if(s.startsWith("LOOM1:"))s=s.slice(6);
-    try{const st=JSON.parse(decodeURIComponent(escape(atob(s))));editor.value=st.c;
-      if(st.bpm)$("bpm").value=st.bpm;if(st.sw){$("swing").value=st.sw;$("vSwing").textContent=st.sw;}
-      if(st.ec){$("echo").value=st.ec;$("vEcho").textContent=st.ec;}if(st.sp){$("space").value=st.sp;$("vSpace").textContent=st.sp;}
-      if(st.vo){$("vol").value=st.vo;$("vVol").textContent=st.vo;}run();log("[ import ] loaded","ai");}catch(e){log("[ import ] invalid code","err");}}
+    try{applyState(JSON.parse(decodeURIComponent(escape(atob(s)))));log("[ import ] loaded","ai");}catch(e){log("[ import ] invalid code","err");}}
+
+  // --- song library (saved in the browser, localStorage) ---
+  const SONGKEY="loom-songs";
+  function getSongs(){try{return JSON.parse(localStorage.getItem(SONGKEY)||"{}");}catch(_){return {};}}
+  function putSongs(o){try{localStorage.setItem(SONGKEY,JSON.stringify(o));}catch(_){}}
+  function refreshSongs(sel){const songs=getSongs(),names=Object.keys(songs).sort();const el=$("songList");
+    el.innerHTML='<option value="">— charger —</option>'+names.map(n=>'<option>'+n.replace(/</g,"&lt;")+'</option>').join("");
+    if(sel)el.value=sel;}
+  function saveSong(){const name=$("songName").value.trim();if(!name){log("[ save ] donne un nom au morceau","err");return;}
+    const songs=getSongs();songs[name]=captureState();putSongs(songs);refreshSongs(name);log("[ save ] « "+name+" » sauvegardé","ai");}
+  function loadSong(){const name=$("songList").value;if(!name){log("[ load ] choisis un morceau dans la liste","err");return;}
+    const songs=getSongs();if(!songs[name]){log("[ load ] introuvable","err");return;}
+    $("songName").value=name;applyState(songs[name]);log("[ load ] « "+name+" » chargé","ai");}
+  function delSong(){const name=$("songList").value;if(!name){log("[ del ] choisis un morceau","err");return;}
+    const songs=getSongs();delete songs[name];putSongs(songs);refreshSongs();log("[ del ] « "+name+" » supprimé","ai");}
 
   const SYS=["You are the composition engine for LOOM, a live-coding music language.",
     "Output ONLY valid LOOM code. No explanations, no markdown fences, no backticks.","GRAMMAR:",
@@ -751,6 +778,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   $("exportBtn").addEventListener("click",exportCode);
   $("importBtn").addEventListener("click",importCode);
+  $("saveSong").addEventListener("click",saveSong);
+  $("loadSong").addEventListener("click",loadSong);
+  $("delSong").addEventListener("click",delSong);
+  $("songList").addEventListener("change",e=>{if(e.target.value)loadSong();});
+  refreshSongs();
   function bind(id,vid,fn){$(id).addEventListener("input",e=>{$(vid).textContent=e.target.value;fn&&fn(e.target.value);});}
   bind("swing","vSwing");
   bind("echo","vEcho",v=>{if(echoSend)echoSend.gain.value=v/100;});
