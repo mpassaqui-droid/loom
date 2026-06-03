@@ -151,6 +151,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="ambient">AMBIENT</button>
     <button class="tiny" data-p="synthwave">SYNTHWAVE</button>
     <button class="tiny" data-p="samples">SAMPLES</button>
+    <button class="tiny" data-p="world">WORLD</button>
+    <button class="tiny" data-p="band">BAND</button>
   </div>
   <div class="presets" style="margin-top:-10px">
     <span style="color:var(--dim);font-size:16px;align-self:center;margin-right:2px">scales &#9656;</span>
@@ -197,7 +199,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>son</b> (après |): <i>lp N</i> / <i>hp N</i> filtre (+ <i>q R</i> résonance) &middot; <i>env A D S R</i> enveloppe ADSR<br>
     <b>synth</b> (après |): <i>unison N</i> + <i>detune C</i> (super-saw) &middot; <i>drive X</i> (disto) &middot; <i>lfo cutoff/pitch/gain RATE DEPTH</i><br>
     <b>stéréo</b> (après |): <i>pan P</i> (-1 gauche … 1 droite) &middot; bus master compressé/limité (glue studio)<br>
-    <b>samples</b> (après |): <i>sample NAME</i> = vrai son enregistré &mdash; bd sd hh cp kick2 (drums) &middot; bass arpy (repitchés)<br>
+    <b>samples</b> (après |): <i>sample NAME</i> = vrai son. Drums: bd sd hh cp kick2 kick909 clubkick clap2 oh rim cow perc tom tom2 tom3 ride tabla &middot; mélodiques (repitchés): bass arpy gtr casio sax sitar juno pad2 hoover stab<br>
     <b>pump</b>: <i>duck: 70</i> (ligne) &mdash; sidechain : tout le mix duck à chaque kick (groove techno)<br>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
@@ -248,8 +250,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
 
   // --- real samples (loaded from a free CDN on first RUN; synth fallback) ---
   const SDIRT="https://cdn.jsdelivr.net/gh/tidalcycles/Dirt-Samples@master/";
-  const SAMPLES={bd:"808bd/BD0000.WAV",sd:"808sd/SD0000.WAV",hh:"hh/000_hh3closedhh.wav",
-    cp:"cp/HANDCLP0.wav",bass:"jvbass/000_01.wav",arpy:"arpy/arpy01.wav",kick2:"bd/BT0A0A7.wav"};
+  const SAMPLES={
+    // drums & percussion
+    bd:"808bd/BD0000.WAV",sd:"808sd/SD0000.WAV",hh:"hh/000_hh3closedhh.wav",cp:"cp/HANDCLP0.wav",
+    kick2:"bd/BT0A0A7.wav",kick909:"909/BT0A0A7.WAV",clubkick:"clubkick/1.wav",clap2:"realclaps/1.wav",
+    oh:"808oh/OH00.WAV",rim:"rs/rytm-rs.wav",cow:"cb/rytm-cb.wav",perc:"perc/000_perc0.wav",
+    tom:"lt/LT0D0.wav",tom2:"mt/MT0D0.wav",tom3:"ht/HT0D0.wav",ride:"cr/RIDED0.wav",tabla:"tabla/000_bass_flick1.wav",
+    // melodic (repitched to the note/degree you play)
+    bass:"jvbass/000_01.wav",arpy:"arpy/arpy01.wav",gtr:"gtr/0001_cleanC.wav",casio:"casio/high.wav",
+    sax:"sax/000_notes121a.wav",sitar:"sitar/000_d_maj_sitar_chorda.wav",juno:"juno/00_juno_raw_low.wav",
+    pad2:"pad/alien-monolith-pad.wav",hoover:"hoover/1.wav",stab:"stab/000_stab1.wav"};
   const sbuf={},sload={};
   function loadSample(name){if(!ctx||!SAMPLES[name]||sbuf[name]||sload[name])return;sload[name]=1;
     fetch(SDIRT+SAMPLES[name]).then(r=>r.arrayBuffer()).then(a=>ctx.decodeAudioData(a))
@@ -529,6 +539,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2",
     vary:"# A/B variation: <a/b/...> picks one alternative per bar (changes each bar).\nkey:   c minor\nkick:  x . . . <x/.> . . . x . . . x . <./x*2> .\nsnare: . . . . x . . . . . . . x . . <./x>\nhat:   x x x x x x x x | gain 0.14\nbass:  1 . <3/5> . 5, . <6,/4,> . | saw | oct 2\nlead:  <1/5> . 3 . <5/1'> . 4 . | pulse | gain 0.18",
     samples:"# VRAIS samples (drums 808 + basse + arpy). Chargés du net au 1er RUN\n# (attends 1-2s puis re-RUN si le 1er tour sonne encore synthe).\nduck:  55\nkey:   a minor\nkick:  x . . . x . . . x . . . x . . . | sample bd\nsnare: . . . . x . . . . . . . x . . . | sample sd\nhat:   x x x x x x x x x x x x x x x x | sample hh | gain 0.3 | pan 0.25\nclap:  . . . . x . . . | sample cp | gain 0.4\nbass:  1 . 1 . 5, . 6, . | sample bass | oct 2\narp:   1 . 3 . 5 . 1' . 5 . 3 . 1 . 5, . | sample arpy | pan -0.3 | gain 0.5",
+    world:"# samples du monde : sitar + tabla + perc, gamme raga.\nkey:    c bhairav\nkick:   x . . . . . . . x . . . . . . . | sample clubkick | gain 0.5\ntabla:  e(7,16) | sample tabla | gain 0.5\nperc:   . . x . . x . . . . x . . x . . | sample perc | gain 0.4 | pan 0.3\nsitar:  1 . 2 3 . 4 5 . 6 . 7 1' . 7 5 . | sample sitar | gain 0.5\ndrone:  1 . . . . . . . | sample sitar | oct 2 | gain 0.3 | pan -0.3",
+    band:"# 'live band' : guitare + sax + vraie batterie.\nduck:   30\nkey:    a minor\nkick:   x . . . x . . . x . . . x . . . | sample kick2\nsnare:  . . . . x . . . . . . . x . . x | sample sd | gain 0.4\nhat:    x x x x x x x x | sample oh | gain 0.2 | pan 0.3\nride:   . . x . . . x . | sample ride | gain 0.18 | pan -0.3\ngtr:    i . . . iv . . . VI . . . v . . . | sample gtr | arp up | gain 0.5\nsax:    . . . . 5 . 4 . . . 3 . . . 1 . | sample sax | gain 0.5 | pan 0.2\nbass:   1 . 1 . 5, . 1 . | sample bass | oct 2 | gain 0.6",
     poly:"# polyrhythm: voices with different step counts (3 vs 4 vs 5) over one bar.\nkey:   a minpent\nkick:  x x x x\nclav:  1 1 1 | tri | gain 0.18\nbell:  1 3 5 4 6 | sine | oct 4 | gain 0.13\nhat:   x x x x x x x x | gain 0.12",
     euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18",
     chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2",
@@ -609,7 +621,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
     "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck.",
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
-    "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Drum names available: bd (808 kick), sd (808 snare), hh (hihat), cp (clap), kick2 (acoustic kick). Melodic: bass, arpy (these repitch to the note/degree you play). e.g. kick: x . x . | sample bd  or  lead: 1 3 5 1' | sample arpy. Samples load from the net on the first RUN (a second of delay; until then it falls back to the synth).",
+    "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Drums: bd sd hh cp kick2 kick909 clubkick clap2 oh(open hat) rim cow perc tom tom2 tom3 ride tabla. Melodic (repitched to the note/degree you play): bass arpy gtr casio sax sitar juno pad2 hoover stab. e.g. kick: x . x . | sample kick909 , lead: 1 3 5 1' | sample sitar , gtr: I . IV . | sample gtr. Samples load from the net on the first RUN (a moment of delay; until then it falls back to the synth).",
     "- Stereo: pan P places a voice in the stereo field, P from -1 (left) to 1 (right), e.g. hat: ... | pan -0.4 , arp: ... | pan 0.5. Spread voices for width. (The master bus runs through a gentle compressor/limiter for studio glue.)",
     "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",
     "- A/B variation: a token <a/b/c> picks ONE alternative per bar, cycling each bar, so the pattern changes over time. e.g. kick: <x/.> x x x (a kick that drops out every other bar), or lead: <1/3/5> . . . . The alternatives can be notes, degrees, chords, rests, even with ?/* mods.",
