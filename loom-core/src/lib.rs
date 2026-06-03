@@ -86,8 +86,8 @@ pub struct Event {
     pub is_drum: bool,
 }
 
-/// Names that introduce a *directive* (key/scale/seed/song/…), not a voice.
-const DIRECTIVES: [&str; 5] = ["key", "scale", "seed", "song", "arrange"];
+/// Names that introduce a *directive* (key/scale/seed/song/duck/…), not a voice.
+const DIRECTIVES: [&str; 6] = ["key", "scale", "seed", "song", "arrange", "duck"];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
 /// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.
@@ -945,6 +945,14 @@ mod tests {
         assert_eq!(parse_seed("kick: x"), 0);
         // seed line is a directive, not a voice
         assert_eq!(parse("seed: 7\nkick: x").len(), 1);
+    }
+
+    #[test]
+    fn audio_only_directives_are_not_voices() {
+        // duck: is an audio-engine directive (sidechain), never a playable voice
+        let v = parse("duck: 60\nkick: x x x x");
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].name, "kick");
     }
 
     #[test]

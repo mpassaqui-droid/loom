@@ -147,6 +147,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="song">SONG</button>
     <button class="tiny" data-p="pad">PAD</button>
     <button class="tiny" data-p="supersaw">SUPERSAW</button>
+    <button class="tiny" data-p="pump">PUMP</button>
   </div>
 
   <div id="grid"></div>
@@ -163,6 +164,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>song</b>: <i>song: intro*4 verse*8 chorus*8</i> &middot; tag les voix avec <i>| in verse chorus</i> (morceaux longs)<br>
     <b>son</b> (après |): <i>lp N</i> / <i>hp N</i> filtre (+ <i>q R</i> résonance) &middot; <i>env A D S R</i> enveloppe ADSR<br>
     <b>synth</b> (après |): <i>unison N</i> + <i>detune C</i> (super-saw) &middot; <i>drive X</i> (disto) &middot; <i>lfo cutoff/pitch/gain RATE DEPTH</i><br>
+    <b>pump</b>: <i>duck: 70</i> (ligne) &mdash; sidechain : tout le mix duck à chaque kick (groove techno)<br>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
     <b>rolls</b>: suffixe <i>*N</i> = ratchet/roll (N frappes dans un pas) &mdash; ex. snare: . . x*4 .<br>
@@ -181,7 +183,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   "use strict";
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
-  let ctx=null,master=null,bus=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null;
+  let ctx=null,master=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null;
+  let duckAmt=0;
   let voices=[],key=null,seed=0,song=[],playing=false,cycleLen=2,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp"]);
@@ -199,12 +202,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     conv=ctx.createConvolver();conv.buffer=makeImpulse(2.2,2.5);
     spaceSend=ctx.createGain();spaceSend.gain.value=+$("space").value/100*0.9;
     bus.connect(conv);conv.connect(spaceSend);spaceSend.connect(master);
-    bus.connect(master);master.connect(ctx.destination);
+    scGain=ctx.createGain();scGain.gain.value=1;bus.connect(scGain);scGain.connect(master);master.connect(ctx.destination);
     const len=Math.floor(ctx.sampleRate*0.4);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
     const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
   function noise(){const s=ctx.createBufferSource();s.buffer=noiseBuf;return s;}
 
-  function kick(t){const o=ctx.createOscillator(),g=ctx.createGain();o.type="triangle";
+  // sidechain pump: dip the whole mix at each kick, then recover (techno/house)
+  function duckPump(t){if(!scGain)return;const lo=Math.max(0.05,1-duckAmt);
+    scGain.gain.setValueAtTime(lo,t);scGain.gain.setTargetAtTime(1,t,Math.min(0.12,cycleLen/8));}
+  function kick(t){if(duckAmt>0)duckPump(t);const o=ctx.createOscillator(),g=ctx.createGain();o.type="triangle";
     o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+0.12);
     g.gain.setValueAtTime(0.9,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.2);o.connect(g).connect(bus);o.start(t);o.stop(t+0.22);}
   function snare(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="highpass";f.frequency.value=1400;
@@ -337,11 +343,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     return [];}
   function sectionAtBar(song,bar){const total=song.reduce((a,s)=>a+s[1],0);if(total===0)return null;
     let pos=((bar%total)+total)%total;for(const s of song){if(pos<s[1])return s[0];pos-=s[1];}return null;}
+  function parseDuck(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="duck"){let n=parseFloat(line.slice(i+1).trim());if(isNaN(n))return 0;
+      if(n>1)n/=100;return Math.max(0,Math.min(0.95,n));}}return 0;}
 
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const name=line.slice(0,i).trim().toLowerCase();
-    if(name==="key"||name==="scale"||name==="seed"||name==="song"||name==="arrange")continue;
+    if(name==="key"||name==="scale"||name==="seed"||name==="song"||name==="arrange"||name==="duck")continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     let tokens=[];for(const t of segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"))){
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
@@ -420,7 +429,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);duckAmt=parseDuck(editor.value);buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     if(delay)delay.delayTime.value=cycleLen/8;
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");}
@@ -447,7 +456,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     arp:"# | arp up egrene chaque accord note par note (sequence synthwave/techno).\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.14\narp:   Am . . . F . . . C . . . G . . . | arp up | saw | gain 0.2\nbass:  a2 . . . f2 . . . c2 . . . g2 . . . | saw\npad:   Am . . . F . . . C . . . G . . . | sine | gain 0.18",
     song:"# a LONG track: sections by bar count. tag voices with | in <sections>.\n# watch the console show the current section as it plays.\nsong:  intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2\nkey:   a minor\nkick:  x . . . x . . .\nhat:   x x x x x x x x | gain 0.14 | in verse chorus\nclap:  . . . . x . . . | in chorus\nbass:  1 . 1 . 5, . 6, . | saw | oct 2 | in verse chorus\narp:   Am . . . F . . . C . . . G . . . | arp up | pulse | gain 0.18 | in chorus\npad:   Am . . . . . . . | sine | gain 0.2 | in intro outro chorus",
     pad:"# filter (lp) + ADSR env (a d s r). lush, evolving pad sound.\nkey:   c minor\nkick:  x . . . . . . . x . . . . . . .\npad:   Cm7 . . . . . . . Ab . . . . . . . | saw | lp 700 q 6 | env 0.5 0.4 0.7 1.4 | gain 0.16\nbass:  1 . . . . . . . 6, . . . . . . . | saw | lp 400 | env 0.01 0.1 0.5 0.2 | oct 2\nlead:  5 . 7 . 1' . 7 . 5 . 4 . 3 . . . | tri | lp 1800 q 4 | env 0.02 0.15 0.4 0.3 | gain 0.16",
-    supersaw:"# unison super-saw + drive + moving filter (lfo). big synth lead.\nkey:   f minor\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   x x x x x x x x | gain 0.13\nsaw:   1 . 3 . 5 . 1' 5 4 . 6 . 5 . 3 . | saw | unison 5 | detune 18 | lp 1400 q 5 | lfo cutoff 0.25 0.6 | env 0.02 0.2 0.6 0.3 | gain 0.12\nbass:  1 1 1 1 5, 5, 6, 6, | saw | drive 0.5 | lp 500 | oct 2 | gain 0.2"};
+    supersaw:"# unison super-saw + drive + moving filter (lfo). big synth lead.\nkey:   f minor\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   x x x x x x x x | gain 0.13\nsaw:   1 . 3 . 5 . 1' 5 4 . 6 . 5 . 3 . | saw | unison 5 | detune 18 | lp 1400 q 5 | lfo cutoff 0.25 0.6 | env 0.02 0.2 0.6 0.3 | gain 0.12\nbass:  1 1 1 1 5, 5, 6, 6, | saw | drive 0.5 | lp 500 | oct 2 | gain 0.2",
+    pump:"# duck: 70 = sidechain pump on every kick (techno/house groove).\nduck:  70\nkey:   a minor\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x . | gain 0.13\npad:   Am7 . . . . . . . F . . . . . . . | saw | unison 4 | lp 1200 | env 0.1 0.2 0.8 0.3 | gain 0.16\nbass:  1 1 5, 5, 6, 6, 5, 5, | saw | lp 600 | oct 2 | gain 0.2"};
   document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{editor.value=PRESETS[b.dataset.p];run();}));
 
   function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
@@ -474,6 +484,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
     "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck.",
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
+    "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");
