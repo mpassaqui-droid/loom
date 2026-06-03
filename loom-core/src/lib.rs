@@ -204,6 +204,30 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64) -> Vec<String> {
                 apply_verb(tokens, &inner, bar)
             } else { tokens.to_vec() }
         }
+        // Tidal-style transforms:
+        Some("palindrome") => {
+            // forwards on even bars, reversed on odd bars
+            if bar.rem_euclid(2) == 0 { tokens.to_vec() }
+            else { tokens.iter().rev().cloned().collect() }
+        }
+        Some("rot") => {
+            // static rotation: shift the pattern left by N steps (N<0 = right)
+            if tokens.is_empty() { return tokens.to_vec(); }
+            let n = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(1);
+            let k = n.rem_euclid(tokens.len() as i64) as usize;
+            let mut r = tokens.to_vec();
+            r.rotate_left(k);
+            r
+        }
+        Some("iter") => {
+            // shift the pattern start one step further each bar, looping after N
+            if tokens.is_empty() { return tokens.to_vec(); }
+            let n = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(4).max(1);
+            let k = (bar.rem_euclid(n)).rem_euclid(tokens.len() as i64) as usize;
+            let mut r = tokens.to_vec();
+            r.rotate_left(k);
+            r
+        }
         _ => tokens.to_vec(),
     }
 }
@@ -774,6 +798,21 @@ mod tests {
     fn fast_repeats() {
         let t = vec!["x".into(),".".into()];
         assert_eq!(apply_verb(&t, "fast 2", 0).len(), 4);
+    }
+
+    #[test]
+    fn palindrome_rot_iter_transforms() {
+        let t = vec!["a".into(),"b".into(),"c".into(),"d".into()];
+        // palindrome: forward on even bars, reversed on odd
+        assert_eq!(apply_verb(&t, "palindrome", 0), vec!["a","b","c","d"]);
+        assert_eq!(apply_verb(&t, "palindrome", 1), vec!["d","c","b","a"]);
+        // rot 1: static left rotation
+        assert_eq!(apply_verb(&t, "rot 1", 0), vec!["b","c","d","a"]);
+        assert_eq!(apply_verb(&t, "rot -1", 0), vec!["d","a","b","c"]);
+        // iter 4: shifts one step further each bar
+        assert_eq!(apply_verb(&t, "iter 4", 0), vec!["a","b","c","d"]);
+        assert_eq!(apply_verb(&t, "iter 4", 1), vec!["b","c","d","a"]);
+        assert_eq!(apply_verb(&t, "iter 4", 2), vec!["c","d","a","b"]);
     }
 
     #[test]
