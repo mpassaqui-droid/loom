@@ -30,8 +30,8 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 
 ### B. Génératif & rythme
 - [x] B1. Rythmes euclidiens `e(k,n)` et `e(k,n,rot)` — distribution Bjorklund + rotation, mixable avec tokens normaux
-- [ ] B2. Probabilité par pas (`x?` joue parfois, `x?70` 70%)
-- [ ] B3. Seed déterministe (`seed: 42`) pour que l'aléatoire soit reproductible
+- [x] B2. Probabilité par pas (`x?` ~50%, `x?70` 70%) — sur n'importe quel token. Preset CHANCE.
+- [x] B3. Seed déterministe (`seed: 42`) — RNG SplitMix64/(seed,bar,voix,pas), rejouable à l'identique.
 - [ ] B4. Ratchets / répétitions (`x*3`), mutations
 
 ### C. Structure (morceaux longs)
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[B2+B3] Probabilité & seed.** Ajoute `?` à un token pour qu'il joue *parfois* : `x?` ~50%, `x?70` = 70%, `c3?25`, `Cm7?` — marche sur tout (drums, notes, degrés, accords). `seed: N` rend les choix aléatoires **reproductibles** (rejoue à l'identique) ; change le seed pour une variation. Essaie le preset **CHANCE**. (loom-core +3 tests, RNG déterministe, miroir JS, wasm, SYS, preset)
 - **[A2] Accords.** Un token à **initiale MAJUSCULE** joue un accord entier : `Cm7`, `F`, `G7`, `Am`, `Dsus4`, `Gmaj7`… Minuscule reste une note simple (`c3`) → aucune ambiguïté. ~30 qualités. Mets-les sur une voix `keys:`/`pad:`. Essaie le preset **CHORDS**. (loom-core +4 tests, miroir JS multi-notes, SYS, preset)
 - **[B1] Rythmes euclidiens.** `e(k,n)` = k frappes réparties uniformément sur n pas ; `e(k,n,rot)` tourne le motif. Ex : `kick: e(4,16)`, `hat: e(7,16,2)`. Mixable avec des tokens normaux. Essaie le preset **EUCLID**. (loom-core +2 tests, miroir JS, SYS, preset)
 - **[A1] Gammes du monde.** 19 gammes ajoutées (hijaz, hijazkar/byzantine, nahawand, kurd, ajam, bhairav, yaman, todi, slendro, pelog, hirajoshi, insen, iwato, egyptian, blues, harmonic/melodic minor, whole-tone, chromatic). Presets **HIJAZ**, **RAGA**. Note : les quarts de ton (maqam bayati/rast/saba) sont approximés en 12-TET — couche microtonale = chantier futur.

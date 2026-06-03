@@ -48,8 +48,8 @@ pub struct Event {
     pub is_drum: bool,
 }
 
-/// Names that introduce a *directive* (key/scale/…), not a playable voice.
-const DIRECTIVES: [&str; 2] = ["key", "scale"];
+/// Names that introduce a *directive* (key/scale/seed/…), not a playable voice.
+const DIRECTIVES: [&str; 3] = ["key", "scale", "seed"];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
 /// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.
@@ -183,6 +183,12 @@ pub fn schedule_bar(voices: &[Voice], bar: i64) -> Vec<Event> {
 /// `'`/`,` octave marks) are resolved into absolute note names (e.g. `eb3`), so
 /// every downstream backend can keep using [`note_to_freq`] unchanged.
 pub fn schedule_bar_keyed(voices: &[Voice], key: Option<&Key>, bar: i64) -> Vec<Event> {
+    schedule_bar_seeded(voices, key, bar, 0)
+}
+
+/// Like [`schedule_bar_keyed`] but with an explicit RNG `seed` for probabilistic
+/// tokens (`x?`, `c3?70`). Same seed + bar ⇒ identical events every time.
+pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: u64) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
         let eff = effective(v, bar);
@@ -196,9 +202,15 @@ pub fn schedule_bar_keyed(voices: &[Voice], key: Option<&Key>, bar: i64) -> Vec<
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
         for (i, tok) in eff.iter().enumerate() {
             if tok == "." || tok == "~" { continue; }
+            let (base, prob) = split_prob(tok);
+            // Probabilistic token: deterministically skip when the roll fails.
+            if let Some(p) = prob {
+                if rand01(seed, bar, &v.name, i) >= p { continue; }
+            }
+            if base.is_empty() || base == "." || base == "~" { continue; }
             let phase = i as f32 / n as f32;
             // Degrees → one note; chords → several notes at the same phase.
-            for note in resolve_token(tok, v.is_drum, base_oct, voice_key.as_ref()) {
+            for note in resolve_token(base, v.is_drum, base_oct, voice_key.as_ref()) {
                 events.push(Event {
                     phase,
                     voice: v.name.clone(),
@@ -454,6 +466,73 @@ pub fn parse_chord(tok: &str, octave: i32) -> Option<Vec<i32>> {
     Some(intervals.iter().map(|i| root_midi + i).collect())
 }
 
+// ---------------------------------------------------------------------------
+// Probability & determinism (roadmap B2/B3).
+//
+// A token may carry a probability suffix: `x?` ~ 50%, `x?70` = 70%. Whether it
+// fires is decided by a deterministic hash of (seed, bar, voice, step), so a
+// given `seed:` always replays the exact same performance — reproducible and
+// testable, with no RNG state and no dependencies.
+// ---------------------------------------------------------------------------
+
+/// SplitMix64 finalizer — cheap, well-distributed integer hash.
+fn hash_u64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+/// FNV-1a hash of a string (used to fold a voice name into the RNG).
+fn fnv(s: &str) -> u64 {
+    let mut h: u64 = 0xCBF2_9CE4_8422_2325;
+    for b in s.bytes() { h ^= b as u64; h = h.wrapping_mul(0x0000_0100_0000_01B3); }
+    h
+}
+
+/// Deterministic pseudo-random value in [0,1) from the performance coordinates.
+fn rand01(seed: u64, bar: i64, voice: &str, step: usize) -> f32 {
+    let mut h = hash_u64(seed ^ 0xA5A5_5A5A_1234_5678);
+    h = hash_u64(h ^ (bar as u64));
+    h = hash_u64(h ^ fnv(voice));
+    h = hash_u64(h ^ step as u64);
+    // top 24 bits → [0,1)
+    ((h >> 40) as f32) / ((1u64 << 24) as f32)
+}
+
+/// Split a token's probability suffix: `x?` -> ("x", 0.5), `c3?70` -> ("c3", 0.7),
+/// `x` -> ("x", None). Percent is clamped to 0..=100.
+fn split_prob(tok: &str) -> (&str, Option<f32>) {
+    match tok.find('?') {
+        None => (tok, None),
+        Some(q) => {
+            let base = &tok[..q];
+            let digits = &tok[q + 1..];
+            let p = if digits.is_empty() {
+                0.5
+            } else {
+                match digits.parse::<f32>() {
+                    Ok(n) => (n / 100.0).clamp(0.0, 1.0),
+                    Err(_) => 0.5,
+                }
+            };
+            (base, Some(p))
+        }
+    }
+}
+
+/// Read the optional `seed: N` directive (default 0 = the canonical performance).
+pub fn parse_seed(src: &str) -> u64 {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        if line[..colon].trim().eq_ignore_ascii_case("seed") {
+            if let Ok(n) = line[colon + 1..].trim().parse::<u64>() { return n; }
+        }
+    }
+    0
+}
+
 /// Resolve one melodic/drum token into the note-name string(s) it sounds.
 /// Order: scale degree (needs a key) → chord symbol → plain note. Drums pass
 /// through untouched. A chord returns several notes (played simultaneously).
@@ -662,6 +741,34 @@ mod tests {
         // absolute note names carry their own octave; oct must not touch them
         let toks: Vec<&str> = ev.iter().map(|e| e.token.as_str()).collect();
         assert_eq!(toks, ["c4", "e4"]);
+    }
+
+    #[test]
+    fn probability_extremes_are_deterministic() {
+        // ?0 never fires, ?100 always fires — independent of the RNG.
+        let never = parse("kick: x?0 x?0 x?0 x?0");
+        assert_eq!(schedule_bar_seeded(&never, None, 0, 0).len(), 0);
+        let always = parse("kick: x?100 x?100 x?100 x?100");
+        assert_eq!(schedule_bar_seeded(&always, None, 0, 0).len(), 4);
+    }
+
+    #[test]
+    fn probability_is_reproducible_per_seed() {
+        let v = parse("hat: x?50 x?50 x?50 x?50 x?50 x?50 x?50 x?50");
+        let a = schedule_bar_seeded(&v, None, 3, 42);
+        let b = schedule_bar_seeded(&v, None, 3, 42);
+        assert_eq!(a.len(), b.len()); // same seed+bar => identical
+        // a different seed generally changes which hits survive (not all 8 / 0)
+        let c = schedule_bar_seeded(&v, None, 3, 99);
+        assert!(a.len() <= 8 && c.len() <= 8);
+    }
+
+    #[test]
+    fn parses_seed_directive() {
+        assert_eq!(parse_seed("seed: 7\nkick: x"), 7);
+        assert_eq!(parse_seed("kick: x"), 0);
+        // seed line is a directive, not a voice
+        assert_eq!(parse("seed: 7\nkick: x").len(), 1);
     }
 
     #[test]

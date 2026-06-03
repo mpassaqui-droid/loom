@@ -21,7 +21,8 @@ struct JsEvent {
 pub fn schedule_bar_json(src: &str, bar: i32) -> String {
     let voices = loom_core::parse(src);
     let key = loom_core::parse_key(src);
-    let events = loom_core::schedule_bar_keyed(&voices, key.as_ref(), bar as i64);
+    let seed = loom_core::parse_seed(src);
+    let events = loom_core::schedule_bar_seeded(&voices, key.as_ref(), bar as i64, seed);
     let js: Vec<JsEvent> = events.into_iter().map(|e| {
         let wave = match e.wave {
             loom_core::Wave::Sine => "sine",
