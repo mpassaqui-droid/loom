@@ -145,6 +145,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="rolls">ROLLS</button>
     <button class="tiny" data-p="arp">ARP</button>
     <button class="tiny" data-p="song">SONG</button>
+    <button class="tiny" data-p="pad">PAD</button>
   </div>
 
   <div id="grid"></div>
@@ -159,6 +160,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>chords</b>: UPPERCASE root = accord (plusieurs notes) &mdash; Cm7 F G7 Am Dsus4 &middot; minuscule = note simple<br>
     <b>arp</b>: <i>| arp up</i> (down/updown/downup) sur une voix d'accords &mdash; égrène chaque accord<br>
     <b>song</b>: <i>song: intro*4 verse*8 chorus*8</i> &middot; tag les voix avec <i>| in verse chorus</i> (morceaux longs)<br>
+    <b>son</b> (après |): <i>lp N</i> / <i>hp N</i> filtre (+ <i>q R</i> résonance) &middot; <i>env A D S R</i> enveloppe ADSR<br>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
     <b>rolls</b>: suffixe <i>*N</i> = ratchet/roll (N frappes dans un pas) &mdash; ex. snare: . . x*4 .<br>
@@ -209,9 +211,31 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     g.gain.setValueAtTime(0.28,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.045);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.06);}
   function clap(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="bandpass";f.frequency.value=1800;f.Q.value=1.2;
     g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.1);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.12);}
-  function tone(t,freq,dur,wave,gain){const o=ctx.createOscillator(),g=ctx.createGain();o.type=wave||"square";o.frequency.value=freq;
-    const d=Math.min(dur*0.9,0.4);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(gain||0.22,t+0.008);
-    g.gain.exponentialRampToValueAtTime(0.001,t+d);o.connect(g).connect(bus);o.start(t);o.stop(t+d+0.02);}
+  // tone(t,freq,dur,v[,opt]) — v carries wave/gain and optional filter (cutoff,
+  // filterType,q) + ADSR env {a,d,s,r}. opt.gain overrides peak (used by chords).
+  function tone(t,freq,dur,v,opt){
+    const o=ctx.createOscillator();o.type=(v&&v.wave)||"square";o.frequency.setValueAtTime(freq,t);
+    const g=ctx.createGain();
+    const peak=(opt&&opt.gain!=null)?opt.gain:((v&&v.gain!=null)?v.gain:0.22);
+    let node=o;
+    if(v&&v.cutoff){const f=ctx.createBiquadFilter();f.type=v.filterType||"lowpass";
+      f.frequency.setValueAtTime(v.cutoff,t);f.Q.value=v.q||1;o.connect(f);node=f;}
+    node.connect(g);g.connect(bus);
+    if(v&&v.env){const e=v.env;
+      const aT=t+Math.max(0.001,e.a),dT=aT+Math.max(0.001,e.d);
+      const sus=Math.max(0.0001,peak*e.s),offT=Math.max(dT+0.001,t+dur),rel=Math.max(0.01,e.r);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(peak,aT);
+      g.gain.exponentialRampToValueAtTime(sus,dT);
+      g.gain.setValueAtTime(sus,offT);
+      g.gain.exponentialRampToValueAtTime(0.0001,offT+rel);
+      o.start(t);o.stop(offT+rel+0.02);
+    }else{
+      const d=Math.min(dur*0.9,0.4);g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(peak,t+0.008);
+      g.gain.exponentialRampToValueAtTime(0.001,t+d);
+      o.start(t);o.stop(t+d+0.02);
+    }}
   function midiToFreq(midi){return 440*Math.pow(2,(midi-69)/12);}
   function noteToFreq(n){const m=/^([a-gA-G])([#b]?)(-?\d)$/.exec(n);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
@@ -299,13 +323,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     let tokens=[];for(const t of segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"))){
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
-    let wave="square",gain=0.22,oct=null,arp=null,sections=null;const verbs=[];
+    let wave="square",gain=0.22,oct=null,arp=null,sections=null;
+    let cutoff=null,filterType="lowpass",q=1,env=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
       else if(p[0]==="arp")arp=p[1]||"up";
-      else if(p[0]==="in")sections=p.slice(1).map(s=>s.toLowerCase());else verbs.push(seg);}
-    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+      else if(p[0]==="in")sections=p.slice(1).map(s=>s.toLowerCase());
+      else if(p[0]==="lp"||p[0]==="hp"){filterType=p[0]==="lp"?"lowpass":"highpass";cutoff=Math.max(20,parseFloat(p[1])||800);
+        const qi=p.indexOf("q");if(qi>=0)q=Math.max(0.1,Math.min(20,parseFloat(p[qi+1])||1));}
+      else if(p[0]==="q")q=Math.max(0.1,Math.min(20,parseFloat(p[1])||1));
+      else if(p[0]==="env")env={a:Math.max(0,parseFloat(p[1])||0.01),d:Math.max(0,parseFloat(p[2])||0.1),
+        s:p[3]!==undefined?Math.max(0,Math.min(1,parseFloat(p[3]))):0.6,r:Math.max(0,parseFloat(p[4])||0.2)};
+      else verbs.push(seg);}
+    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   function arpOrder(a,mode){
     if(mode==="down")return a.slice().reverse();
     if(mode==="updown"||mode==="ud"){const d=a.slice().reverse().slice(1,-1);return a.length>2?a.concat(d):a.slice();}
@@ -331,12 +362,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);}
     else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
       const dur=cycleLen/v.tokens.length;
-      if(tok==="x"){const f=noteToFreq("c3");if(f)tone(t,f,dur,v.wave,v.gain);return;}
-      if(k&&isDegree(tok)){tone(t,midiToFreq(degreeToMidi(tok,k)),dur,v.wave,v.gain);return;}
+      if(tok==="x"){const f=noteToFreq("c3");if(f)tone(t,f,dur,v);return;}
+      if(k&&isDegree(tok)){tone(t,midiToFreq(degreeToMidi(tok,k)),dur,v);return;}
       const baseOct=v.oct!=null?v.oct:(k?k.octave:3);
       const ch=parseChord(tok,baseOct);
-      if(ch){const g=v.gain*0.7;for(const mn of ch)tone(t,midiToFreq(mn),dur,v.wave,g);return;}
-      const f=noteToFreq(tok);if(f)tone(t,f,dur,v.wave,v.gain);}}
+      if(ch){for(const mn of ch)tone(t,midiToFreq(mn),dur,v,{gain:v.gain*0.7});return;}
+      const f=noteToFreq(tok);if(f)tone(t,f,dur,v);}}
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(songOn)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
@@ -351,7 +382,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         if(v.arp&&v.type!=="drum"){let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
           const baseOct=v.oct!=null?v.oct:(k?k.octave:3);const ch=parseChord(base,baseOct);
           if(ch&&ch.length>1){const ord=arpOrder(ch,v.arp),M=ord.length;
-            for(let j=0;j<M;j++)tone(t0+j*step/M,midiToFreq(ord[j]),step/M,v.wave,v.gain);continue;}}
+            for(let j=0;j<M;j++)tone(t0+j*step/M,midiToFreq(ord[j]),step/M,v);continue;}}
         for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2]);}}}
   function tick(){if(!playing)return;while(nextBarTime<ctx.currentTime+LOOKAHEAD){scheduleBar(nextBarTime,barCount);nextBarTime+=cycleLen;barCount++;}schedTimer=setTimeout(tick,TICK);}
   function animate(){if(playing&&ctx){const e=ctx.currentTime-transportStart;const phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;
@@ -387,7 +418,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     chance:"# x?70 = 70% chance. seed makes the randomness repeat. change seed for variations.\nseed:  7\nkey:   a minpent\nkick:  x . . . x . . . x . . . x?60 . . .\nsnare: . . . . x . . . . . . . x . . .\nhat:   x?80 x?40 x x?60 x?80 x?40 x x?50 | gain 0.16\nbass:  1 . 1?50 . 3?70 . 1 . 5?60 . . . 4?50 . . . | saw | oct 2\nlead:  5?40 . 3?60 . 1?80 . 4?50 . | pulse | gain 0.18",
     rolls:"# *N = roll/ratchet (N hits in one step). build-ups & fills.\nkey:   c minor\nkick:  x . . . x . . . x . . . x*2 x*4 . .\nsnare: . . . . x . . . . . . . x . x*3 .\nhat:   x x x*2 x x x*2 x x*4 | gain 0.16\nbass:  1 . . . 5, . . . 6, . . . 5,*3 . . . | saw | oct 2\nlead:  1 . 3 . 5*2 . 1' . | pulse | gain 0.18",
     arp:"# | arp up egrene chaque accord note par note (sequence synthwave/techno).\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.14\narp:   Am . . . F . . . C . . . G . . . | arp up | saw | gain 0.2\nbass:  a2 . . . f2 . . . c2 . . . g2 . . . | saw\npad:   Am . . . F . . . C . . . G . . . | sine | gain 0.18",
-    song:"# a LONG track: sections by bar count. tag voices with | in <sections>.\n# watch the console show the current section as it plays.\nsong:  intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2\nkey:   a minor\nkick:  x . . . x . . .\nhat:   x x x x x x x x | gain 0.14 | in verse chorus\nclap:  . . . . x . . . | in chorus\nbass:  1 . 1 . 5, . 6, . | saw | oct 2 | in verse chorus\narp:   Am . . . F . . . C . . . G . . . | arp up | pulse | gain 0.18 | in chorus\npad:   Am . . . . . . . | sine | gain 0.2 | in intro outro chorus"};
+    song:"# a LONG track: sections by bar count. tag voices with | in <sections>.\n# watch the console show the current section as it plays.\nsong:  intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2\nkey:   a minor\nkick:  x . . . x . . .\nhat:   x x x x x x x x | gain 0.14 | in verse chorus\nclap:  . . . . x . . . | in chorus\nbass:  1 . 1 . 5, . 6, . | saw | oct 2 | in verse chorus\narp:   Am . . . F . . . C . . . G . . . | arp up | pulse | gain 0.18 | in chorus\npad:   Am . . . . . . . | sine | gain 0.2 | in intro outro chorus",
+    pad:"# filter (lp) + ADSR env (a d s r). lush, evolving pad sound.\nkey:   c minor\nkick:  x . . . . . . . x . . . . . . .\npad:   Cm7 . . . . . . . Ab . . . . . . . | saw | lp 700 q 6 | env 0.5 0.4 0.7 1.4 | gain 0.16\nbass:  1 . . . . . . . 6, . . . . . . . | saw | lp 400 | env 0.01 0.1 0.5 0.2 | oct 2\nlead:  5 . 7 . 1' . 7 . 5 . 4 . 3 . . . | tri | lp 1800 q 4 | env 0.02 0.15 0.4 0.3 | gain 0.16"};
   document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{editor.value=PRESETS[b.dataset.p];run();}));
 
   function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
@@ -412,6 +444,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Probability: add ? to a token to make it fire only sometimes. x? ~50%, x?70 = 70%, c3?25 = 25%. Works on any token (drums, notes, degrees, chords). Use it for humanized hats, ghost notes, evolving patterns.",
     "- Determinism: add seed: N (e.g. seed: 42) so the random ? choices replay identically every time. Change the seed for a different variation.",
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
+    "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck. Combine with saw/sine/etc and gain.",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");

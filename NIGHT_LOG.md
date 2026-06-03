@@ -43,8 +43,8 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [ ] D2. Changements de tempo/mesure
 
 ### E. Sound design (web — beaux sons)
-- [ ] E1. Filtre par voix (lowpass/highpass, cutoff, résonance)
-- [ ] E2. Enveloppe ADSR par voix
+- [x] E1. Filtre par voix `| lp 800` / `| hp 2000` (+ `q R` résonance). Refactor `tone(t,f,dur,v[,opt])`.
+- [x] E2. Enveloppe ADSR par voix `| env A D S R` (sustain 0-1). Son par défaut inchangé si absent. Preset PAD.
 - [ ] E3. LFO (sur cutoff / pitch / volume)
 - [ ] E4. Detune / unison (super-saw), plus de richesse
 - [ ] E5. Distorsion / drive, bitcrush
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[E1+E2] Filtre & enveloppe ADSR (sound design).** Sur une voix mélodique : `| lp 800` (passe-bas, plus sombre), `| hp 2000` (passe-haut), + `q R` pour la résonance (ex. `lp 600 q 8`). `| env A D S R` = enveloppe (attaque, déclin, niveau de sustain 0-1, release, en secondes) : `env 0.5 0.4 0.7 1.4` pour des nappes lentes, `env 0.005 0.08 0 0.05` pour un pluck sec. Le `tone()` a été refactoré pour porter ces réglages ; **le son par défaut est inchangé** si tu ne mets ni filtre ni env. Essaie le preset **PAD**. (web only, miroir core inchangé/vert)
 - **[C1] Structure de morceau (morceaux longs).** Pose un arrangement avec `song: intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2` (nom*barres, l'arrangement boucle). Puis tague chaque voix avec `| in verse chorus` pour choisir où elle joue. Les voix sans tag jouent partout. On crée les montées/drops en ajoutant des voix dans les sections plus intenses. La console affiche la section courante en live. Nouvelle struct `Program` dans loom-core (front door : `Program::parse(src).schedule_bar(bar)`). Essaie le preset **SONG**. (loom-core +3 tests, wasm bascule sur Program, miroir JS, SYS, preset)
 - **[A4] Arpèges.** Ajoute `| arp up` (ou `down`, `updown`, `downup`) à une voix d'accords : chaque accord est égrené note par note sur la durée du pas — la séquence arpégée classique (techno/synthwave). Essaie le preset **ARP**. (loom-core +2 tests, miroir JS, SYS, preset)
 - **[B4] Ratchets / rolls.** Suffixe `*N` = N frappes rapides dans un seul pas : `snare: . . x*4 .` (un roll), `hat: x*2 x x*3 x`. Combinable : `x*4?60` (roll qui sort 60% du temps). Parfait pour les montées/fills. (loom-core +2 tests + refactor `token_mods` robuste qui gère `?` et `*` dans n'importe quel ordre, miroir JS, SYS, preset ROLLS)
