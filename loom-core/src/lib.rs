@@ -202,23 +202,27 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
         for (i, tok) in eff.iter().enumerate() {
             if tok == "." || tok == "~" { continue; }
-            let (base, prob) = split_prob(tok);
+            let (base, prob, ratchet) = token_mods(tok);
             // Probabilistic token: deterministically skip when the roll fails.
             if let Some(p) = prob {
                 if rand01(seed, bar, &v.name, i) >= p { continue; }
             }
             if base.is_empty() || base == "." || base == "~" { continue; }
-            let phase = i as f32 / n as f32;
             // Degrees → one note; chords → several notes at the same phase.
-            for note in resolve_token(base, v.is_drum, base_oct, voice_key.as_ref()) {
-                events.push(Event {
-                    phase,
-                    voice: v.name.clone(),
-                    token: note,
-                    wave: v.wave,
-                    gain: v.gain,
-                    is_drum: v.is_drum,
-                });
+            let notes = resolve_token(base, v.is_drum, base_oct, voice_key.as_ref());
+            // Ratchet: subdivide this step into `ratchet` evenly-spaced sub-hits.
+            for j in 0..ratchet {
+                let phase = (i as f32 + j as f32 / ratchet as f32) / n as f32;
+                for note in &notes {
+                    events.push(Event {
+                        phase,
+                        voice: v.name.clone(),
+                        token: note.clone(),
+                        wave: v.wave,
+                        gain: v.gain,
+                        is_drum: v.is_drum,
+                    });
+                }
             }
         }
     }
@@ -500,25 +504,33 @@ fn rand01(seed: u64, bar: i64, voice: &str, step: usize) -> f32 {
     ((h >> 40) as f32) / ((1u64 << 24) as f32)
 }
 
-/// Split a token's probability suffix: `x?` -> ("x", 0.5), `c3?70` -> ("c3", 0.7),
-/// `x` -> ("x", None). Percent is clamped to 0..=100.
-fn split_prob(tok: &str) -> (&str, Option<f32>) {
-    match tok.find('?') {
-        None => (tok, None),
-        Some(q) => {
-            let base = &tok[..q];
-            let digits = &tok[q + 1..];
-            let p = if digits.is_empty() {
-                0.5
-            } else {
-                match digits.parse::<f32>() {
-                    Ok(n) => (n / 100.0).clamp(0.0, 1.0),
-                    Err(_) => 0.5,
-                }
-            };
-            (base, Some(p))
-        }
-    }
+/// Digits immediately following position `at` in `tok` (a `?`/`*` marker).
+fn digits_after(tok: &str, at: usize) -> &str {
+    let rest = &tok[at + 1..];
+    let end = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+    &rest[..end]
+}
+
+/// Parse a token's modifiers, in any order: probability `?P` (`x?` ~50%,
+/// `x?70` = 70%) and ratchet `*N` (`x*3` = 3 sub-hits). Returns the bare base
+/// token, an optional fire probability in 0..1, and a ratchet count ≥ 1.
+fn token_mods(tok: &str) -> (&str, Option<f32>, usize) {
+    let q = tok.find('?');
+    let r = tok.find('*');
+    let cut = match (q, r) {
+        (Some(a), Some(b)) => a.min(b),
+        (Some(a), None) => a,
+        (None, Some(b)) => b,
+        (None, None) => return (tok, None, 1),
+    };
+    let prob = q.map(|p| {
+        let d = digits_after(tok, p);
+        if d.is_empty() { 0.5 } else { (d.parse::<f32>().unwrap_or(50.0) / 100.0).clamp(0.0, 1.0) }
+    });
+    let ratchet = r
+        .map(|p| digits_after(tok, p).parse::<usize>().unwrap_or(2).max(1))
+        .unwrap_or(1);
+    (&tok[..cut], prob, ratchet)
 }
 
 /// Read the optional `seed: N` directive (default 0 = the canonical performance).
@@ -741,6 +753,29 @@ mod tests {
         // absolute note names carry their own octave; oct must not touch them
         let toks: Vec<&str> = ev.iter().map(|e| e.token.as_str()).collect();
         assert_eq!(toks, ["c4", "e4"]);
+    }
+
+    #[test]
+    fn ratchet_subdivides_a_step() {
+        // x*2 in a 2-step bar: step width 0.5, so sub-hits at 0.0 and 0.25.
+        let v = parse("kick: x*2 .");
+        let ev = schedule_bar_seeded(&v, None, 0, 0);
+        assert_eq!(ev.len(), 2);
+        assert!((ev[0].phase - 0.0).abs() < 1e-6);
+        assert!((ev[1].phase - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ratchet_works_on_notes_and_combines_with_probability() {
+        // a single-step bar with a triple ratchet on degree 1 = three c3 hits
+        let v = parse("key: c major\nlead: 1*3");
+        let k = parse_key("key: c major");
+        let ev = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
+        assert_eq!(ev.len(), 3);
+        assert!(ev.iter().all(|e| e.token == "c3"));
+        // p=0 ratchet never fires (probability is checked before the ratchet)
+        let z = parse("kick: x?0*4");
+        assert_eq!(schedule_bar_seeded(&z, None, 0, 0).len(), 0);
     }
 
     #[test]

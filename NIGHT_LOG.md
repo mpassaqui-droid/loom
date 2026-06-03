@@ -32,7 +32,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] B1. Rythmes euclidiens `e(k,n)` et `e(k,n,rot)` — distribution Bjorklund + rotation, mixable avec tokens normaux
 - [x] B2. Probabilité par pas (`x?` ~50%, `x?70` 70%) — sur n'importe quel token. Preset CHANCE.
 - [x] B3. Seed déterministe (`seed: 42`) — RNG SplitMix64/(seed,bar,voix,pas), rejouable à l'identique.
-- [ ] B4. Ratchets / répétitions (`x*3`), mutations
+- [x] B4. Ratchets / rolls (`x*3` = N frappes dans un pas), combinable avec `?`. Preset ROLLS. (mutations = plus tard si temps)
 
 ### C. Structure (morceaux longs)
 - [ ] C1. Sections nommées + arrangement/timeline (intro/verse/chorus/drop, ordre, répétitions)
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[B4] Ratchets / rolls.** Suffixe `*N` = N frappes rapides dans un seul pas : `snare: . . x*4 .` (un roll), `hat: x*2 x x*3 x`. Combinable : `x*4?60` (roll qui sort 60% du temps). Parfait pour les montées/fills. (loom-core +2 tests + refactor `token_mods` robuste qui gère `?` et `*` dans n'importe quel ordre, miroir JS, SYS, preset ROLLS)
 - **[B2+B3] Probabilité & seed.** Ajoute `?` à un token pour qu'il joue *parfois* : `x?` ~50%, `x?70` = 70%, `c3?25`, `Cm7?` — marche sur tout (drums, notes, degrés, accords). `seed: N` rend les choix aléatoires **reproductibles** (rejoue à l'identique) ; change le seed pour une variation. Essaie le preset **CHANCE**. (loom-core +3 tests, RNG déterministe, miroir JS, wasm, SYS, preset)
 - **[A2] Accords.** Un token à **initiale MAJUSCULE** joue un accord entier : `Cm7`, `F`, `G7`, `Am`, `Dsus4`, `Gmaj7`… Minuscule reste une note simple (`c3`) → aucune ambiguïté. ~30 qualités. Mets-les sur une voix `keys:`/`pad:`. Essaie le preset **CHORDS**. (loom-core +4 tests, miroir JS multi-notes, SYS, preset)
 - **[B1] Rythmes euclidiens.** `e(k,n)` = k frappes réparties uniformément sur n pas ; `e(k,n,rot)` tourne le motif. Ex : `kick: e(4,16)`, `hat: e(7,16,2)`. Mixable avec des tokens normaux. Essaie le preset **EUCLID**. (loom-core +2 tests, miroir JS, SYS, preset)
