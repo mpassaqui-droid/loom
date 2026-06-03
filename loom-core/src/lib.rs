@@ -686,14 +686,47 @@ impl Program {
     }
 }
 
+/// Parse a roman-numeral chord token: `I`..`VII` / `i`..`vii`, optional trailing
+/// `7` for a diatonic seventh. Returns (degree 1..7, seventh?). Case is allowed
+/// either way — the chord quality comes from the scale, not the casing.
+fn parse_roman(tok: &str) -> Option<(i32, bool)> {
+    let (body, seventh) = match tok.strip_suffix('7') { Some(b) => (b, true), None => (tok, false) };
+    let deg = match body {
+        "I" | "i" => 1, "II" | "ii" => 2, "III" | "iii" => 3, "IV" | "iv" => 4,
+        "V" | "v" => 5, "VI" | "vi" => 6, "VII" | "vii" => 7,
+        _ => return None,
+    };
+    Some((deg, seventh))
+}
+
+/// MIDI note for a 0-based scale index, wrapping up an octave past the scale end.
+fn scale_note_midi(key: &Key, idx: i32) -> i32 {
+    let len = key.scale.len() as i32;
+    let wrap = idx.div_euclid(len);
+    let step = key.scale[idx.rem_euclid(len) as usize];
+    12 * (key.octave + wrap + 1) + key.tonic + step
+}
+
+/// Build a diatonic chord on a scale degree by stacking scale-thirds, so the
+/// quality (maj/min/dim…) is whatever the scale gives — works in any scale.
+fn diatonic_chord(key: &Key, degree: i32, seventh: bool) -> Vec<i32> {
+    let i0 = degree - 1;
+    let mut n = vec![scale_note_midi(key, i0), scale_note_midi(key, i0 + 2), scale_note_midi(key, i0 + 4)];
+    if seventh { n.push(scale_note_midi(key, i0 + 6)); }
+    n
+}
+
 /// Resolve one melodic/drum token into the note-name string(s) it sounds.
-/// Order: scale degree (needs a key) → chord symbol → plain note. Drums pass
-/// through untouched. A chord returns several notes (played simultaneously).
+/// Order: scale degree → roman-numeral chord → chord symbol → plain note (the
+/// first two need a key). Drums pass through. Chords return several notes.
 fn resolve_token(tok: &str, is_drum: bool, octave: i32, key: Option<&Key>) -> Vec<String> {
     if is_drum { return vec![tok.to_string()]; }
     if let Some(k) = key {
         if is_degree(tok) {
             return vec![degree_to_midi(tok, k).map(midi_to_name).unwrap_or_else(|| tok.to_string())];
+        }
+        if let Some((deg, seventh)) = parse_roman(tok) {
+            return diatonic_chord(k, deg, seventh).into_iter().map(midi_to_name).collect();
         }
     }
     if let Some(notes) = parse_chord(tok, octave) {
@@ -1010,6 +1043,30 @@ mod tests {
         let ev2 = schedule_bar_seeded(&ud, None, 0, 0);
         // c eb g bb then back down without repeating ends: g eb
         assert_eq!(ev2.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","eb3","g3","bb3","g3","eb3"]);
+    }
+
+    #[test]
+    fn roman_numerals_build_diatonic_chords() {
+        let k = parse_key("key: c major");
+        // I = C E G
+        let i = schedule_bar_seeded(&parse("key: c major\nx: I"), k.as_ref(), 0, 0);
+        assert_eq!(i.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","e3","g3"]);
+        // V7 = G B D F (diatonic seventh)
+        let v7 = schedule_bar_seeded(&parse("key: c major\nx: V7"), k.as_ref(), 0, 0);
+        assert_eq!(v7.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["g3","b3","d4","f4"]);
+        // vi = A C E (minor, straight from the scale)
+        let vi = schedule_bar_seeded(&parse("key: c major\nx: vi"), k.as_ref(), 0, 0);
+        assert_eq!(vi.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["a3","c4","e4"]);
+    }
+
+    #[test]
+    fn roman_needs_a_key_and_adapts_to_the_scale() {
+        // no key: "i" is not a note, yields nothing playable
+        assert!(parse_chord("i", 3).is_none());
+        // in c minor, i = C Eb G (minor tonic)
+        let k = parse_key("key: c minor");
+        let i = schedule_bar_seeded(&parse("key: c minor\nx: i"), k.as_ref(), 0, 0);
+        assert_eq!(i.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","eb3","g3"]);
     }
 
     #[test]

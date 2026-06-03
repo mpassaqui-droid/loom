@@ -25,7 +25,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] A2. Accords `Cm7` `F` `G7` — MAJUSCULE = accord (notes simultanées), minuscule = note. 30+ qualités (maj m dim aug 7 maj7 m7 m7b5 dim7 6 m6 sus2 sus4 add9 9 maj9 m9). Preset CHORDS.
 - [x] A1. Gammes du monde (hijaz, hijazkar, nahawand, kurd, ajam, bhairav, yaman, todi, slendro, pelog, hirajoshi, insen, iwato, egyptian, blues, harmonic/melodic minor, whole-tone, chromatic) — presets HIJAZ, RAGA
 - [ ] A2. Accords `chord: Cm7` — un token joue plusieurs notes (triades, 7th, sus, add)
-- [ ] A3. Progressions d'accords + degrés d'accords romains (I IV V vi…)
+- [x] A3. Accords romains diatoniques `I ii iii IV V vi vii` (+`7`) contre la key (s'adaptent à la gamme). Arpégeables. Preset PROG.
 - [x] A4. Arpèges `| arp up/down/updown/downup` — égrène les accords sur le pas. Preset ARP.
 
 ### B. Génératif & rythme
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[A3] Accords en chiffres romains.** Avec une `key:`, écris `I ii iii IV V vi vii` (+`7` pour la septième : `V7`, `ii7`) → l'accord diatonique construit sur ce degré, dont la qualité (majeur/mineur/dim) vient automatiquement de la gamme (en mineur `i` est mineur, etc.). Parfait pour les progressions (`I V vi IV`). Arpégeables avec `| arp up`. Essaie le preset **PROG**. (loom-core +2 tests, miroir JS dans trigger+arp, SYS, preset)
 - **[E7] Presets de genre soignés.** Les boutons du haut sont maintenant de vrais points de départ par style, exploitant tout le nouveau sound design : **CHIP** (8-bit), **TECHNO** (pump + stabs), **HOUSE** (off-beat hats, stabs orgue), **DNB** (break + reese bass disto), **AMBIENT** (nappes lentes + LFO), **SYNTHWAVE** (arp + pad gated + basse grasse). Clique-les et regarde le code pour apprendre les combinaisons. (web only, 38 tests verts)
 - **[E6] Sidechain / pump.** Ajoute une ligne `duck: 70` (0-100) : tout le mix « duck » (baisse puis remonte) à chaque coup de kick — le pompage caractéristique de la techno/house. Implémenté via un gain `scGain` entre le bus et le master, déclenché dans `kick()` (recovery exponentielle). Essaie le preset **PUMP**. (web only ; `duck` ajouté aux directives core pour ne pas créer de voix — 38 tests verts)
 - **[E3+E4+E5] LFO, super-saw, distorsion.** Sur une voix mélodique : `| unison 5 | detune 18` empile 5 oscillateurs désaccordés = gros son super-saw ; `| drive 0.5` ajoute de la chaleur/saturation ; `| lfo cutoff 0.3 0.6` fait bouger le filtre (cible `cutoff`, `pitch` = vibrato, `gain` = tremolo ; RATE en Hz, DEPTH 0-1). `tone()` refactoré en chaîne unison→filtre→ADSR→drive→tremolo→bus, avec clamps (pas de clic/saturation incontrôlée). Essaie le preset **SUPERSAW**. (web only, core inchangé/vert)
