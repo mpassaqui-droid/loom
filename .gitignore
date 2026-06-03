@@ -2,3 +2,6 @@ target/
 **/target/
 Cargo.lock
 .DS_Store
+
+.claude/scheduled_tasks.lock
+.claude/*.lock
