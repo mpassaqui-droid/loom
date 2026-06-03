@@ -16,10 +16,45 @@ pub struct Voice {
     /// Reference octave for this voice's scale degrees (`| oct N`). When `None`,
     /// the key's octave is used. Has no effect on absolute note names.
     pub octave: Option<i32>,
+    /// Arpeggio mode (`| arp up|down|…`). Spreads chord tokens across the step.
+    pub arp: Option<ArpMode>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Wave { Sine, Square, Saw, Triangle }
+
+/// Arpeggio direction for a chord voice (`| arp up|down|updown|downup`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArpMode { Up, Down, UpDown, DownUp }
+
+fn arp_mode(w: &str) -> ArpMode {
+    match w {
+        "down" => ArpMode::Down,
+        "updown" | "ud" => ArpMode::UpDown,
+        "downup" | "du" => ArpMode::DownUp,
+        _ => ArpMode::Up,
+    }
+}
+
+/// Order a chord's notes for an arpeggio. UpDown/DownUp don't repeat the
+/// turning-point notes (…g bb g eb…), so they read as a smooth bounce.
+fn arp_order(notes: &[String], mode: ArpMode) -> Vec<String> {
+    let rev = || notes.iter().rev().cloned().collect::<Vec<_>>();
+    match mode {
+        ArpMode::Up => notes.to_vec(),
+        ArpMode::Down => rev(),
+        ArpMode::UpDown => {
+            let mut v = notes.to_vec();
+            if notes.len() > 2 { v.extend(notes[1..notes.len() - 1].iter().rev().cloned()); }
+            v
+        }
+        ArpMode::DownUp => {
+            let mut v = rev();
+            if notes.len() > 2 { v.extend(notes[1..notes.len() - 1].iter().cloned()); }
+            v
+        }
+    }
+}
 
 impl Wave {
     fn from_word(w: &str) -> Option<Wave> {
@@ -113,6 +148,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut wave = if is_drum { Wave::Square } else { Wave::Square };
         let mut gain = 0.22_f32;
         let mut octave = None;
+        let mut arp = None;
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -127,11 +163,13 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 }
             } else if head == "oct" {
                 octave = parts.next().and_then(|x| x.parse::<i32>().ok());
+            } else if head == "arp" {
+                arp = Some(arp_mode(parts.next().unwrap_or("up")));
             } else {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave });
+        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave, arp });
     }
     out
 }
@@ -210,18 +248,31 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
             if base.is_empty() || base == "." || base == "~" { continue; }
             // Degrees → one note; chords → several notes at the same phase.
             let notes = resolve_token(base, v.is_drum, base_oct, voice_key.as_ref());
-            // Ratchet: subdivide this step into `ratchet` evenly-spaced sub-hits.
-            for j in 0..ratchet {
-                let phase = (i as f32 + j as f32 / ratchet as f32) / n as f32;
-                for note in &notes {
-                    events.push(Event {
-                        phase,
-                        voice: v.name.clone(),
-                        token: note.clone(),
-                        wave: v.wave,
-                        gain: v.gain,
-                        is_drum: v.is_drum,
-                    });
+            let push = |events: &mut Vec<Event>, phase: f32, note: &str| {
+                events.push(Event {
+                    phase,
+                    voice: v.name.clone(),
+                    token: note.to_string(),
+                    wave: v.wave,
+                    gain: v.gain,
+                    is_drum: v.is_drum,
+                });
+            };
+            match v.arp {
+                // Arpeggio: spread a chord's notes one-by-one across the step.
+                Some(mode) if !v.is_drum && notes.len() > 1 => {
+                    let ord = arp_order(&notes, mode);
+                    let m = ord.len();
+                    for (j, note) in ord.iter().enumerate() {
+                        push(&mut events, (i as f32 + j as f32 / m as f32) / n as f32, note);
+                    }
+                }
+                // Otherwise: ratchet subdivides the step into evenly-spaced hits.
+                _ => {
+                    for j in 0..ratchet {
+                        let phase = (i as f32 + j as f32 / ratchet as f32) / n as f32;
+                        for note in &notes { push(&mut events, phase, note); }
+                    }
                 }
             }
         }
@@ -804,6 +855,28 @@ mod tests {
         assert_eq!(parse_seed("kick: x"), 0);
         // seed line is a directive, not a voice
         assert_eq!(parse("seed: 7\nkick: x").len(), 1);
+    }
+
+    #[test]
+    fn arp_spreads_chord_across_the_step() {
+        let v = parse("keys: Cm7 | arp up");
+        assert_eq!(v[0].arp, Some(ArpMode::Up));
+        let ev = schedule_bar_seeded(&v, None, 0, 0);
+        // one-step bar, 4 chord notes -> phases 0, .25, .5, .75 in order
+        assert_eq!(ev.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","eb3","g3","bb3"]);
+        let phases: Vec<f32> = ev.iter().map(|e| e.phase).collect();
+        assert!((phases[1] - 0.25).abs() < 1e-6 && (phases[3] - 0.75).abs() < 1e-6);
+    }
+
+    #[test]
+    fn arp_down_and_updown_orders() {
+        let down = parse("keys: C | arp down");
+        let ev = schedule_bar_seeded(&down, None, 0, 0);
+        assert_eq!(ev.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["g3","e3","c3"]);
+        let ud = parse("keys: Cm7 | arp updown");
+        let ev2 = schedule_bar_seeded(&ud, None, 0, 0);
+        // c eb g bb then back down without repeating ends: g eb
+        assert_eq!(ev2.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","eb3","g3","bb3","g3","eb3"]);
     }
 
     #[test]
