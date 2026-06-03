@@ -140,6 +140,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="hijaz">HIJAZ</button>
     <button class="tiny" data-p="raga">RAGA</button>
     <button class="tiny" data-p="euclid">EUCLID</button>
+    <button class="tiny" data-p="chords">CHORDS</button>
   </div>
 
   <div id="grid"></div>
@@ -151,6 +152,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>drums</b>: kick snare hat clap &mdash; use x and .<br>
     <b>melody</b>: any other name &mdash; notes like c2 eb3 g4<br>
     <b>key</b>: <i>key: c minor</i> &middot; then melody can use degrees 1-7 (1=tonic) &middot; octave marks ' and , &middot; alter with suffix: 7# 3b 5b<br>
+    <b>chords</b>: UPPERCASE root = accord (plusieurs notes) &mdash; Cm7 F G7 Am Dsus4 &middot; minuscule = note simple<br>
+    <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>verbs</b> (after |): rev &middot; fast N &middot; slow N &middot; every N &lt;verb&gt;<br>
     <b>timbre</b> (after |): saw sine tri pulse square &middot; gain N &middot; oct N (octave par défaut des degrés)
     </p>
@@ -247,6 +250,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     rot=((rot%n)+n)%n;return v.slice(rot).concat(v.slice(0,rot));}
   function expandEuclid(tok){const m=/^e\((\d+),(\d+)(?:,(-?\d+))?\)$/.exec(tok);if(!m)return null;
     return euclid(+m[1],+m[2],m[3]?+m[3]:0).map(b=>b?"x":".");}
+  // chords: UPPERCASE root = chord (Cm7, F, G7); lowercase stays a single note
+  const CHORDS={"":[0,4,7],maj:[0,4,7],M:[0,4,7],m:[0,3,7],min:[0,3,7],"-":[0,3,7],
+    dim:[0,3,6],o:[0,3,6],aug:[0,4,8],"+":[0,4,8],"7":[0,4,7,10],maj7:[0,4,7,11],M7:[0,4,7,11],
+    m7:[0,3,7,10],min7:[0,3,7,10],"-7":[0,3,7,10],m7b5:[0,3,6,10],min7b5:[0,3,6,10],
+    dim7:[0,3,6,9],o7:[0,3,6,9],"6":[0,4,7,9],m6:[0,3,7,9],min6:[0,3,7,9],
+    sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],add9:[0,4,7,14],"9":[0,4,7,10,14],
+    maj9:[0,4,7,11,14],M9:[0,4,7,11,14],m9:[0,3,7,10,14],min9:[0,3,7,10,14]};
+  function parseChord(tok,oct){const m=/^([A-G])([#b]?)(.*)$/.exec(tok);if(!m)return null;
+    const map={C:0,D:2,E:4,F:5,G:7,A:9,B:11};let root=map[m[1]];if(m[2]==="#")root++;if(m[2]==="b")root--;
+    const iv=CHORDS[m[3]];if(!iv)return null;const rm=12*(oct+1)+root;return iv.map(i=>rm+i);}
 
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
@@ -280,7 +293,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     if(v.type==="drum"){const n=v.name;if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
       else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);}
     else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
-      const f=tok==="x"?noteToFreq("c3"):tokenToFreq(tok,k);if(f)tone(t,f,cycleLen/v.tokens.length,v.wave,v.gain);}}
+      const dur=cycleLen/v.tokens.length;
+      if(tok==="x"){const f=noteToFreq("c3");if(f)tone(t,f,dur,v.wave,v.gain);return;}
+      if(k&&isDegree(tok)){tone(t,midiToFreq(degreeToMidi(tok,k)),dur,v.wave,v.gain);return;}
+      const baseOct=v.oct!=null?v.oct:(k?k.octave:3);
+      const ch=parseChord(tok,baseOct);
+      if(ch){const g=v.gain*0.7;for(const mn of ch)tone(t,midiToFreq(mn),dur,v.wave,g);return;}
+      const f=noteToFreq(tok);if(f)tone(t,f,dur,v.wave,v.gain);}}
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     for(const v of voices){const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
       for(let i=0;i<n;i++){let t=barT+i*step;if(i%2===1)t+=sw*step;trigger(v,eff[i],t);}}}
@@ -313,7 +332,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2",
     hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
     raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2",
-    euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18"};
+    euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18",
+    chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2"};
   document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{editor.value=PRESETS[b.dataset.p];run();}));
 
   function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
@@ -333,6 +353,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>. Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
+    "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: maj m dim aug 7 maj7 m7 m7b5 dim7 6 m6 sus2 sus4 add9 9 maj9 m9. Use on a pad/keys voice for harmony, e.g. keys: Cm7 . . . Fm7 . . . | sine.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");
 

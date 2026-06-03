@@ -193,23 +193,21 @@ pub fn schedule_bar_keyed(voices: &[Voice], key: Option<&Key>, bar: i64) -> Vec<
             Some(o) => Key { tonic: k.tonic, scale: k.scale.clone(), octave: o },
             None => k.clone(),
         });
+        let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
         for (i, tok) in eff.iter().enumerate() {
             if tok == "." || tok == "~" { continue; }
-            // Resolve scale degrees on melodic voices into absolute note names.
-            let token = match &voice_key {
-                Some(k) if !v.is_drum && is_degree(tok) => {
-                    degree_to_midi(tok, k).map(midi_to_name).unwrap_or_else(|| tok.clone())
-                }
-                _ => tok.clone(),
-            };
-            events.push(Event {
-                phase: i as f32 / n as f32,
-                voice: v.name.clone(),
-                token,
-                wave: v.wave,
-                gain: v.gain,
-                is_drum: v.is_drum,
-            });
+            let phase = i as f32 / n as f32;
+            // Degrees → one note; chords → several notes at the same phase.
+            for note in resolve_token(tok, v.is_drum, base_oct, voice_key.as_ref()) {
+                events.push(Event {
+                    phase,
+                    voice: v.name.clone(),
+                    token: note,
+                    wave: v.wave,
+                    gain: v.gain,
+                    is_drum: v.is_drum,
+                });
+            }
         }
     }
     events
@@ -414,6 +412,64 @@ fn midi_to_name(midi: i32) -> String {
     format!("{}{}", NAMES[pc], octave)
 }
 
+/// Parse a chord symbol into its MIDI notes, e.g. `Cm7` -> [c, eb, g, bb].
+///
+/// Convention: the root must be an UPPERCASE letter A–G (so `Cm7`, `F`, `G7`).
+/// Lowercase tokens stay single notes/degrees (`c3`, `eb2`), which is how we
+/// disambiguate `C` the chord from `c3` the note. Uppercase note names that
+/// carry an octave (`C3`) fail the quality match and fall back to a plain note.
+pub fn parse_chord(tok: &str, octave: i32) -> Option<Vec<i32>> {
+    let b = tok.as_bytes();
+    if b.is_empty() { return None; }
+    let base: i32 = match b[0] as char {
+        'C'=>0,'D'=>2,'E'=>4,'F'=>5,'G'=>7,'A'=>9,'B'=>11, _=>return None,
+    };
+    let mut idx = 1;
+    let mut root = base;
+    if idx < b.len() && (b[idx] == b'#' || b[idx] == b'b') {
+        if b[idx] == b'#' { root += 1; } else { root -= 1; }
+        idx += 1;
+    }
+    let intervals: &[i32] = match &tok[idx..] {
+        "" | "maj" | "M"            => &[0, 4, 7],
+        "m" | "min" | "-"           => &[0, 3, 7],
+        "dim" | "o"                 => &[0, 3, 6],
+        "aug" | "+"                 => &[0, 4, 8],
+        "7"                         => &[0, 4, 7, 10],
+        "maj7" | "M7"               => &[0, 4, 7, 11],
+        "m7" | "min7" | "-7"        => &[0, 3, 7, 10],
+        "m7b5" | "min7b5"           => &[0, 3, 6, 10],
+        "dim7" | "o7"               => &[0, 3, 6, 9],
+        "6"                         => &[0, 4, 7, 9],
+        "m6" | "min6"               => &[0, 3, 7, 9],
+        "sus2"                      => &[0, 2, 7],
+        "sus4" | "sus"              => &[0, 5, 7],
+        "add9"                      => &[0, 4, 7, 14],
+        "9"                         => &[0, 4, 7, 10, 14],
+        "maj9" | "M9"               => &[0, 4, 7, 11, 14],
+        "m9" | "min9"               => &[0, 3, 7, 10, 14],
+        _ => return None,
+    };
+    let root_midi = 12 * (octave + 1) + root;
+    Some(intervals.iter().map(|i| root_midi + i).collect())
+}
+
+/// Resolve one melodic/drum token into the note-name string(s) it sounds.
+/// Order: scale degree (needs a key) → chord symbol → plain note. Drums pass
+/// through untouched. A chord returns several notes (played simultaneously).
+fn resolve_token(tok: &str, is_drum: bool, octave: i32, key: Option<&Key>) -> Vec<String> {
+    if is_drum { return vec![tok.to_string()]; }
+    if let Some(k) = key {
+        if is_degree(tok) {
+            return vec![degree_to_midi(tok, k).map(midi_to_name).unwrap_or_else(|| tok.to_string())];
+        }
+    }
+    if let Some(notes) = parse_chord(tok, octave) {
+        return notes.into_iter().map(midi_to_name).collect();
+    }
+    vec![tok.to_string()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -606,6 +662,39 @@ mod tests {
         // absolute note names carry their own octave; oct must not touch them
         let toks: Vec<&str> = ev.iter().map(|e| e.token.as_str()).collect();
         assert_eq!(toks, ["c4", "e4"]);
+    }
+
+    #[test]
+    fn chord_expands_to_simultaneous_notes() {
+        // No key needed: Cm7 (uppercase) -> c eb g bb, all at the same phase.
+        let v = parse("pad: Cm7 . | sine");
+        let ev = schedule_bar_keyed(&v, None, 0);
+        let toks: Vec<&str> = ev.iter().map(|e| e.token.as_str()).collect();
+        assert_eq!(toks, ["c3", "eb3", "g3", "bb3"]);
+        assert!(ev.iter().all(|e| e.phase == 0.0));
+    }
+
+    #[test]
+    fn bare_uppercase_is_a_major_triad() {
+        let v = parse("pad: G .");
+        let ev = schedule_bar_keyed(&v, None, 0);
+        assert_eq!(ev.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["g3","b3","d4"]);
+    }
+
+    #[test]
+    fn uppercase_note_with_octave_stays_a_note() {
+        // "C3" carries an octave so it is NOT a chord — it is the note C3.
+        let v = parse("lead: C3 .");
+        let ev = schedule_bar_keyed(&v, None, 0);
+        assert_eq!(ev.len(), 1);
+        assert!(close(note_to_freq(&ev[0].token), note_to_freq("c3")));
+    }
+
+    #[test]
+    fn chord_respects_voice_octave() {
+        let v = parse("pad: Am . | oct 2");
+        let ev = schedule_bar_keyed(&v, None, 0);
+        assert_eq!(ev.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["a2","c3","e3"]);
     }
 
     #[test]

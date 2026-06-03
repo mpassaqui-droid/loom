@@ -22,6 +22,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 ## Plan (coché au fur et à mesure)
 
 ### A. Théorie musicale
+- [x] A2. Accords `Cm7` `F` `G7` — MAJUSCULE = accord (notes simultanées), minuscule = note. 30+ qualités (maj m dim aug 7 maj7 m7 m7b5 dim7 6 m6 sus2 sus4 add9 9 maj9 m9). Preset CHORDS.
 - [x] A1. Gammes du monde (hijaz, hijazkar, nahawand, kurd, ajam, bhairav, yaman, todi, slendro, pelog, hirajoshi, insen, iwato, egyptian, blues, harmonic/melodic minor, whole-tone, chromatic) — presets HIJAZ, RAGA
 - [ ] A2. Accords `chord: Cm7` — un token joue plusieurs notes (triades, 7th, sus, add)
 - [ ] A3. Progressions d'accords + degrés d'accords romains (I IV V vi…)
@@ -59,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[A2] Accords.** Un token à **initiale MAJUSCULE** joue un accord entier : `Cm7`, `F`, `G7`, `Am`, `Dsus4`, `Gmaj7`… Minuscule reste une note simple (`c3`) → aucune ambiguïté. ~30 qualités. Mets-les sur une voix `keys:`/`pad:`. Essaie le preset **CHORDS**. (loom-core +4 tests, miroir JS multi-notes, SYS, preset)
 - **[B1] Rythmes euclidiens.** `e(k,n)` = k frappes réparties uniformément sur n pas ; `e(k,n,rot)` tourne le motif. Ex : `kick: e(4,16)`, `hat: e(7,16,2)`. Mixable avec des tokens normaux. Essaie le preset **EUCLID**. (loom-core +2 tests, miroir JS, SYS, preset)
 - **[A1] Gammes du monde.** 19 gammes ajoutées (hijaz, hijazkar/byzantine, nahawand, kurd, ajam, bhairav, yaman, todi, slendro, pelog, hirajoshi, insen, iwato, egyptian, blues, harmonic/melodic minor, whole-tone, chromatic). Presets **HIJAZ**, **RAGA**. Note : les quarts de ton (maqam bayati/rast/saba) sont approximés en 12-TET — couche microtonale = chantier futur.
 - **[init]** git initialisé, baseline commitée sur `main`, branche `night-build` créée. Plan posé.
