@@ -35,7 +35,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] B4. Ratchets / rolls (`x*3` = N frappes dans un pas), combinable avec `?`. Preset ROLLS. (mutations = plus tard si temps)
 
 ### C. Structure (morceaux longs)
-- [ ] C1. Sections nommées + arrangement/timeline (intro/verse/chorus/drop, ordre, répétitions)
+- [x] C1. Structure : `song: intro*4 verse*8 chorus*8 …` + tag de voix `| in verse chorus`. Struct `Program` dans loom-core. Preset SONG. La console affiche la section courante.
 - [ ] C2. Variation A/B, longueur de morceau
 
 ### D. Polyrythmie & temps
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[C1] Structure de morceau (morceaux longs).** Pose un arrangement avec `song: intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2` (nom*barres, l'arrangement boucle). Puis tague chaque voix avec `| in verse chorus` pour choisir où elle joue. Les voix sans tag jouent partout. On crée les montées/drops en ajoutant des voix dans les sections plus intenses. La console affiche la section courante en live. Nouvelle struct `Program` dans loom-core (front door : `Program::parse(src).schedule_bar(bar)`). Essaie le preset **SONG**. (loom-core +3 tests, wasm bascule sur Program, miroir JS, SYS, preset)
 - **[A4] Arpèges.** Ajoute `| arp up` (ou `down`, `updown`, `downup`) à une voix d'accords : chaque accord est égrené note par note sur la durée du pas — la séquence arpégée classique (techno/synthwave). Essaie le preset **ARP**. (loom-core +2 tests, miroir JS, SYS, preset)
 - **[B4] Ratchets / rolls.** Suffixe `*N` = N frappes rapides dans un seul pas : `snare: . . x*4 .` (un roll), `hat: x*2 x x*3 x`. Combinable : `x*4?60` (roll qui sort 60% du temps). Parfait pour les montées/fills. (loom-core +2 tests + refactor `token_mods` robuste qui gère `?` et `*` dans n'importe quel ordre, miroir JS, SYS, preset ROLLS)
 - **[B2+B3] Probabilité & seed.** Ajoute `?` à un token pour qu'il joue *parfois* : `x?` ~50%, `x?70` = 70%, `c3?25`, `Cm7?` — marche sur tout (drums, notes, degrés, accords). `seed: N` rend les choix aléatoires **reproductibles** (rejoue à l'identique) ; change le seed pour une variation. Essaie le preset **CHANCE**. (loom-core +3 tests, RNG déterministe, miroir JS, wasm, SYS, preset)

@@ -18,6 +18,9 @@ pub struct Voice {
     pub octave: Option<i32>,
     /// Arpeggio mode (`| arp up|down|…`). Spreads chord tokens across the step.
     pub arp: Option<ArpMode>,
+    /// Sections this voice plays in (`| in verse chorus`). `None` = always on.
+    /// Only consulted when the program declares a `song:` arrangement.
+    pub sections: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,8 +86,8 @@ pub struct Event {
     pub is_drum: bool,
 }
 
-/// Names that introduce a *directive* (key/scale/seed/…), not a playable voice.
-const DIRECTIVES: [&str; 3] = ["key", "scale", "seed"];
+/// Names that introduce a *directive* (key/scale/seed/song/…), not a voice.
+const DIRECTIVES: [&str; 5] = ["key", "scale", "seed", "song", "arrange"];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
 /// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.
@@ -149,6 +152,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut gain = 0.22_f32;
         let mut octave = None;
         let mut arp = None;
+        let mut sections: Option<Vec<String>> = None;
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -165,11 +169,14 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 octave = parts.next().and_then(|x| x.parse::<i32>().ok());
             } else if head == "arp" {
                 arp = Some(arp_mode(parts.next().unwrap_or("up")));
+            } else if head == "in" {
+                let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
+                if !secs.is_empty() { sections = Some(secs); }
             } else {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave, arp });
+        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave, arp, sections });
     }
     out
 }
@@ -596,6 +603,89 @@ pub fn parse_seed(src: &str) -> u64 {
     0
 }
 
+/// Default bars for a section in `song:` when no `*count` is given.
+const DEFAULT_SECTION_BARS: u32 = 4;
+
+/// Read the `song:`/`arrange:` arrangement: a list of `(section, bars)`, e.g.
+/// `song: intro*4 verse*8 chorus*8 outro*4`. A bare `name` lasts 4 bars.
+pub fn parse_song(src: &str) -> Vec<(String, u32)> {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        let head = line[..colon].trim().to_lowercase();
+        if head != "song" && head != "arrange" { continue; }
+        return line[colon + 1..]
+            .split_whitespace()
+            .filter_map(|tok| {
+                let (name, bars) = match tok.split_once('*') {
+                    Some((n, b)) => (n, b.parse::<u32>().unwrap_or(DEFAULT_SECTION_BARS)),
+                    None => (tok, DEFAULT_SECTION_BARS),
+                };
+                if name.is_empty() { None } else { Some((name.to_lowercase(), bars.max(1))) }
+            })
+            .collect();
+    }
+    Vec::new()
+}
+
+/// Which section is playing at `bar`, looping over the whole arrangement.
+fn section_at_bar(song: &[(String, u32)], bar: i64) -> Option<&str> {
+    let total: u32 = song.iter().map(|(_, n)| *n).sum();
+    if total == 0 { return None; }
+    let mut pos = bar.rem_euclid(total as i64) as u32;
+    for (name, n) in song {
+        if pos < *n { return Some(name.as_str()); }
+        pos -= *n;
+    }
+    None
+}
+
+/// A whole parsed LOOM program: voices plus the optional key/seed/arrangement.
+/// This is the convenient front door — `Program::parse` then `schedule_bar`.
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub voices: Vec<Voice>,
+    pub key: Option<Key>,
+    pub seed: u64,
+    pub song: Vec<(String, u32)>,
+}
+
+impl Program {
+    pub fn parse(src: &str) -> Program {
+        Program {
+            voices: parse(src),
+            key: parse_key(src),
+            seed: parse_seed(src),
+            song: parse_song(src),
+        }
+    }
+
+    /// Total length of the arrangement in bars (0 if there is no `song:`).
+    pub fn len_bars(&self) -> u32 { self.song.iter().map(|(_, n)| *n).sum() }
+
+    /// Section name playing at `bar` (None if no arrangement).
+    pub fn section_at(&self, bar: i64) -> Option<&str> { section_at_bar(&self.song, bar) }
+
+    /// Schedule one bar, honouring the arrangement: when a `song:` is present,
+    /// a voice plays only if it has no `| in …` tag or its tag includes the
+    /// current section. With no `song:`, every voice always plays.
+    pub fn schedule_bar(&self, bar: i64) -> Vec<Event> {
+        let active: Vec<Voice> = if self.song.is_empty() {
+            self.voices.clone()
+        } else {
+            let sec = section_at_bar(&self.song, bar);
+            self.voices.iter()
+                .filter(|v| match &v.sections {
+                    None => true,
+                    Some(set) => sec.map_or(false, |s| set.iter().any(|x| x == s)),
+                })
+                .cloned()
+                .collect()
+        };
+        schedule_bar_seeded(&active, self.key.as_ref(), bar, self.seed)
+    }
+}
+
 /// Resolve one melodic/drum token into the note-name string(s) it sounds.
 /// Order: scale degree (needs a key) → chord symbol → plain note. Drums pass
 /// through untouched. A chord returns several notes (played simultaneously).
@@ -855,6 +945,41 @@ mod tests {
         assert_eq!(parse_seed("kick: x"), 0);
         // seed line is a directive, not a voice
         assert_eq!(parse("seed: 7\nkick: x").len(), 1);
+    }
+
+    #[test]
+    fn song_arrangement_selects_sections() {
+        let song = parse_song("song: intro*2 chorus*4 outro*2");
+        assert_eq!(song, vec![("intro".into(),2),("chorus".into(),4),("outro".into(),2)]);
+        assert_eq!(section_at_bar(&song, 0), Some("intro"));
+        assert_eq!(section_at_bar(&song, 2), Some("chorus"));
+        assert_eq!(section_at_bar(&song, 5), Some("chorus"));
+        assert_eq!(section_at_bar(&song, 6), Some("outro"));
+        // loops: bar 8 == bar 0
+        assert_eq!(section_at_bar(&song, 8), Some("intro"));
+    }
+
+    #[test]
+    fn program_mutes_voices_outside_their_sections() {
+        let src = "song: intro*1 drop*1\nkick: x x x x\nlead: c4 c4 c4 c4 | in drop";
+        let prog = Program::parse(src);
+        assert_eq!(prog.len_bars(), 2);
+        // bar 0 = intro: only kick (lead is `in drop`)
+        let b0 = prog.schedule_bar(0);
+        assert!(b0.iter().all(|e| e.voice == "kick"));
+        // bar 1 = drop: kick (untagged, always) + lead
+        let b1 = prog.schedule_bar(1);
+        assert!(b1.iter().any(|e| e.voice == "kick"));
+        assert!(b1.iter().any(|e| e.voice == "lead"));
+    }
+
+    #[test]
+    fn no_song_means_every_voice_plays() {
+        let prog = Program::parse("kick: x x\nlead: c4 c4 | in chorus");
+        // no arrangement -> section tags are ignored, both voices play
+        let ev = prog.schedule_bar(0);
+        assert!(ev.iter().any(|e| e.voice == "lead"));
+        assert!(ev.iter().any(|e| e.voice == "kick"));
     }
 
     #[test]

@@ -144,6 +144,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="chance">CHANCE</button>
     <button class="tiny" data-p="rolls">ROLLS</button>
     <button class="tiny" data-p="arp">ARP</button>
+    <button class="tiny" data-p="song">SONG</button>
   </div>
 
   <div id="grid"></div>
@@ -157,6 +158,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>key</b>: <i>key: c minor</i> &middot; then melody can use degrees 1-7 (1=tonic) &middot; octave marks ' and , &middot; alter with suffix: 7# 3b 5b<br>
     <b>chords</b>: UPPERCASE root = accord (plusieurs notes) &mdash; Cm7 F G7 Am Dsus4 &middot; minuscule = note simple<br>
     <b>arp</b>: <i>| arp up</i> (down/updown/downup) sur une voix d'accords &mdash; égrène chaque accord<br>
+    <b>song</b>: <i>song: intro*4 verse*8 chorus*8</i> &middot; tag les voix avec <i>| in verse chorus</i> (morceaux longs)<br>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
     <b>rolls</b>: suffixe <i>*N</i> = ratchet/roll (N frappes dans un pas) &mdash; ex. snare: . . x*4 .<br>
@@ -176,7 +178,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,bus=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null;
-  let voices=[],key=null,seed=0,playing=false,cycleLen=2,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null;
+  let voices=[],key=null,seed=0,song=[],playing=false,cycleLen=2,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp"]);
   const WAVES={sine:"sine",square:"square",saw:"sawtooth",sawtooth:"sawtooth",tri:"triangle",triangle:"triangle",pulse:"square"};
@@ -280,21 +282,30 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     return[tok.slice(0,cut),prob,rat];}
   function parseSeed(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="seed"){const n=parseInt(line.slice(i+1).trim(),10);if(!isNaN(n))return n;}}return 0;}
+  // song arrangement: song: intro*4 verse*8 chorus*8 ...
+  function parseSong(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
+    const h=line.slice(0,i).trim().toLowerCase();if(h!=="song"&&h!=="arrange")continue;
+    return line.slice(i+1).trim().split(/\s+/).filter(Boolean).map(tok=>{const s=tok.split("*");
+      const n=s[1]?parseInt(s[1],10):4;return [s[0].toLowerCase(),isNaN(n)?4:Math.max(1,n)];}).filter(p=>p[0]);}
+    return [];}
+  function sectionAtBar(song,bar){const total=song.reduce((a,s)=>a+s[1],0);if(total===0)return null;
+    let pos=((bar%total)+total)%total;for(const s of song){if(pos<s[1])return s[0];pos-=s[1];}return null;}
 
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const name=line.slice(0,i).trim().toLowerCase();
-    if(name==="key"||name==="scale"||name==="seed")continue;
+    if(name==="key"||name==="scale"||name==="seed"||name==="song"||name==="arrange")continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     let tokens=[];for(const t of segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"))){
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
-    let wave="square",gain=0.22,oct=null,arp=null;const verbs=[];
+    let wave="square",gain=0.22,oct=null,arp=null,sections=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
-      else if(p[0]==="arp")arp=p[1]||"up";else verbs.push(seg);}
-    out.push({name,tokens,verbs,wave,gain,oct,arp,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+      else if(p[0]==="arp")arp=p[1]||"up";
+      else if(p[0]==="in")sections=p.slice(1).map(s=>s.toLowerCase());else verbs.push(seg);}
+    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   function arpOrder(a,mode){
     if(mode==="down")return a.slice().reverse();
     if(mode==="updown"||mode==="ud"){const d=a.slice().reverse().slice(1,-1);return a.length>2?a.concat(d):a.slice();}
@@ -327,7 +338,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       if(ch){const g=v.gain*0.7;for(const mn of ch)tone(t,midiToFreq(mn),dur,v.wave,g);return;}
       const f=noteToFreq(tok);if(f)tone(t,f,dur,v.wave,v.gain);}}
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
-    for(const v of voices){const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
+    const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
+    if(songOn)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
+    for(const v of voices){
+      if(songOn&&v.sections&&!(sec&&v.sections.includes(sec)))continue;
+      const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
       for(let i=0;i<n;i++){let tok=eff[i];if(tok==="."||tok==="~")continue;
         const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,i)>=tm[1])continue;
         const base=tm[0];if(base===""||base==="."||base==="~")continue;
@@ -347,7 +362,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     if(delay)delay.delayTime.value=cycleLen/8;
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");}
@@ -371,7 +386,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2",
     chance:"# x?70 = 70% chance. seed makes the randomness repeat. change seed for variations.\nseed:  7\nkey:   a minpent\nkick:  x . . . x . . . x . . . x?60 . . .\nsnare: . . . . x . . . . . . . x . . .\nhat:   x?80 x?40 x x?60 x?80 x?40 x x?50 | gain 0.16\nbass:  1 . 1?50 . 3?70 . 1 . 5?60 . . . 4?50 . . . | saw | oct 2\nlead:  5?40 . 3?60 . 1?80 . 4?50 . | pulse | gain 0.18",
     rolls:"# *N = roll/ratchet (N hits in one step). build-ups & fills.\nkey:   c minor\nkick:  x . . . x . . . x . . . x*2 x*4 . .\nsnare: . . . . x . . . . . . . x . x*3 .\nhat:   x x x*2 x x x*2 x x*4 | gain 0.16\nbass:  1 . . . 5, . . . 6, . . . 5,*3 . . . | saw | oct 2\nlead:  1 . 3 . 5*2 . 1' . | pulse | gain 0.18",
-    arp:"# | arp up egrene chaque accord note par note (sequence synthwave/techno).\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.14\narp:   Am . . . F . . . C . . . G . . . | arp up | saw | gain 0.2\nbass:  a2 . . . f2 . . . c2 . . . g2 . . . | saw\npad:   Am . . . F . . . C . . . G . . . | sine | gain 0.18"};
+    arp:"# | arp up egrene chaque accord note par note (sequence synthwave/techno).\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.14\narp:   Am . . . F . . . C . . . G . . . | arp up | saw | gain 0.2\nbass:  a2 . . . f2 . . . c2 . . . g2 . . . | saw\npad:   Am . . . F . . . C . . . G . . . | sine | gain 0.18",
+    song:"# a LONG track: sections by bar count. tag voices with | in <sections>.\n# watch the console show the current section as it plays.\nsong:  intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2\nkey:   a minor\nkick:  x . . . x . . .\nhat:   x x x x x x x x | gain 0.14 | in verse chorus\nclap:  . . . . x . . . | in chorus\nbass:  1 . 1 . 5, . 6, . | saw | oct 2 | in verse chorus\narp:   Am . . . F . . . C . . . G . . . | arp up | pulse | gain 0.18 | in chorus\npad:   Am . . . . . . . | sine | gain 0.2 | in intro outro chorus"};
   document.querySelectorAll(".presets button").forEach(b=>b.addEventListener("click",()=>{editor.value=PRESETS[b.dataset.p];run();}));
 
   function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
@@ -396,6 +412,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Probability: add ? to a token to make it fire only sometimes. x? ~50%, x?70 = 70%, c3?25 = 25%. Works on any token (drums, notes, degrees, chords). Use it for humanized hats, ghost notes, evolving patterns.",
     "- Determinism: add seed: N (e.g. seed: 42) so the random ? choices replay identically every time. Change the seed for a different variation.",
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
+    "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");
 
