@@ -1,3 +1,32 @@
+# ☀️ BONJOUR — résumé du matin
+
+J'ai construit toute la nuit, en mode sûr. **Tout marche** : `cargo test -p loom-core` = **42 tests verts**, l'app tourne, rien de cassé. **17 commits** sur la branche `night-build` (ton état d'avant est intact sur `main`).
+
+### Essaie tout de suite (3 étapes)
+1. Ouvre **http://localhost:8753/index.html** (le serveur tourne déjà ; sinon `cd web && python3 -m http.server 8753`).
+2. Clique le panneau **▸ COURS** sous la grille : 16 leçons, bouton « ▶ essayer » sur chacune → ça charge et ça joue.
+3. Change le **look** (rangée tout en haut : CRT/AMBER/C64/DOS/APPLE II/MODERN) et teste les **presets** (TECHNO, HOUSE, DNB, SYNTHWAVE, SONG, PROG, SUPERSAW, PUMP, VARY, POLY…).
+
+### Ce que LOOM sait faire maintenant (nouveautés de la nuit)
+- **Théorie** : `key:`/`scale:` + 28 gammes (modes, pentatoniques, **maqam/raga/gamelan**, blues, harmonic/melodic minor, whole-tone) · degrés `1-7` + octaves `'`/`,` + altérations suffixe `7# 3b` · **accords** MAJUSCULE (`Cm7 F G7…`) · **accords romains** diatoniques (`I ii V7 vi`) · **arpèges** `| arp up`.
+- **Génératif** : rythmes **euclidiens** `e(k,n[,rot])` · **probabilité** `x?70` + **`seed:`** reproductible · **rolls** `x*4` · **variation A/B** `<a/b/c>` (change par mesure) · **polyrythmie** (voix de longueurs différentes).
+- **Structure (morceaux longs)** : `song: intro*4 verse*8 chorus*8…` + tag de voix `| in verse chorus` (la console affiche la section en live).
+- **Sound design** : filtre `| lp/hp + q` · enveloppe `| env A D S R` · **super-saw** `| unison N + detune` · **drive** · **LFO** `| lfo cutoff/pitch/gain` · **sidechain** `duck: N`.
+- **Interface** : **bouton COURS** (16 leçons cliquables, FR) · **galerie de thèmes** (mémorisée).
+
+### Limite honnête
+Je n'ai **pas d'oreilles** : je garantis que ça tourne et que la logique est testée, mais le réglage « beau son » reste ton jugement. Tous les boutons sont là, à toi d'affiner.
+
+### Git
+- Voir : `git log --oneline main..night-build` (17 commits, un par feature).
+- Garder : fusionner si ça te plaît, ou rester sur `night-build`.
+- Revenir à l'état d'avant : `git checkout main`.
+- Connue/laissée de côté : **D2** (changements de tempo/mesure) — trop risqué pour le scheduler actuel, documenté plus bas. Maqam à quarts de ton = approximés en 12-TET (couche microtonale future).
+
+Détails complets et journal par feature ci-dessous. ⬇️
+
+---
+
 # NIGHT BUILD LOG — LOOM
 
 Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
