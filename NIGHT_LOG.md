@@ -95,6 +95,13 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [ ] G5. Cerveau IA renforcé (décrire → super code), notre avantage sur Strudel.
 
 ## Journal (le plus récent en haut)
+
+- **[export] Enregistrement WAV.** Bouton **REC** : capture la sortie et télécharge un vrai `loom.wav` (stéréo 16-bit, encodeur validé). RUN → REC → joue → REC = fichier téléchargé.
+- **[langage] Verbes Tidal.** `palindrome`, `rot N`, `iter N` (le motif évolue par mesure). Preset SHIFT.
+- **[MIDI] Sortie MIDI.** `| midi CH` envoie une voix vers DAW/synthé (drums → canal 10).
+- **[espace] Reverb/delay par voix.** `| reverb N`, `| delay N`. Preset DUB.
+- **[samples] ~40 sons** (808/909, breaks Amen, instruments, voix) + `| root` pour accorder. Presets SAMPLES/WORLD/BAND/AMEN.
+- **[mix] Bus master** compresseur/limiteur + `| pan P`.
 _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
