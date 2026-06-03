@@ -49,7 +49,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] E4. Unison/detune super-saw `| unison N` (+ `| detune C`). Preset SUPERSAW.
 - [x] E5. Distorsion `| drive X` (0-1, WaveShaper). (bitcrush = plus tard si temps)
 - [x] E6. Sidechain — ligne `duck: 70` : tout le mix duck à chaque kick (pompage techno/house). Preset PUMP.
-- [ ] E7. Presets de genre : Techno/House, DnB/Jungle, Ambient/Drone, Synthwave/Chiptune
+- [x] E7. Presets de genre soignés : CHIP, TECHNO, HOUSE, DNB, AMBIENT, SYNTHWAVE (utilisent filtres/env/unison/drive/duck/euclid).
 
 ### F. Interface
 - [ ] F1. Galerie de thèmes terminal (CRT vert, ambre, C64, DOS, Mac, moderne) + sélecteur
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[E7] Presets de genre soignés.** Les boutons du haut sont maintenant de vrais points de départ par style, exploitant tout le nouveau sound design : **CHIP** (8-bit), **TECHNO** (pump + stabs), **HOUSE** (off-beat hats, stabs orgue), **DNB** (break + reese bass disto), **AMBIENT** (nappes lentes + LFO), **SYNTHWAVE** (arp + pad gated + basse grasse). Clique-les et regarde le code pour apprendre les combinaisons. (web only, 38 tests verts)
 - **[E6] Sidechain / pump.** Ajoute une ligne `duck: 70` (0-100) : tout le mix « duck » (baisse puis remonte) à chaque coup de kick — le pompage caractéristique de la techno/house. Implémenté via un gain `scGain` entre le bus et le master, déclenché dans `kick()` (recovery exponentielle). Essaie le preset **PUMP**. (web only ; `duck` ajouté aux directives core pour ne pas créer de voix — 38 tests verts)
 - **[E3+E4+E5] LFO, super-saw, distorsion.** Sur une voix mélodique : `| unison 5 | detune 18` empile 5 oscillateurs désaccordés = gros son super-saw ; `| drive 0.5` ajoute de la chaleur/saturation ; `| lfo cutoff 0.3 0.6` fait bouger le filtre (cible `cutoff`, `pitch` = vibrato, `gain` = tremolo ; RATE en Hz, DEPTH 0-1). `tone()` refactoré en chaîne unison→filtre→ADSR→drive→tremolo→bus, avec clamps (pas de clic/saturation incontrôlée). Essaie le preset **SUPERSAW**. (web only, core inchangé/vert)
 - **[E1+E2] Filtre & enveloppe ADSR (sound design).** Sur une voix mélodique : `| lp 800` (passe-bas, plus sombre), `| hp 2000` (passe-haut), + `q R` pour la résonance (ex. `lp 600 q 8`). `| env A D S R` = enveloppe (attaque, déclin, niveau de sustain 0-1, release, en secondes) : `env 0.5 0.4 0.7 1.4` pour des nappes lentes, `env 0.005 0.08 0 0.05` pour un pluck sec. Le `tone()` a été refactoré pour porter ces réglages ; **le son par défaut est inchangé** si tu ne mets ni filtre ni env. Essaie le preset **PAD**. (web only, miroir core inchangé/vert)
