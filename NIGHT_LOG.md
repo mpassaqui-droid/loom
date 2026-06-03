@@ -84,11 +84,19 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] F1. Galerie de thèmes : CRT vert, AMBER, C64, DOS, APPLE II, MODERN (boutons en haut, sauvegardé en localStorage).
 - [x] F2. Bouton/panneau COURS : 16 leçons en français, exemples cliquables (« essayer » charge+joue). Couvre tout le langage.
 
+### G. Qualité audio (vision « Strudel mais en mieux + son studio » — nouvelle phase)
+- [x] G1. Bus master pro : compresseur/limiteur (glue studio) + `| pan P` par voix (largeur stéréo).
+- [ ] G2. Vrais samples (drums 808/909/acoustiques, instruments) — banque à choisir ensemble.
+- [ ] G3. Moteur AudioWorklet (timing sample-accurate, zéro clic) + synthèse wavetable/FM.
+- [ ] G4. Profondeur langage (algèbre de patterns façon Tidal) + MIDI out.
+- [ ] G5. Cerveau IA renforcé (décrire → super code), notre avantage sur Strudel.
+
 ## Journal (le plus récent en haut)
 _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[G1] Bus master pro + pan (début de la phase qualité audio).** Le mix passe maintenant par un **compresseur/limiteur** master (rend l'ensemble cohérent et plus fort, « glue » studio) et chaque voix peut être placée dans le champ stéréo avec `| pan P` (P de -1 gauche à +1 droite). Vérifié : moteur exécuté en headless sur ~41 mesures sans erreur. Prochaine grosse étape : les **vrais samples** (G2). (web only)
 - **[C2+D1] Variation A/B & polyrythmie.** `<a/b/c>` dans un motif choisit une alternative différente à chaque mesure (le motif évolue tout seul) — ex. `kick: <x/.> x x x`. Les alternatives peuvent être notes/degrés/accords/silences (+ mods `?`/`*`). Presets **VARY** et **POLY** (voix de longueurs 3/4/5 qui se croisent dans la mesure). D2 (tempo-map) volontairement laissé de côté pour ne pas risquer le timing — voir checklist. (loom-core +2 tests, miroir JS, SYS, presets)
 - **[F1] Galerie de thèmes terminal.** Une rangée « look ▸ » en haut : **CRT** (vert, l'original), **AMBER** (monochrome ambre), **C64** (bleu Commodore), **DOS** (gris/ANSI), **APPLE II** (vert phosphore), **MODERN** (sombre, sans scanlines). Purement cosmétique (variables CSS) ; ton choix est mémorisé (localStorage) et revient au prochain chargement. (web only)
 - **[F2] Bouton COURS (tutoriel interactif).** Un panneau dépliable « ▸ COURS — apprends LOOM pas à pas » sous la grille : **16 leçons en français**, de la batterie aux gammes du monde, accords, romains, verbes, euclidien, probabilité/seed, rolls, arpèges, sound design, sidechain et structure. Chaque leçon a un bouton **« ▶ essayer »** qui charge l'exemple dans l'éditeur et le joue. C'est la meilleure porte d'entrée pour apprendre. (web only)
