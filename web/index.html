@@ -202,6 +202,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>synth</b> (après |): <i>unison N</i> + <i>detune C</i> (super-saw) &middot; <i>drive X</i> (disto) &middot; <i>lfo cutoff/pitch/gain RATE DEPTH</i><br>
     <b>stéréo</b> (après |): <i>pan P</i> (-1 gauche … 1 droite) &middot; bus master compressé/limité (glue studio)<br>
     <b>espace</b> (après |): <i>reverb N</i> (0-1, profondeur) &middot; <i>delay N</i> (0-1, écho) &mdash; send par voix<br>
+    <b>MIDI</b> (après |): <i>midi CH</i> (1-16) &mdash; envoie la voix vers ton DAW/synthé matériel (drums → canal 10)<br>
     <b>samples</b> (après |): <i>sample NAME</i> &mdash; drums (bd sd hh cp kick909 clubkick oh rim cow perc tom… tabla) &middot; mélodiques (bass arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo) &middot; breaks (amen break amencut) &middot; voix/texture (vox yeah breath wood metal glass bottle) &middot; <i>root NOTE</i> pour accorder<br>
     <b>pump</b>: <i>duck: 70</i> (ligne) &mdash; sidechain : tout le mix duck à chaque kick (groove techno)<br>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
@@ -224,7 +225,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null;
-  let duckAmt=0;
+  let duckAmt=0,midiOut=null,midiAsked=false;
   let voices=[],key=null,seed=0,song=[],playing=false,cycleLen=2,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp"]);
@@ -280,6 +281,17 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function playSample(name,t,gain,rate,v){const b=sbuf[name];if(!b)return false;
     const s=ctx.createBufferSource();s.buffer=b;s.playbackRate.value=rate||1;
     const g=ctx.createGain();g.gain.value=gain!=null?gain:0.9;s.connect(g).connect(bus);connectFx(g,v);s.start(t);return true;}
+
+  // --- MIDI out: send a voice's notes to a DAW / hardware synth ---
+  function initMidi(){if(midiAsked||!(navigator&&navigator.requestMIDIAccess))return;midiAsked=true;
+    navigator.requestMIDIAccess().then(a=>{const outs=[...a.outputs.values()];if(outs.length){midiOut=outs[0];
+      log("[ midi ] connecté: "+(midiOut.name||"sortie")+"","ai");}else log("[ midi ] aucune sortie MIDI trouvée","err");
+    }).catch(()=>log("[ midi ] accès refusé","err"));}
+  function freqToMidi(f){return Math.max(0,Math.min(127,Math.round(69+12*Math.log2(f/440))));}
+  // send a note at audio-time t for dur seconds on 1-based channel ch
+  function sendMidi(ch,note,vel,t,dur){if(!midiOut)return false;
+    const on=performance.now()+Math.max(0,(t-ctx.currentTime)*1000),c=(Math.max(1,Math.min(16,ch))-1);
+    midiOut.send([0x90|c,note,vel],on);midiOut.send([0x80|c,note,0],on+Math.max(40,dur*1000));return true;}
 
   // sidechain pump: dip the whole mix at each kick, then recover (techno/house)
   function duckPump(t){if(!scGain)return;const lo=Math.max(0.05,1-duckAmt);
@@ -440,7 +452,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,sample=null,root=null,reverb=null,dly=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,sample=null,root=null,reverb=null,dly=null,midi=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -460,8 +472,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="root")root=p[1]||null;
       else if(p[0]==="reverb"||p[0]==="room")reverb=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
+      else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
       else verbs.push(seg);}
-    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,sample,root,reverb,dly,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,sample,root,reverb,dly,midi,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   function arpOrder(a,mode){
     if(mode==="down")return a.slice().reverse();
     if(mode==="updown"||mode==="ud"){const d=a.slice().reverse().slice(1,-1);return a.length>2?a.concat(d):a.slice();}
@@ -491,6 +504,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const f=noteToFreq(tok);return f?[f]:[];}
   function trigger(v,tok,t){if(tok==="."||tok==="~")return;
     if(v.type==="drum"){const n=v.name;
+      if(v.midi&&midiOut){const gm={kick:36,bd:36,snare:38,sd:38,hat:42,hh:42,clap:39,cp:39}[n]||37;sendMidi(v.midi,gm,110,t,0.1);return;}
       if((n==="kick"||n==="bd")&&duckAmt>0)duckPump(t);
       if(v.sample&&playSample(v.sample,t,Math.min(1,(v.gain||0.22)*4),1,v))return;
       if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
@@ -498,6 +512,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
       const dur=cycleLen/v.tokens.length,baseOct=v.oct!=null?v.oct:(k?k.octave:3);
       const fr=melFreqs(tok,v,k,baseOct);if(!fr.length)return;
+      if(v.midi&&midiOut){for(const f of fr)sendMidi(v.midi,freqToMidi(f),96,t,dur);return;}
       if(v.sample){const bc=noteToFreq(v.root||"c3")||noteToFreq("c3"),gm=Math.min(1,(v.gain||0.22)*3);
         for(const f of fr)playSample(v.sample,t,gm,f/bc,v);return;}
       const op=fr.length>1?{gain:v.gain*0.7}:null;
@@ -530,7 +545,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);duckAmt=parseDuck(editor.value);
-    voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);});if(voices.some(v=>v.midi))initMidi();buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     if(delay)delay.delayTime.value=cycleLen/8;
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");}
@@ -640,6 +655,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck.",
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
     "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Drums: bd sd hh cp kick2 kick909 clubkick clap2 oh(open hat) rim cow perc tom tom2 tom3 ride tabla. Melodic (repitched): bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo. Loops/breaks (one-shot a whole drum loop): amen break amencut. Vocal/texture: vox yeah breath wood metal glass bottle. e.g. kick: x . x . | sample kick909 , lead: 1 3 5 1' | sample sitar , break: x . . . | sample amen. A melodic sample is repitched assuming its natural pitch is c3; if it sounds off, tune it with | root NOTE (e.g. | sample gtr | root c4). Samples load on the first RUN (a moment of delay; until then it falls back to the synth).",
+    "- MIDI out: add | midi CH (1-16) to a voice to send it as MIDI notes to your DAW / hardware synth instead of the built-in sound (the browser asks permission on the first RUN). Melodic voices send their pitches; drum voices send the General-MIDI drum notes (kick=36 snare=38 hat=42 clap=39) — put drums on | midi 10. e.g. bass: 1 . 5 . | midi 1 , kick: x . x . | midi 10. If no MIDI device is connected it falls back to the internal sound.",
     "- Per-voice space: reverb N adds that voice to the reverb (N 0-1, depth/room), delay N adds an echo send (N 0-1). e.g. lead: 1 . 3 . | delay 0.4 | reverb 0.3 , snare: . . x . | reverb 0.5. Use sparingly on a few voices for depth. (The global SPACE/ECHO knobs still apply to everything.)",
     "- Stereo: pan P places a voice in the stereo field, P from -1 (left) to 1 (right), e.g. hat: ... | pan -0.4 , arp: ... | pan 0.5. Spread voices for width. (The master bus runs through a gentle compressor/limiter for studio glue.)",
     "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",

@@ -88,7 +88,10 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] G1. Bus master pro : compresseur/limiteur (glue studio) + `| pan P` par voix (largeur stéréo).
 - [x] G2. Vrais samples via `| sample NAME` (bd sd hh cp kick2 ; bass arpy repitchés). Chargés du CDN Dirt-Samples au RUN, repli synthe. Preset SAMPLES.
 - [ ] G3. Moteur AudioWorklet (timing sample-accurate, zéro clic) + synthèse wavetable/FM.
-- [ ] G4. Profondeur langage (algèbre de patterns façon Tidal) + MIDI out.
+- [x] G3b. Reverb/delay par voix (`| reverb N`, `| delay N`) — sends d'effets par piste. Preset DUB.
+- [x] G4-midi. MIDI out (`| midi CH`) — envoie une voix vers DAW/synthé matériel (drums → GM canal 10), repli son interne.
+- [ ] G4. Profondeur langage (algèbre de patterns façon Tidal). (MIDI out fait ✓)
+- [ ] G3. Moteur AudioWorklet — reporté (timing déjà sample-accurate ; gros risque pour peu de gain, à faire seulement si besoin de DSP custom).
 - [ ] G5. Cerveau IA renforcé (décrire → super code), notre avantage sur Strudel.
 
 ## Journal (le plus récent en haut)
