@@ -162,6 +162,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="hijaz">HIJAZ</button>
     <button class="tiny" data-p="raga">RAGA</button>
     <button class="tiny" data-p="euclid">EUCLID</button>
+    <button class="tiny" data-p="vary">VARY</button>
+    <button class="tiny" data-p="poly">POLY</button>
     <button class="tiny" data-p="chords">CHORDS</button>
     <button class="tiny" data-p="chance">CHANCE</button>
     <button class="tiny" data-p="rolls">ROLLS</button>
@@ -197,6 +199,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
     <b>rolls</b>: suffixe <i>*N</i> = ratchet/roll (N frappes dans un pas) &mdash; ex. snare: . . x*4 .<br>
+    <b>vary</b>: <i>&lt;a/b/c&gt;</i> choisit une alternative par mesure (varie le motif) &middot; <b>poly</b>: voix de longueurs différentes = polyrythmie<br>
     <b>verbs</b> (after |): rev &middot; fast N &middot; slow N &middot; every N &lt;verb&gt;<br>
     <b>timbre</b> (after |): saw sine tri pulse square &middot; gain N &middot; oct N (octave par défaut des degrés)
     </p>
@@ -361,6 +364,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function rng(seed,bar,vname,step){let h=Math.imul((seed>>>0)^0x9e3779b1,2654435761)>>>0;
     h=Math.imul(h^(bar>>>0),2246822519)>>>0;h=Math.imul(h^fnv(vname),3266489917)>>>0;h=Math.imul(h^(step+1),668265263)>>>0;
     h^=h>>>15;return (h>>>0)/4294967296;}
+  // A/B variation: <a/b/c> picks one alternative per bar (cycles by bar index)
+  function pickAlt(tok,bar){if(tok.length>=2&&tok[0]==="<"&&tok[tok.length-1]===">"){
+    const a=tok.slice(1,-1).split("/");if(a.length)return a[((bar%a.length)+a.length)%a.length];}return tok;}
   function digitsAfter(tok,at){return (/^\d*/.exec(tok.slice(at+1)))[0];}
   // modifiers in any order: probability ?P and ratchet *N -> [base, prob|null, ratchet]
   function tokenMods(tok){const q=tok.indexOf("?"),r=tok.indexOf("*");if(q<0&&r<0)return[tok,null,1];
@@ -445,7 +451,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     for(const v of voices){
       if(songOn&&v.sections&&!(sec&&v.sections.includes(sec)))continue;
       const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
-      for(let i=0;i<n;i++){let tok=eff[i];if(tok==="."||tok==="~")continue;
+      for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar);if(tok==="."||tok==="~")continue;
         const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,i)>=tm[1])continue;
         const base=tm[0];if(base===""||base==="."||base==="~")continue;
         let t0=barT+i*step;if(i%2===1)t0+=sw*step;
@@ -487,6 +493,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2",
     hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
     raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2",
+    vary:"# A/B variation: <a/b/...> picks one alternative per bar (changes each bar).\nkey:   c minor\nkick:  x . . . <x/.> . . . x . . . x . <./x*2> .\nsnare: . . . . x . . . . . . . x . . <./x>\nhat:   x x x x x x x x | gain 0.14\nbass:  1 . <3/5> . 5, . <6,/4,> . | saw | oct 2\nlead:  <1/5> . 3 . <5/1'> . 4 . | pulse | gain 0.18",
+    poly:"# polyrhythm: voices with different step counts (3 vs 4 vs 5) over one bar.\nkey:   a minpent\nkick:  x x x x\nclav:  1 1 1 | tri | gain 0.18\nbell:  1 3 5 4 6 | sine | oct 4 | gain 0.13\nhat:   x x x x x x x x | gain 0.12",
     euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18",
     chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2",
     chance:"# x?70 = 70% chance. seed makes the randomness repeat. change seed for variations.\nseed:  7\nkey:   a minpent\nkick:  x . . . x . . . x . . . x?60 . . .\nsnare: . . . . x . . . . . . . x . . .\nhat:   x?80 x?40 x x?60 x?80 x?40 x x?50 | gain 0.16\nbass:  1 . 1?50 . 3?70 . 1 . 5?60 . . . 4?50 . . . | saw | oct 2\nlead:  5?40 . 3?60 . 1?80 . 4?50 . | pulse | gain 0.18",
@@ -567,6 +575,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck.",
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
     "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",
+    "- A/B variation: a token <a/b/c> picks ONE alternative per bar, cycling each bar, so the pattern changes over time. e.g. kick: <x/.> x x x (a kick that drops out every other bar), or lead: <1/3/5> . . . . The alternatives can be notes, degrees, chords, rests, even with ?/* mods.",
+    "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");

@@ -36,11 +36,11 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 
 ### C. Structure (morceaux longs)
 - [x] C1. Structure : `song: intro*4 verse*8 chorus*8 …` + tag de voix `| in verse chorus`. Struct `Program` dans loom-core. Preset SONG. La console affiche la section courante.
-- [ ] C2. Variation A/B, longueur de morceau
+- [x] C2. Variation A/B : token `<a/b/c>` choisit une alternative par mesure (cycle). Preset VARY.
 
 ### D. Polyrythmie & temps
-- [ ] D1. Polymètre (voix de longueurs différentes qui se déphasent)
-- [ ] D2. Changements de tempo/mesure
+- [x] D1. Polyrythmie : voix de longueurs différentes subdivisent la mesure (3-contre-4…). Preset POLY. (Polymètre cross-mesure = futur ; tout réaligne à chaque mesure.)
+- [~] D2. Changements de tempo/mesure : SKIP volontaire. Le scheduler a un `cycleLen` fixe ; un vrai tempo-map serait trop invasif et risquerait de casser le timing. Le SWING (curseur) et le `slow N` couvrent une partie du besoin. À faire proprement plus tard.
 
 ### E. Sound design (web — beaux sons)
 - [x] E1. Filtre par voix `| lp 800` / `| hp 2000` (+ `q R` résonance). Refactor `tone(t,f,dur,v[,opt])`.
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[C2+D1] Variation A/B & polyrythmie.** `<a/b/c>` dans un motif choisit une alternative différente à chaque mesure (le motif évolue tout seul) — ex. `kick: <x/.> x x x`. Les alternatives peuvent être notes/degrés/accords/silences (+ mods `?`/`*`). Presets **VARY** et **POLY** (voix de longueurs 3/4/5 qui se croisent dans la mesure). D2 (tempo-map) volontairement laissé de côté pour ne pas risquer le timing — voir checklist. (loom-core +2 tests, miroir JS, SYS, presets)
 - **[F1] Galerie de thèmes terminal.** Une rangée « look ▸ » en haut : **CRT** (vert, l'original), **AMBER** (monochrome ambre), **C64** (bleu Commodore), **DOS** (gris/ANSI), **APPLE II** (vert phosphore), **MODERN** (sombre, sans scanlines). Purement cosmétique (variables CSS) ; ton choix est mémorisé (localStorage) et revient au prochain chargement. (web only)
 - **[F2] Bouton COURS (tutoriel interactif).** Un panneau dépliable « ▸ COURS — apprends LOOM pas à pas » sous la grille : **16 leçons en français**, de la batterie aux gammes du monde, accords, romains, verbes, euclidien, probabilité/seed, rolls, arpèges, sound design, sidechain et structure. Chaque leçon a un bouton **« ▶ essayer »** qui charge l'exemple dans l'éditeur et le joue. C'est la meilleure porte d'entrée pour apprendre. (web only)
 - **[A3] Accords en chiffres romains.** Avec une `key:`, écris `I ii iii IV V vi vii` (+`7` pour la septième : `V7`, `ii7`) → l'accord diatonique construit sur ce degré, dont la qualité (majeur/mineur/dim) vient automatiquement de la gamme (en mineur `i` est mineur, etc.). Parfait pour les progressions (`I V vi IV`). Arpégeables avec `| arp up`. Essaie le preset **PROG**. (loom-core +2 tests, miroir JS dans trigger+arp, SYS, preset)

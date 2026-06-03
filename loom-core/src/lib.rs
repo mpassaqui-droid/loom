@@ -245,7 +245,8 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
             None => k.clone(),
         });
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
-        for (i, tok) in eff.iter().enumerate() {
+        for (i, raw) in eff.iter().enumerate() {
+            let tok = pick_alt(raw, bar); // A/B variation: choose this bar's alt
             if tok == "." || tok == "~" { continue; }
             let (base, prob, ratchet) = token_mods(tok);
             // Probabilistic token: deterministically skip when the roll fails.
@@ -589,6 +590,19 @@ fn token_mods(tok: &str) -> (&str, Option<f32>, usize) {
         .map(|p| digits_after(tok, p).parse::<usize>().unwrap_or(2).max(1))
         .unwrap_or(1);
     (&tok[..cut], prob, ratchet)
+}
+
+/// A/B variation: an alternation group `<a/b/c>` picks one alternative per bar,
+/// cycling by bar index (so the pattern changes bar to bar). Any other token is
+/// returned unchanged. The chosen alternative may itself carry `?`/`*` mods.
+fn pick_alt(tok: &str, bar: i64) -> &str {
+    if tok.len() >= 2 && tok.starts_with('<') && tok.ends_with('>') {
+        let alts: Vec<&str> = tok[1..tok.len() - 1].split('/').collect();
+        if !alts.is_empty() {
+            return alts[bar.rem_euclid(alts.len() as i64) as usize];
+        }
+    }
+    tok
 }
 
 /// Read the optional `seed: N` directive (default 0 = the canonical performance).
@@ -1043,6 +1057,35 @@ mod tests {
         let ev2 = schedule_bar_seeded(&ud, None, 0, 0);
         // c eb g bb then back down without repeating ends: g eb
         assert_eq!(ev2.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","eb3","g3","bb3","g3","eb3"]);
+    }
+
+    #[test]
+    fn ab_variation_alternates_per_bar() {
+        // <x/.> is "x" on even bars, "." on odd bars.
+        let v = parse("kick: <x/.> x");
+        assert_eq!(schedule_bar_seeded(&v, None, 0, 0).len(), 2); // bar0: x x
+        assert_eq!(schedule_bar_seeded(&v, None, 1, 0).len(), 1); // bar1: . x
+        assert_eq!(schedule_bar_seeded(&v, None, 2, 0).len(), 2); // loops
+        // alternatives can be degrees and cycle through 3 bars
+        let m = parse("key: c major\nlead: <1/3/5>");
+        let k = parse_key("key: c major");
+        assert_eq!(schedule_bar_seeded(&m, k.as_ref(), 0, 0)[0].token, "c3");
+        assert_eq!(schedule_bar_seeded(&m, k.as_ref(), 1, 0)[0].token, "e3");
+        assert_eq!(schedule_bar_seeded(&m, k.as_ref(), 2, 0)[0].token, "g3");
+    }
+
+    #[test]
+    fn polyrhythm_voices_subdivide_independently() {
+        // a 3-step voice and a 4-step voice each fill the bar -> 3-against-4.
+        let three = parse("a: x x x");
+        let four = parse("b: x x x x");
+        let e3 = schedule_bar_seeded(&three, None, 0, 0);
+        let e4 = schedule_bar_seeded(&four, None, 0, 0);
+        assert_eq!(e3.len(), 3);
+        assert_eq!(e4.len(), 4);
+        // their phases line up only at 0.0 (the downbeat)
+        assert!((e3[1].phase - 1.0/3.0).abs() < 1e-6);
+        assert!((e4[1].phase - 0.25).abs() < 1e-6);
     }
 
     #[test]
