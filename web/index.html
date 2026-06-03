@@ -150,6 +150,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button class="tiny" data-p="dnb">DNB</button>
     <button class="tiny" data-p="ambient">AMBIENT</button>
     <button class="tiny" data-p="synthwave">SYNTHWAVE</button>
+    <button class="tiny" data-p="samples">SAMPLES</button>
   </div>
   <div class="presets" style="margin-top:-10px">
     <span style="color:var(--dim);font-size:16px;align-self:center;margin-right:2px">scales &#9656;</span>
@@ -196,6 +197,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>son</b> (après |): <i>lp N</i> / <i>hp N</i> filtre (+ <i>q R</i> résonance) &middot; <i>env A D S R</i> enveloppe ADSR<br>
     <b>synth</b> (après |): <i>unison N</i> + <i>detune C</i> (super-saw) &middot; <i>drive X</i> (disto) &middot; <i>lfo cutoff/pitch/gain RATE DEPTH</i><br>
     <b>stéréo</b> (après |): <i>pan P</i> (-1 gauche … 1 droite) &middot; bus master compressé/limité (glue studio)<br>
+    <b>samples</b> (après |): <i>sample NAME</i> = vrai son enregistré &mdash; bd sd hh cp kick2 (drums) &middot; bass arpy (repitchés)<br>
     <b>pump</b>: <i>duck: 70</i> (ligne) &mdash; sidechain : tout le mix duck à chaque kick (groove techno)<br>
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
@@ -244,10 +246,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
   function noise(){const s=ctx.createBufferSource();s.buffer=noiseBuf;return s;}
 
+  // --- real samples (loaded from a free CDN on first RUN; synth fallback) ---
+  const SDIRT="https://cdn.jsdelivr.net/gh/tidalcycles/Dirt-Samples@master/";
+  const SAMPLES={bd:"808bd/BD0000.WAV",sd:"808sd/SD0000.WAV",hh:"hh/000_hh3closedhh.wav",
+    cp:"cp/HANDCLP0.wav",bass:"jvbass/000_01.wav",arpy:"arpy/arpy01.wav",kick2:"bd/BT0A0A7.wav"};
+  const sbuf={},sload={};
+  function loadSample(name){if(!ctx||!SAMPLES[name]||sbuf[name]||sload[name])return;sload[name]=1;
+    fetch(SDIRT+SAMPLES[name]).then(r=>r.arrayBuffer()).then(a=>ctx.decodeAudioData(a))
+      .then(b=>{sbuf[name]=b;}).catch(()=>{sload[name]=0;});}
+  function playSample(name,t,gain,rate){const b=sbuf[name];if(!b)return false;
+    const s=ctx.createBufferSource();s.buffer=b;s.playbackRate.value=rate||1;
+    const g=ctx.createGain();g.gain.value=gain!=null?gain:0.9;s.connect(g).connect(bus);s.start(t);return true;}
+
   // sidechain pump: dip the whole mix at each kick, then recover (techno/house)
   function duckPump(t){if(!scGain)return;const lo=Math.max(0.05,1-duckAmt);
     scGain.gain.setValueAtTime(lo,t);scGain.gain.setTargetAtTime(1,t,Math.min(0.12,cycleLen/8));}
-  function kick(t){if(duckAmt>0)duckPump(t);const o=ctx.createOscillator(),g=ctx.createGain();o.type="triangle";
+  function kick(t){const o=ctx.createOscillator(),g=ctx.createGain();o.type="triangle";
     o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(42,t+0.12);
     g.gain.setValueAtTime(0.9,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.2);o.connect(g).connect(bus);o.start(t);o.stop(t+0.22);}
   function snare(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="highpass";f.frequency.value=1400;
@@ -403,7 +417,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,sample=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -419,8 +433,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="detune")detune=Math.max(0,Math.min(100,parseFloat(p[1])||0));
       else if(p[0]==="drive")drive=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="pan")pan=Math.max(-1,Math.min(1,parseFloat(p[1])||0));
+      else if(p[0]==="sample"||p[0]==="s")sample=p[1]||null;
       else verbs.push(seg);}
-    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,sample,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   function arpOrder(a,mode){
     if(mode==="down")return a.slice().reverse();
     if(mode==="updown"||mode==="ud"){const d=a.slice().reverse().slice(1,-1);return a.length>2?a.concat(d):a.slice();}
@@ -441,17 +456,26 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       if(tok!=="."&&tok!=="~")c.classList.add("on");cells.appendChild(c);v.cells.push(c);});
     row.appendChild(nm);row.appendChild(cells);grid.appendChild(row);}}
 
+  // resolve a melodic token to the frequency(ies) it sounds (1 note, or N for a chord)
+  function melFreqs(tok,v,k,baseOct){
+    if(tok==="x")return [noteToFreq("c3")];
+    if(k&&isDegree(tok))return [midiToFreq(degreeToMidi(tok,k))];
+    const ch=romanToChord(tok,k)||parseChord(tok,baseOct);
+    if(ch)return ch.map(midiToFreq);
+    const f=noteToFreq(tok);return f?[f]:[];}
   function trigger(v,tok,t){if(tok==="."||tok==="~")return;
-    if(v.type==="drum"){const n=v.name;if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
+    if(v.type==="drum"){const n=v.name;
+      if((n==="kick"||n==="bd")&&duckAmt>0)duckPump(t);
+      if(v.sample&&playSample(v.sample,t,Math.min(1,(v.gain||0.22)*4),1))return;
+      if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
       else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);}
     else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
-      const dur=cycleLen/v.tokens.length;
-      if(tok==="x"){const f=noteToFreq("c3");if(f)tone(t,f,dur,v);return;}
-      if(k&&isDegree(tok)){tone(t,midiToFreq(degreeToMidi(tok,k)),dur,v);return;}
-      const baseOct=v.oct!=null?v.oct:(k?k.octave:3);
-      const ch=romanToChord(tok,k)||parseChord(tok,baseOct);
-      if(ch){for(const mn of ch)tone(t,midiToFreq(mn),dur,v,{gain:v.gain*0.7});return;}
-      const f=noteToFreq(tok);if(f)tone(t,f,dur,v);}}
+      const dur=cycleLen/v.tokens.length,baseOct=v.oct!=null?v.oct:(k?k.octave:3);
+      const fr=melFreqs(tok,v,k,baseOct);if(!fr.length)return;
+      if(v.sample){const bc=noteToFreq("c3"),gm=Math.min(1,(v.gain||0.22)*3);
+        for(const f of fr)playSample(v.sample,t,gm,f/bc);return;}
+      const op=fr.length>1?{gain:v.gain*0.7}:null;
+      for(const f of fr)tone(t,f,dur,v,op);}}
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(songOn)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
@@ -466,7 +490,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         if(v.arp&&v.type!=="drum"){let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
           const baseOct=v.oct!=null?v.oct:(k?k.octave:3);const ch=romanToChord(base,k)||parseChord(base,baseOct);
           if(ch&&ch.length>1){const ord=arpOrder(ch,v.arp),M=ord.length;
-            for(let j=0;j<M;j++)tone(t0+j*step/M,midiToFreq(ord[j]),step/M,v);continue;}}
+            for(let j=0;j<M;j++){const tt=t0+j*step/M;
+              if(v.sample)playSample(v.sample,tt,Math.min(1,(v.gain||0.22)*3),midiToFreq(ord[j])/noteToFreq("c3"));
+              else tone(tt,midiToFreq(ord[j]),step/M,v);}continue;}}
         for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2]);}}}
   function tick(){if(!playing)return;while(nextBarTime<ctx.currentTime+LOOKAHEAD){scheduleBar(nextBarTime,barCount);nextBarTime+=cycleLen;barCount++;}schedTimer=setTimeout(tick,TICK);}
   function animate(){if(playing&&ctx){const e=ctx.currentTime-transportStart;const phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;
@@ -477,7 +503,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);duckAmt=parseDuck(editor.value);buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);duckAmt=parseDuck(editor.value);
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     if(delay)delay.delayTime.value=cycleLen/8;
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");}
@@ -501,6 +528,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
     raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2",
     vary:"# A/B variation: <a/b/...> picks one alternative per bar (changes each bar).\nkey:   c minor\nkick:  x . . . <x/.> . . . x . . . x . <./x*2> .\nsnare: . . . . x . . . . . . . x . . <./x>\nhat:   x x x x x x x x | gain 0.14\nbass:  1 . <3/5> . 5, . <6,/4,> . | saw | oct 2\nlead:  <1/5> . 3 . <5/1'> . 4 . | pulse | gain 0.18",
+    samples:"# VRAIS samples (drums 808 + basse + arpy). Chargés du net au 1er RUN\n# (attends 1-2s puis re-RUN si le 1er tour sonne encore synthe).\nduck:  55\nkey:   a minor\nkick:  x . . . x . . . x . . . x . . . | sample bd\nsnare: . . . . x . . . . . . . x . . . | sample sd\nhat:   x x x x x x x x x x x x x x x x | sample hh | gain 0.3 | pan 0.25\nclap:  . . . . x . . . | sample cp | gain 0.4\nbass:  1 . 1 . 5, . 6, . | sample bass | oct 2\narp:   1 . 3 . 5 . 1' . 5 . 3 . 1 . 5, . | sample arpy | pan -0.3 | gain 0.5",
     poly:"# polyrhythm: voices with different step counts (3 vs 4 vs 5) over one bar.\nkey:   a minpent\nkick:  x x x x\nclav:  1 1 1 | tri | gain 0.18\nbell:  1 3 5 4 6 | sine | oct 4 | gain 0.13\nhat:   x x x x x x x x | gain 0.12",
     euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18",
     chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2",
@@ -581,6 +609,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
     "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck.",
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
+    "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Drum names available: bd (808 kick), sd (808 snare), hh (hihat), cp (clap), kick2 (acoustic kick). Melodic: bass, arpy (these repitch to the note/degree you play). e.g. kick: x . x . | sample bd  or  lead: 1 3 5 1' | sample arpy. Samples load from the net on the first RUN (a second of delay; until then it falls back to the synth).",
     "- Stereo: pan P places a voice in the stereo field, P from -1 (left) to 1 (right), e.g. hat: ... | pan -0.4 , arp: ... | pan 0.5. Spread voices for width. (The master bus runs through a gentle compressor/limiter for studio glue.)",
     "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",
     "- A/B variation: a token <a/b/c> picks ONE alternative per bar, cycling each bar, so the pattern changes over time. e.g. kick: <x/.> x x x (a kick that drops out every other bar), or lead: <1/3/5> . . . . The alternatives can be notes, degrees, chords, rests, even with ?/* mods.",
