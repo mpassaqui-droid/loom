@@ -46,6 +46,9 @@
   button.stop:active,button.stop:hover{background:var(--amber);color:var(--bg);}
   button.go{border-color:var(--cyan);color:var(--cyan);text-shadow:0 0 4px var(--cyan);}
   button.go:active,button.go:hover{background:var(--cyan);color:var(--bg);}
+  button.rec{border-color:#ff5a5a;color:#ff5a5a;text-shadow:0 0 4px #ff5a5a;}
+  button.rec:active,button.rec:hover{background:#ff5a5a;color:var(--bg);}
+  button.rec.on{background:#ff5a5a;color:var(--bg);animation:blink 1s steps(1) infinite;}
   button.tiny{font-size:11px;padding:11px 12px;}
   .bpm{display:flex;align-items:center;gap:8px;font-size:21px;margin-left:auto;}
   input[type=number]{width:64px;background:transparent;border:1px solid var(--dim);color:var(--glow);
@@ -133,6 +136,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   <div class="transport">
     <button id="run">&#9658; RUN</button>
     <button id="stop" class="stop">&#9632; STOP</button>
+    <button id="rec" class="rec">&#9679; REC</button>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
   </div>
 
@@ -252,6 +256,35 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const len=Math.floor(ctx.sampleRate*0.4);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
     const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
   function noise(){const s=ctx.createBufferSource();s.buffer=noiseBuf;return s;}
+
+  // --- record the output to a downloadable WAV file ---
+  let recNode=null,recSilent=null,recording=false,recL=[],recR=[];
+  function setupRec(){if(recNode||!comp)return;recNode=ctx.createScriptProcessor(4096,2,2);
+    recSilent=ctx.createGain();recSilent.gain.value=0;
+    recNode.onaudioprocess=e=>{if(!recording)return;const ib=e.inputBuffer;
+      recL.push(new Float32Array(ib.getChannelData(0)));
+      recR.push(new Float32Array(ib.getChannelData(ib.numberOfChannels>1?1:0)));};
+    comp.connect(recNode);recNode.connect(recSilent);recSilent.connect(ctx.destination);}
+  function flatF(chunks){let n=0;for(const c of chunks)n+=c.length;const o=new Float32Array(n);let p=0;
+    for(const c of chunks){o.set(c,p);p+=c.length;}return o;}
+  function encodeWAV(L,R,rate){const len=L.length,buf=new ArrayBuffer(44+len*4),view=new DataView(buf);
+    const w=(o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));};
+    w(0,"RIFF");view.setUint32(4,36+len*4,true);w(8,"WAVE");w(12,"fmt ");
+    view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,2,true);
+    view.setUint32(24,rate,true);view.setUint32(28,rate*4,true);view.setUint16(32,4,true);view.setUint16(34,16,true);
+    w(36,"data");view.setUint32(40,len*4,true);let off=44;
+    for(let i=0;i<len;i++){let l=Math.max(-1,Math.min(1,L[i])),r=Math.max(-1,Math.min(1,R[i]));
+      view.setInt16(off,l<0?l*32768:l*32767,true);off+=2;view.setInt16(off,r<0?r*32768:r*32767,true);off+=2;}
+    return new Blob([buf],{type:"audio/wav"});}
+  function toggleRec(){initAudio();if(ctx.state==="suspended")ctx.resume();setupRec();
+    if(!recording){recL=[];recR=[];recording=true;$("rec").classList.add("on");
+      log("[ rec ] enregistrement… (assure-toi que ca joue) - reclique REC pour stopper","ai");}
+    else{recording=false;$("rec").classList.remove("on");const L=flatF(recL),R=flatF(recR);recL=[];recR=[];
+      if(!L.length){log("[ rec ] rien enregistre - lance RUN puis REC","err");return;}
+      const url=URL.createObjectURL(encodeWAV(L,R,ctx.sampleRate));
+      const a=document.createElement("a");a.href=url;a.download="loom.wav";document.body.appendChild(a);a.click();
+      setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1000);
+      log("[ rec ] loom.wav telecharge ("+Math.round(L.length/ctx.sampleRate)+"s)","ai");}}
 
   // --- real samples (loaded from a free CDN on first RUN; synth fallback) ---
   const SDIRT="https://cdn.jsdelivr.net/gh/tidalcycles/Dirt-Samples@master/";
@@ -713,6 +746,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   // wiring
   $("run").addEventListener("click",run);
   $("stop").addEventListener("click",stop);
+  $("rec").addEventListener("click",toggleRec);
   $("vibeBtn").addEventListener("click",vibe);
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   $("exportBtn").addEventListener("click",exportCode);
