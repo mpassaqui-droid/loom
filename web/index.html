@@ -19,6 +19,10 @@
   /* very subtle CRT — does NOT sit on top of text legibility */
   body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
     background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,0.08) 3px 4px);}
+  /* "flat" themes (e.g. Modern): no CRT scanlines, no glow */
+  body.flat::after{display:none;}
+  body.flat{text-shadow:none;}
+  body.flat h1{text-shadow:none;}
   h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
     text-shadow:0 0 12px var(--green);letter-spacing:3px;margin-bottom:6px;}
   .sub{color:var(--dim);font-size:20px;margin-bottom:20px;}
@@ -94,6 +98,16 @@
 <body>
   <h1>LOOM</h1>
   <div class="sub" style="color:var(--amber);font-size:22px;">&#9656; VERSION 6 &middot; IA GRATUITE <span class="blink">_</span></div>
+
+  <div class="presets" id="themes" style="margin-bottom:14px">
+    <span style="color:var(--dim);font-size:16px;align-self:center;margin-right:2px">look &#9656;</span>
+    <button class="tiny" data-theme="crt">CRT</button>
+    <button class="tiny" data-theme="amber">AMBER</button>
+    <button class="tiny" data-theme="c64">C64</button>
+    <button class="tiny" data-theme="dos">DOS</button>
+    <button class="tiny" data-theme="apple2">APPLE II</button>
+    <button class="tiny" data-theme="modern">MODERN</button>
+  </div>
 
   <div class="card cyan">
     <div class="head">vibe &mdash; describe it, ai writes it (free)</div>
@@ -509,6 +523,23 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("course").addEventListener("click",e=>{const b=e.target.closest("[data-lesson]");if(!b)return;
     editor.value=LESSONS[+b.dataset.lesson].c;run();window.scrollTo({top:0,behavior:"smooth"});});
   renderCourse();
+
+  // --- terminal theme gallery (cosmetic; swaps CSS vars, persists) ---
+  const THEMES={
+    crt:   {bg:"#0b0f0b",green:"#5cff4a",dim:"#2b6b22",glow:"#9dff8a",amber:"#ffc04a",cyan:"#5fe6ff",flat:false},
+    amber: {bg:"#140d01",green:"#ffb000",dim:"#7a4f00",glow:"#ffd27a",amber:"#ff8a00",cyan:"#ffcf6b",flat:false},
+    c64:   {bg:"#3e31a2",green:"#b1a7ff",dim:"#6c5edb",glow:"#dcd7ff",amber:"#f7f779",cyan:"#a9e6ff",flat:false},
+    dos:   {bg:"#000000",green:"#c0c0c0",dim:"#5a5a5a",glow:"#ffffff",amber:"#ffff55",cyan:"#55ffff",flat:true},
+    apple2:{bg:"#000000",green:"#39ff66",dim:"#1a7a3a",glow:"#b6ffc4",amber:"#39ff8c",cyan:"#56ffa0",flat:false},
+    modern:{bg:"#1e1e2e",green:"#a6e3a1",dim:"#6c7086",glow:"#cdd6f4",amber:"#f9e2af",cyan:"#89dceb",flat:true}
+  };
+  function applyTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
+    r.setProperty("--bg",t.bg);r.setProperty("--green",t.green);r.setProperty("--dim",t.dim);
+    r.setProperty("--glow",t.glow);r.setProperty("--amber",t.amber);r.setProperty("--cyan",t.cyan);
+    document.body.classList.toggle("flat",!!t.flat);
+    try{localStorage.setItem("loom-theme",name);}catch(_){}}
+  document.querySelectorAll("#themes button").forEach(b=>b.addEventListener("click",()=>applyTheme(b.dataset.theme)));
+  try{const saved=localStorage.getItem("loom-theme");if(saved&&THEMES[saved])applyTheme(saved);}catch(_){}
 
   function exportCode(){const st={c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};
     try{$("shareIn").value="LOOM1:"+btoa(unescape(encodeURIComponent(JSON.stringify(st))));$("shareIn").select();log("[ export ] code ready - copy it","ai");}catch(e){log("[ export ] "+e.message,"err");}}

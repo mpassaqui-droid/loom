@@ -52,7 +52,7 @@ Bonjour ☀️ Tu dormais, j'ai construit. Lis ce fichier en premier.
 - [x] E7. Presets de genre soignés : CHIP, TECHNO, HOUSE, DNB, AMBIENT, SYNTHWAVE (utilisent filtres/env/unison/drive/duck/euclid).
 
 ### F. Interface
-- [ ] F1. Galerie de thèmes terminal (CRT vert, ambre, C64, DOS, Mac, moderne) + sélecteur
+- [x] F1. Galerie de thèmes : CRT vert, AMBER, C64, DOS, APPLE II, MODERN (boutons en haut, sauvegardé en localStorage).
 - [x] F2. Bouton/panneau COURS : 16 leçons en français, exemples cliquables (« essayer » charge+joue). Couvre tout le langage.
 
 ## Journal (le plus récent en haut)
@@ -60,6 +60,7 @@ _(je remplis ici à chaque étape : ce que j'ai fait, fichiers touchés, tests)_
 
 - **[B1]** Rythmes euclidiens `e(k,n[,rot])` : core (2 tests) + miroir JS + prompt IA. Essaie `kick: e(4,16)` ou `hat: e(7,16,2)`. 23 tests verts.
 - **[A1]** 19 gammes ajoutées (maqam/raga/gamelan/blues/harmonic-minor/whole-tone…) : core (1 test) + JS + prompt IA + presets HIJAZ & RAGA. 21 tests verts.
+- **[F1] Galerie de thèmes terminal.** Une rangée « look ▸ » en haut : **CRT** (vert, l'original), **AMBER** (monochrome ambre), **C64** (bleu Commodore), **DOS** (gris/ANSI), **APPLE II** (vert phosphore), **MODERN** (sombre, sans scanlines). Purement cosmétique (variables CSS) ; ton choix est mémorisé (localStorage) et revient au prochain chargement. (web only)
 - **[F2] Bouton COURS (tutoriel interactif).** Un panneau dépliable « ▸ COURS — apprends LOOM pas à pas » sous la grille : **16 leçons en français**, de la batterie aux gammes du monde, accords, romains, verbes, euclidien, probabilité/seed, rolls, arpèges, sound design, sidechain et structure. Chaque leçon a un bouton **« ▶ essayer »** qui charge l'exemple dans l'éditeur et le joue. C'est la meilleure porte d'entrée pour apprendre. (web only)
 - **[A3] Accords en chiffres romains.** Avec une `key:`, écris `I ii iii IV V vi vii` (+`7` pour la septième : `V7`, `ii7`) → l'accord diatonique construit sur ce degré, dont la qualité (majeur/mineur/dim) vient automatiquement de la gamme (en mineur `i` est mineur, etc.). Parfait pour les progressions (`I V vi IV`). Arpégeables avec `| arp up`. Essaie le preset **PROG**. (loom-core +2 tests, miroir JS dans trigger+arp, SYS, preset)
 - **[E7] Presets de genre soignés.** Les boutons du haut sont maintenant de vrais points de départ par style, exploitant tout le nouveau sound design : **CHIP** (8-bit), **TECHNO** (pump + stabs), **HOUSE** (off-beat hats, stabs orgue), **DNB** (break + reese bass disto), **AMBIENT** (nappes lentes + LFO), **SYNTHWAVE** (arp + pad gated + basse grasse). Clique-les et regarde le code pour apprendre les combinaisons. (web only, 38 tests verts)
