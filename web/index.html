@@ -190,6 +190,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     </div>
   </div>
 
+  <div class="card" id="customCard">
+    <div class="head">mes sons &mdash; tes propres samples</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="file" id="sampFiles" accept="audio/*" multiple style="flex:1;min-width:140px;color:var(--green);font-family:'VT323',monospace;font-size:18px">
+      <button class="tiny stop" id="clearSamples">VIDER</button>
+    </div>
+    <div id="customList" class="opt" style="margin-top:7px">aucun &mdash; dépose des fichiers audio, puis utilise-les avec | sample &lt;nom&gt;</div>
+  </div>
+
   <div id="timeline" class="wide" style="display:none"></div>
   <canvas id="scope" class="wide" title="clique : onde → spectre → off" style="width:100%;height:110px;display:block;border:1px solid var(--dim);border-radius:3px;margin:4px 0 10px;cursor:pointer"></canvas>
   <div id="grid" class="wide"></div>
@@ -354,8 +363,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     vox:"mouth/000_1.wav",yeah:"yeah/000_Sound0.wav",breath:"breath/000_breath.wav",
     wood:"east/000_nipon_wood_block.wav",metal:"metal/000_0.wav",glass:"glasstap/000_0.wav",bottle:"bottle/000_1.wav"};
   const sbuf={},sload={};
-  function loadSample(name){if(!ctx||!SAMPLES[name]||sbuf[name])return Promise.resolve();
+  const customRaw={};   // name -> ArrayBuffer of the user's own audio file
+  function loadSample(name){if(!ctx||sbuf[name])return Promise.resolve();
     if(sload[name])return sload[name];
+    if(customRaw[name]){sload[name]=ctx.decodeAudioData(customRaw[name].slice(0))
+      .then(b=>{sbuf[name]=b;}).catch(()=>{sload[name]=null;});return sload[name];}
+    if(!SAMPLES[name])return Promise.resolve();
     sload[name]=fetch(SDIRT+SAMPLES[name]).then(r=>r.arrayBuffer()).then(a=>ctx.decodeAudioData(a))
       .then(b=>{sbuf[name]=b;}).catch(()=>{sload[name]=null;});
     return sload[name];}
@@ -846,6 +859,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Samples (mélo)","| sample sitar","bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo (repitchés)"],
     ["Samples (loops/voix)","| sample amen","breaks: amen break amencut · voix/texture: vox yeah breath wood metal glass bottle"],
     ["Samples","| root NOTE","accorde un sample mélodique à l'oreille"],
+    ["Mes sons","panneau « mes sons »","dépose tes fichiers audio → | sample <ton_nom> (mémorisés)"],
     ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
@@ -970,6 +984,24 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function delSong(){const name=$("songList").value;if(!name){log("[ del ] choisis un morceau","err");return;}
     const songs=getSongs();delete songs[name];putSongs(songs);refreshSongs();log("[ del ] « "+name+" » supprimé","ai");}
 
+  // --- your own samples (decoded in-memory, persisted in IndexedDB) ---
+  function sampName(fn){return fn.replace(/\.[^.]+$/,"").toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,16)||"sample";}
+  function refreshCustomList(){const el=$("customList");if(!el)return;const names=Object.keys(customRaw);
+    el.innerHTML=names.length?("perso : <b>"+names.join("</b>, <b>")+"</b> — joue-les avec | sample &lt;nom&gt;"):"aucun — dépose des fichiers audio, puis | sample &lt;nom&gt;";}
+  function idbOpen(){return new Promise(res=>{if(!window.indexedDB){res(null);return;}
+    const r=indexedDB.open("loom-samples",1);r.onupgradeneeded=()=>r.result.createObjectStore("s");
+    r.onsuccess=()=>res(r.result);r.onerror=()=>res(null);});}
+  async function idbPut(name,ab){const db=await idbOpen();if(!db)return;try{db.transaction("s","readwrite").objectStore("s").put(ab,name);}catch(_){}}
+  async function idbClear(){const db=await idbOpen();if(!db)return;try{db.transaction("s","readwrite").objectStore("s").clear();}catch(_){}}
+  async function idbLoadAll(){const db=await idbOpen();if(!db)return;try{const st=db.transaction("s","readonly").objectStore("s");
+    const kr=st.getAllKeys(),vr=st.getAll();kr.onsuccess=()=>{vr.onsuccess=()=>{const ks=kr.result||[],vs=vr.result||[];
+      for(let i=0;i<ks.length;i++)customRaw[ks[i]]=vs[i];refreshCustomList();};};}catch(_){}}
+  function addCustomFiles(files){for(const f of files){const name=sampName(f.name);
+    f.arrayBuffer().then(ab=>{customRaw[name]=ab;idbPut(name,ab);delete sbuf[name];delete sload[name];
+      if(ctx)loadSample(name);refreshCustomList();log("[ sample ] « "+name+" » ajouté","ai");});}}
+  function clearCustomSamples(){for(const n of Object.keys(customRaw)){delete customRaw[n];delete sbuf[n];delete sload[n];}
+    idbClear();refreshCustomList();log("[ sample ] samples perso vidés","ai");}
+
   const SYS=["You are the composition engine for LOOM, a live-coding music language.",
     "Output ONLY valid LOOM code. No explanations, no markdown fences, no backticks.","GRAMMAR:",
     "- One voice per line: name: pattern | verb | verb",
@@ -1071,6 +1103,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("delSong").addEventListener("click",delSong);
   $("songList").addEventListener("change",e=>{if(e.target.value)loadSong();});
   refreshSongs();
+  $("sampFiles").addEventListener("change",e=>{addCustomFiles(e.target.files);e.target.value="";});
+  $("clearSamples").addEventListener("click",clearCustomSamples);
+  idbLoadAll();
   function bind(id,vid,fn){$(id).addEventListener("input",e=>{$(vid).textContent=e.target.value;fn&&fn(e.target.value);});}
   bind("swing","vSwing");
   bind("echo","vEcho",v=>{if(echoSend)echoSend.gain.value=v/100;});
