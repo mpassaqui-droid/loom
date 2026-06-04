@@ -690,6 +690,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     if(c==="palindrome")return(((bar%2)+2)%2===0)?tokens:tokens.slice().reverse();
     if(c==="rot"){if(!tokens.length)return tokens;const n=parseInt(p[1]);const k=(((isNaN(n)?1:n)%tokens.length)+tokens.length)%tokens.length;return tokens.slice(k).concat(tokens.slice(0,k));}
     if(c==="iter"){if(!tokens.length)return tokens;const n=Math.max(1,parseInt(p[1])||4);const k=(((bar%n)+n)%n)%tokens.length;return tokens.slice(k).concat(tokens.slice(0,k));}
+    if(c==="sometimes"||c==="often"||c==="rarely"||c==="someby"){
+      const P=c==="often"?0.75:c==="rarely"?0.25:c==="someby"?(parseFloat(p[1])||50)/100:0.5,skip=c==="someby"?2:1;
+      return rng(seed,bar,c+":"+v,1)<P?applyOne(tokens,p.slice(skip).join(" "),bar):tokens;}
     return tokens;}
   // cellular automaton: ca(rule,n) evolves one Wolfram generation per bar
   function caRow(rule,n,gen){let row=new Array(n).fill(false);row[n>>1]=true;
@@ -988,6 +991,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Verbes","| fast N    | slow N","accélère N× / joue une mesure sur N"],
     ["Verbes","| every N <verbe>","applique un verbe une mesure sur N"],
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
+    ["Verbes (proba)","| sometimes <verbe>","applique un verbe au hasard (often 75% · rarely 25% · someby P)"],
     ["Verbes","| rot N    | iter N","rotation fixe / décalage d'un pas par mesure"],
     ["Génératif","e(k,n)   e(k,n,rot)","rythme euclidien (k frappes sur n pas)"],
     ["Génératif (maths)","ca(rule,n)","automate cellulaire (Wolfram) qui évolue chaque mesure — rules 90 30 110 18 150"],
@@ -1186,7 +1190,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Melodic voices use any other name (bass, lead, arp, pad). Tokens are note names like c2 eb2 g3 a4 (a-g, optional # or b, octave 1-5). . means rest.",
     "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian; microtonal maqam with true quarter tones: bayati rast saba sikah huzam jiharkah). You can also bend any note by cents with +N or -N, e.g. 3+50 c3-30 (great for blue notes or maqam inflections). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
-    "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
+    "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars), sometimes <verb> / often <verb> / rarely <verb> / someby P <verb> (apply a verb on a random fraction of bars, seeded). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",

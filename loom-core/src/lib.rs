@@ -210,8 +210,9 @@ pub fn parse(src: &str) -> Vec<Voice> {
     out
 }
 
-/// Apply a single verb to a token list for a given bar index.
-fn apply_verb(tokens: &[String], verb: &str, bar: i64) -> Vec<String> {
+/// Apply a single verb to a token list for a given bar index. `seed` feeds the
+/// probabilistic verbs (`sometimes`/`someby`/…) so they replay deterministically.
+fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String> {
     let parts: Vec<&str> = verb.split_whitespace().collect();
     match parts.first().copied() {
         Some("rev") => tokens.iter().rev().cloned().collect(),
@@ -230,7 +231,19 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64) -> Vec<String> {
             let n = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(2).max(1);
             if bar.rem_euclid(n) == n - 1 {
                 let inner = parts[2..].join(" ");
-                apply_verb(tokens, &inner, bar)
+                apply_verb(tokens, &inner, bar, seed)
+            } else { tokens.to_vec() }
+        }
+        // probabilistic verbs: apply the inner verb on a fraction of bars (seeded)
+        Some(w @ ("sometimes" | "often" | "rarely" | "someby")) => {
+            let (p, skip) = match w {
+                "often" => (0.75, 1),
+                "rarely" => (0.25, 1),
+                "someby" => (parts.get(1).and_then(|x| x.parse::<f32>().ok()).unwrap_or(50.0) / 100.0, 2),
+                _ => (0.5, 1),
+            };
+            if rand01(seed, bar, verb, 0) < p {
+                apply_verb(tokens, &parts[skip..].join(" "), bar, seed)
             } else { tokens.to_vec() }
         }
         // Tidal-style transforms:
@@ -294,8 +307,13 @@ fn expand_generative_token(tok: &str, bar: i64) -> Option<Vec<String>> {
 /// Resolve a voice's effective tokens for a given bar (all verbs + bar-aware
 /// generative expansions applied).
 pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
+    effective_seeded(voice, bar, 0)
+}
+
+/// Like [`effective`] but with an explicit `seed` for probabilistic verbs.
+pub fn effective_seeded(voice: &Voice, bar: i64, seed: u64) -> Vec<String> {
     let mut t = voice.tokens.clone();
-    for v in &voice.verbs { t = apply_verb(&t, v, bar); }
+    for v in &voice.verbs { t = apply_verb(&t, v, bar, seed); }
     let mut out = Vec::with_capacity(t.len());
     for tok in t {
         match expand_generative_token(&tok, bar) {
@@ -327,7 +345,7 @@ pub fn schedule_bar_keyed(voices: &[Voice], key: Option<&Key>, bar: i64) -> Vec<
 pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: u64) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
-        let eff = effective(v, bar);
+        let eff = effective_seeded(v, bar, seed);
         let n = eff.len();
         if n == 0 { continue; }
         // Effective key for this voice: a `| oct N` overrides the key's octave.
@@ -935,36 +953,47 @@ mod tests {
     #[test]
     fn rev_reverses() {
         let t = vec!["a".into(),"b".into(),"c".into()];
-        assert_eq!(apply_verb(&t, "rev", 0), vec!["c","b","a"]);
+        assert_eq!(apply_verb(&t, "rev", 0, 0), vec!["c","b","a"]);
     }
 
     #[test]
     fn fast_repeats() {
         let t = vec!["x".into(),".".into()];
-        assert_eq!(apply_verb(&t, "fast 2", 0).len(), 4);
+        assert_eq!(apply_verb(&t, "fast 2", 0, 0).len(), 4);
     }
 
     #[test]
     fn palindrome_rot_iter_transforms() {
         let t = vec!["a".into(),"b".into(),"c".into(),"d".into()];
         // palindrome: forward on even bars, reversed on odd
-        assert_eq!(apply_verb(&t, "palindrome", 0), vec!["a","b","c","d"]);
-        assert_eq!(apply_verb(&t, "palindrome", 1), vec!["d","c","b","a"]);
+        assert_eq!(apply_verb(&t, "palindrome", 0, 0), vec!["a","b","c","d"]);
+        assert_eq!(apply_verb(&t, "palindrome", 1, 0), vec!["d","c","b","a"]);
         // rot 1: static left rotation
-        assert_eq!(apply_verb(&t, "rot 1", 0), vec!["b","c","d","a"]);
-        assert_eq!(apply_verb(&t, "rot -1", 0), vec!["d","a","b","c"]);
+        assert_eq!(apply_verb(&t, "rot 1", 0, 0), vec!["b","c","d","a"]);
+        assert_eq!(apply_verb(&t, "rot -1", 0, 0), vec!["d","a","b","c"]);
         // iter 4: shifts one step further each bar
-        assert_eq!(apply_verb(&t, "iter 4", 0), vec!["a","b","c","d"]);
-        assert_eq!(apply_verb(&t, "iter 4", 1), vec!["b","c","d","a"]);
-        assert_eq!(apply_verb(&t, "iter 4", 2), vec!["c","d","a","b"]);
+        assert_eq!(apply_verb(&t, "iter 4", 0, 0), vec!["a","b","c","d"]);
+        assert_eq!(apply_verb(&t, "iter 4", 1, 0), vec!["b","c","d","a"]);
+        assert_eq!(apply_verb(&t, "iter 4", 2, 0), vec!["c","d","a","b"]);
+    }
+
+    #[test]
+    fn probabilistic_verbs_are_deterministic() {
+        let t = vec!["a".into(),"b".into()];
+        // someby 0 never applies, someby 100 always applies (independent of seed)
+        assert_eq!(apply_verb(&t, "someby 0 rev", 5, 7), vec!["a","b"]);
+        assert_eq!(apply_verb(&t, "someby 100 rev", 5, 7), vec!["b","a"]);
+        // same (bar,seed) -> same result, every time
+        let x = apply_verb(&t, "sometimes rev", 3, 42);
+        assert_eq!(x, apply_verb(&t, "sometimes rev", 3, 42));
     }
 
     #[test]
     fn every_applies_on_nth_bar() {
         let t = vec!["a".into(),"b".into()];
         // every 4 rev -> reversed only when bar % 4 == 3
-        assert_eq!(apply_verb(&t, "every 4 rev", 0), vec!["a","b"]);
-        assert_eq!(apply_verb(&t, "every 4 rev", 3), vec!["b","a"]);
+        assert_eq!(apply_verb(&t, "every 4 rev", 0, 0), vec!["a","b"]);
+        assert_eq!(apply_verb(&t, "every 4 rev", 3, 0), vec!["b","a"]);
     }
 
     #[test]
