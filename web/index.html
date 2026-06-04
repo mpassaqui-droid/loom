@@ -579,7 +579,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -601,8 +601,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="reverb"||p[0]==="room")reverb=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
+      else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -660,7 +661,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const ch=romanToChord(tok,k)||parseChord(tok,baseOct);
     if(ch)return ch.map(midiToFreq);
     const f=noteToFreq(tok);return f?[f]:[];}
-  function trigger(v,tok,t){if(tok==="."||tok==="~")return;
+  function trigger(v,tok,t,durOverride){if(tok==="."||tok==="~")return;
     if(v.type==="drum"){const n=v.name;
       if(v.midi&&midiOut){const gm={kick:36,bd:36,snare:38,sd:38,hat:42,hh:42,clap:39,cp:39}[n]||37;sendMidi(v.midi,gm,110,t,0.1);return;}
       if((n==="kick"||n==="bd")&&duckAmt>0)duckPump(t);
@@ -668,7 +669,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
       else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);}
     else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
-      const dur=cycleLen/v.tokens.length,baseOct=v.oct!=null?v.oct:(k?k.octave:3);
+      const dur=durOverride||cycleLen/v.tokens.length,baseOct=v.oct!=null?v.oct:(k?k.octave:3);
       const sc=splitCents(tok),fr0=melFreqs(sc[0],v,k,baseOct);if(!fr0.length)return;
       const fr=sc[1]?fr0.map(f=>f*Math.pow(2,sc[1]/1200)):fr0;
       if(v.midi&&midiOut){for(const f of fr)sendMidi(v.midi,freqToMidi(f),96,t,dur);return;}
@@ -680,6 +681,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(songOn&&playing)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
     for(const v of activeVoices(bar)){
+      // true polymeter: a `| poly N` voice runs its own loop at N steps/bar and
+      // drifts against the bar grid when its length != N (Reich-style phasing)
+      if(v.poly){const spb=(typeof v.poly==="number"&&v.poly>0)?v.poly:16,gstep=cycleLen/spb,toks=v.tokens,nn=toks.length;
+        if(nn)for(let i=0;i<spb;i++){const s=bar*spb+i;let tok=toks[((s%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
+          const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
+          const base=tm[0];if(base===""||base==="."||base==="~")continue;
+          let t0=barT+i*gstep;if(i%2===1)t0+=sw*gstep;
+          for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2]);}
+        continue;}
       const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
       for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar);if(tok==="."||tok==="~")continue;
         const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,i)>=tm[1])continue;
@@ -756,6 +766,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     amen:"# le fameux Amen break + sub bass : jungle/DnB.\nduck:   40\nkey:    c minor\nbreak:  x . . . . . . . x . . . . . . . | sample amen | gain 0.5\nsub:    1 . . . . . 1 . . . 7, . . 5, . . | sample voodoo | oct 2 | gain 0.6\nstab:   . . . . 1' . . . . . . . 5 . . . | sample sid | gain 0.4 | pan 0.3\nvox:    . . . . . . . . . . . . . . x . | sample yeah | gain 0.4 | pan -0.3",
     band:"# 'live band' : guitare + sax + vraie batterie.\nduck:   30\nkey:    a minor\nkick:   x . . . x . . . x . . . x . . . | sample kick2\nsnare:  . . . . x . . . . . . . x . . x | sample sd | gain 0.4\nhat:    x x x x x x x x | sample oh | gain 0.2 | pan 0.3\nride:   . . x . . . x . | sample ride | gain 0.18 | pan -0.3\ngtr:    i . . . iv . . . VI . . . v . . . | sample gtr | arp up | gain 0.5\nsax:    . . . . 5 . 4 . . . 3 . . . 1 . | sample sax | gain 0.5 | pan 0.2\nbass:   1 . 1 . 5, . 1 . | sample bass | oct 2 | gain 0.6",
     poly:"# polyrhythm: voices with different step counts (3 vs 4 vs 5) over one bar.\nkey:   a minpent\nkick:  x x x x\nclav:  1 1 1 | tri | gain 0.18\nbell:  1 3 5 4 6 | sine | oct 4 | gain 0.13\nhat:   x x x x x x x x | gain 0.12",
+    phase:"# phasing facon Steve Reich : | poly fait deriver les voix dans le temps.\nkey:    e dorian\nkick:   x . . . x . . .\np1:     1 2 3 5 6 | poly 16 | pulse | gain 0.16 | pan -0.4\np2:     1 2 3 5 6 | poly 17 | pulse | gain 0.16 | pan 0.4\nbell:   1 . 5 . 1' . 5 . 3 . 6 . 5 . 2 . | poly 16 | sample arpy | gain 0.3\nbass:   1 . . . 5, . . . | sample bass | oct 2 | gain 0.5",
     automata:"# automates cellulaires : ca(rule,n) evolue chaque mesure (maths -> musique).\nseed:  1\nkey:   a minpent\nkick:  x . . . x . . . x . . . x . . .\nca1:   ca(90,16) | sample hh | gain 0.16\nca2:   ca(30,16) | sample perc | gain 0.2 | pan 0.3\nca3:   ca(150,8) | sample rim | gain 0.18 | pan -0.3\nbass:  1 . . . 5, . . . | sample bass | oct 2 | gain 0.5\nlead:  ca(110,8) | tri | lp 1600 | gain 0.12",
     euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18",
     chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2",
@@ -771,7 +782,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   const PRESET_GROUPS=[
     ["Genres & samples",["set","techno","house","dnb","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
-    ["Génératif & rythme",["euclid","automata","chance","rolls","vary","shift","poly","song","long","auto"]],
+    ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto"]],
     ["Sound design",["pad","supersaw","pump"]]
   ];
   function buildPresetMenu(){const el=$("presetSel");if(!el)return;
@@ -835,6 +846,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Verbes","| rot N    | iter N","rotation fixe / décalage d'un pas par mesure"],
     ["Génératif","e(k,n)   e(k,n,rot)","rythme euclidien (k frappes sur n pas)"],
     ["Génératif (maths)","ca(rule,n)","automate cellulaire (Wolfram) qui évolue chaque mesure — rules 90 30 110 18 150"],
+    ["Génératif (maths)","| poly N","vraie polymétrie : la voix tourne à N pas/mesure et dérive (phasing à la Reich)"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","seed: 42","rend l'aléatoire reproductible"],
     ["Génératif","x*3","ratchet / roll (N frappes dans un pas)"],
@@ -1027,6 +1039,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Automation (movement over time): write a parameter as A..B to sweep it, e.g. | lp 300..6000 opens the filter, | drive 0..0.6 grows the grit, | pan -1..1 sweeps across. The sweep spans the current section (or | over N bars). Perfect for builds/risers and evolving long tracks — use it on the build section of a song.",
     "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",
     "- A/B variation: a token <a/b/c> picks ONE alternative per bar, cycling each bar, so the pattern changes over time. e.g. kick: <x/.> x x x (a kick that drops out every other bar), or lead: <1/3/5> . . . . The alternatives can be notes, degrees, chords, rests, even with ?/* mods.",
+    "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
     "- Comments start with #.",
