@@ -419,6 +419,27 @@ pub fn scale_intervals(name: &str) -> Option<Vec<i32>> {
         "insen"                            => vec![0, 1, 5, 7, 10],
         "iwato"                            => vec![0, 1, 5, 6, 10],
         "egyptian"                         => vec![0, 2, 5, 7, 10],
+        // symmetric & jazz
+        "octatonic" | "octatonic_hw" | "diminished" => vec![0, 1, 3, 4, 6, 7, 9, 10],
+        "octatonic_wh"                     => vec![0, 2, 3, 5, 6, 8, 9, 11],
+        "augmented"                        => vec![0, 3, 4, 7, 8, 11],
+        "bebop" | "bebop_dominant"         => vec![0, 2, 4, 5, 7, 9, 10, 11],
+        "bebop_major"                      => vec![0, 2, 4, 5, 7, 8, 9, 11],
+        "phrygian_dominant" | "spanish"    => vec![0, 1, 4, 5, 7, 8, 10],
+        // exotic / world
+        "hungarian_minor" | "gypsy"        => vec![0, 2, 3, 6, 7, 8, 11],
+        "hungarian_major"                  => vec![0, 3, 4, 6, 7, 9, 10],
+        "neapolitan_minor"                 => vec![0, 1, 3, 5, 7, 8, 11],
+        "neapolitan_major"                 => vec![0, 1, 3, 5, 7, 9, 11],
+        "enigmatic"                        => vec![0, 1, 4, 6, 8, 10, 11],
+        "persian"                          => vec![0, 1, 4, 5, 6, 8, 11],
+        "prometheus"                       => vec![0, 2, 4, 6, 9, 10],
+        "marwa"                            => vec![0, 1, 4, 6, 7, 9, 11],
+        "purvi"                            => vec![0, 1, 4, 6, 7, 8, 11],
+        // more pentatonics
+        "kumoi"                            => vec![0, 2, 3, 7, 9],
+        "yo"                               => vec![0, 2, 5, 7, 9],
+        "blues_major" | "majblues"         => vec![0, 2, 3, 4, 7, 9],
         _ => return None,
     };
     Some(s)
@@ -525,7 +546,23 @@ fn midi_to_name(midi: i32) -> String {
 /// Lowercase tokens stay single notes/degrees (`c3`, `eb2`), which is how we
 /// disambiguate `C` the chord from `c3` the note. Uppercase note names that
 /// carry an octave (`C3`) fail the quality match and fall back to a plain note.
+/// Pitch class (0..=11) of a chord/bass note like `C`, `F#`, `Bb` (uppercase root).
+fn chord_root_pc(s: &str) -> Option<i32> {
+    let b = s.as_bytes();
+    if b.is_empty() { return None; }
+    let mut root: i32 = match b[0] as char {
+        'C'=>0,'D'=>2,'E'=>4,'F'=>5,'G'=>7,'A'=>9,'B'=>11, _=>return None,
+    };
+    if b.len() > 1 { match b[1] { b'#' => root += 1, b'b' => root -= 1, _ => {} } }
+    Some(root.rem_euclid(12))
+}
+
 pub fn parse_chord(tok: &str, octave: i32) -> Option<Vec<i32>> {
+    // slash chord / inversion: `Cm7/G` puts G in the bass, below the chord.
+    let (tok, slash_bass) = match tok.split_once('/') {
+        Some((c, b)) => (c, chord_root_pc(b)),
+        None => (tok, None),
+    };
     let b = tok.as_bytes();
     if b.is_empty() { return None; }
     let base: i32 = match b[0] as char {
@@ -540,25 +577,44 @@ pub fn parse_chord(tok: &str, octave: i32) -> Option<Vec<i32>> {
     let intervals: &[i32] = match &tok[idx..] {
         "" | "maj" | "M"            => &[0, 4, 7],
         "m" | "min" | "-"           => &[0, 3, 7],
+        "5"                         => &[0, 7],            // power chord
         "dim" | "o"                 => &[0, 3, 6],
         "aug" | "+"                 => &[0, 4, 8],
+        "sus2"                      => &[0, 2, 7],
+        "sus4" | "sus"              => &[0, 5, 7],
+        "6"                         => &[0, 4, 7, 9],
+        "m6" | "min6"               => &[0, 3, 7, 9],
+        "69" | "6/9"                => &[0, 4, 7, 9, 14],
         "7"                         => &[0, 4, 7, 10],
         "maj7" | "M7"               => &[0, 4, 7, 11],
         "m7" | "min7" | "-7"        => &[0, 3, 7, 10],
-        "m7b5" | "min7b5"           => &[0, 3, 6, 10],
+        "mmaj7" | "mMaj7" | "m#7"   => &[0, 3, 7, 11],
+        "m7b5" | "min7b5"           => &[0, 3, 6, 10],     // half-diminished
         "dim7" | "o7"               => &[0, 3, 6, 9],
-        "6"                         => &[0, 4, 7, 9],
-        "m6" | "min6"               => &[0, 3, 7, 9],
-        "sus2"                      => &[0, 2, 7],
-        "sus4" | "sus"              => &[0, 5, 7],
+        "7b5"                       => &[0, 4, 6, 10],
+        "7#5" | "7+5" | "aug7"      => &[0, 4, 8, 10],
+        "7b9"                       => &[0, 4, 7, 10, 13],
+        "7#9"                       => &[0, 4, 7, 10, 15],
+        "7#11"                      => &[0, 4, 7, 10, 18],
         "add9"                      => &[0, 4, 7, 14],
+        "add11"                     => &[0, 4, 7, 17],
         "9"                         => &[0, 4, 7, 10, 14],
         "maj9" | "M9"               => &[0, 4, 7, 11, 14],
         "m9" | "min9"               => &[0, 3, 7, 10, 14],
+        "11"                        => &[0, 7, 10, 14, 17],
+        "m11"                       => &[0, 3, 7, 10, 14, 17],
+        "13"                        => &[0, 4, 7, 10, 14, 21],
+        "maj13" | "M13"             => &[0, 4, 7, 11, 14, 21],
+        "m13"                       => &[0, 3, 7, 10, 14, 21],
         _ => return None,
     };
     let root_midi = 12 * (octave + 1) + root;
-    Some(intervals.iter().map(|i| root_midi + i).collect())
+    let mut notes: Vec<i32> = intervals.iter().map(|i| root_midi + i).collect();
+    if let Some(bass_pc) = slash_bass {
+        // place the named bass note an octave below the root
+        notes.insert(0, 12 * octave + bass_pc);
+    }
+    Some(notes)
 }
 
 // ---------------------------------------------------------------------------
@@ -1189,6 +1245,28 @@ mod tests {
         let toks: Vec<&str> = ev.iter().map(|e| e.token.as_str()).collect();
         assert_eq!(toks, ["c3", "eb3", "g3", "bb3"]);
         assert!(ev.iter().all(|e| e.phase == 0.0));
+    }
+
+    #[test]
+    fn extended_chords_and_inversions() {
+        // 13th chord stacks the extensions
+        let v = parse("k: C13");
+        let ev = schedule_bar_seeded(&v, None, 0, 0);
+        assert_eq!(ev.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["c3","e3","g3","bb3","d4","a4"]);
+        // power chord
+        let p = parse("k: G5");
+        assert_eq!(schedule_bar_seeded(&p, None, 0, 0).iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["g3","d4"]);
+        // slash chord puts the named bass below: C/E -> e2 c3 e3 g3
+        let s = parse("k: C/E");
+        assert_eq!(schedule_bar_seeded(&s, None, 0, 0).iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["e2","c3","e3","g3"]);
+    }
+
+    #[test]
+    fn new_scales_exist() {
+        assert!(scale_intervals("octatonic").is_some());
+        assert!(scale_intervals("hungarian_minor").is_some());
+        assert!(scale_intervals("phrygian_dominant").is_some());
+        assert_eq!(scale_intervals("augmented").unwrap(), vec![0,3,4,7,8,11]);
     }
 
     #[test]

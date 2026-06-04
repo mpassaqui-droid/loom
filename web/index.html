@@ -466,7 +466,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     hijaz:[0,1,4,5,7,8,10],hijazkar:[0,1,4,5,7,8,11],double_harmonic:[0,1,4,5,7,8,11],byzantine:[0,1,4,5,7,8,11],
     nahawand:[0,2,3,5,7,8,10],kurd:[0,1,3,5,7,8,10],ajam:[0,2,4,5,7,9,11],
     bhairav:[0,1,4,5,7,8,11],yaman:[0,2,4,6,7,9,11],todi:[0,1,3,6,7,8,11],
-    slendro:[0,2,5,7,10],pelog:[0,1,3,7,8],hirajoshi:[0,2,3,7,8],insen:[0,1,5,7,10],iwato:[0,1,5,6,10],egyptian:[0,2,5,7,10]};
+    slendro:[0,2,5,7,10],pelog:[0,1,3,7,8],hirajoshi:[0,2,3,7,8],insen:[0,1,5,7,10],iwato:[0,1,5,6,10],egyptian:[0,2,5,7,10],
+    octatonic:[0,1,3,4,6,7,9,10],octatonic_hw:[0,1,3,4,6,7,9,10],diminished:[0,1,3,4,6,7,9,10],octatonic_wh:[0,2,3,5,6,8,9,11],
+    augmented:[0,3,4,7,8,11],bebop:[0,2,4,5,7,9,10,11],bebop_dominant:[0,2,4,5,7,9,10,11],bebop_major:[0,2,4,5,7,8,9,11],
+    phrygian_dominant:[0,1,4,5,7,8,10],spanish:[0,1,4,5,7,8,10],hungarian_minor:[0,2,3,6,7,8,11],gypsy:[0,2,3,6,7,8,11],
+    hungarian_major:[0,3,4,6,7,9,10],neapolitan_minor:[0,1,3,5,7,8,11],neapolitan_major:[0,1,3,5,7,9,11],
+    enigmatic:[0,1,4,6,8,10,11],persian:[0,1,4,5,6,8,11],prometheus:[0,2,4,6,9,10],marwa:[0,1,4,6,7,9,11],purvi:[0,1,4,6,7,8,11],
+    kumoi:[0,2,3,7,9],yo:[0,2,5,7,9],blues_major:[0,2,3,4,7,9],majblues:[0,2,3,4,7,9]};
   const DEFAULT_OCTAVE=3;
   function tonicPc(w){const m=/^([a-gA-G])([#b]?)/.exec(w);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
@@ -494,15 +500,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function expandEuclid(tok){const m=/^e\((\d+),(\d+)(?:,(-?\d+))?\)$/.exec(tok);if(!m)return null;
     return euclid(+m[1],+m[2],m[3]?+m[3]:0).map(b=>b?"x":".");}
   // chords: UPPERCASE root = chord (Cm7, F, G7); lowercase stays a single note
-  const CHORDS={"":[0,4,7],maj:[0,4,7],M:[0,4,7],m:[0,3,7],min:[0,3,7],"-":[0,3,7],
-    dim:[0,3,6],o:[0,3,6],aug:[0,4,8],"+":[0,4,8],"7":[0,4,7,10],maj7:[0,4,7,11],M7:[0,4,7,11],
-    m7:[0,3,7,10],min7:[0,3,7,10],"-7":[0,3,7,10],m7b5:[0,3,6,10],min7b5:[0,3,6,10],
-    dim7:[0,3,6,9],o7:[0,3,6,9],"6":[0,4,7,9],m6:[0,3,7,9],min6:[0,3,7,9],
-    sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],add9:[0,4,7,14],"9":[0,4,7,10,14],
-    maj9:[0,4,7,11,14],M9:[0,4,7,11,14],m9:[0,3,7,10,14],min9:[0,3,7,10,14]};
-  function parseChord(tok,oct){const m=/^([A-G])([#b]?)(.*)$/.exec(tok);if(!m)return null;
+  const CHORDS={"":[0,4,7],maj:[0,4,7],M:[0,4,7],m:[0,3,7],min:[0,3,7],"-":[0,3,7],"5":[0,7],
+    dim:[0,3,6],o:[0,3,6],aug:[0,4,8],"+":[0,4,8],sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],
+    "6":[0,4,7,9],m6:[0,3,7,9],min6:[0,3,7,9],"69":[0,4,7,9,14],"6/9":[0,4,7,9,14],
+    "7":[0,4,7,10],maj7:[0,4,7,11],M7:[0,4,7,11],m7:[0,3,7,10],min7:[0,3,7,10],"-7":[0,3,7,10],
+    mmaj7:[0,3,7,11],"m#7":[0,3,7,11],m7b5:[0,3,6,10],min7b5:[0,3,6,10],dim7:[0,3,6,9],o7:[0,3,6,9],
+    "7b5":[0,4,6,10],"7#5":[0,4,8,10],"7+5":[0,4,8,10],aug7:[0,4,8,10],"7b9":[0,4,7,10,13],"7#9":[0,4,7,10,15],"7#11":[0,4,7,10,18],
+    add9:[0,4,7,14],add11:[0,4,7,17],"9":[0,4,7,10,14],maj9:[0,4,7,11,14],M9:[0,4,7,11,14],m9:[0,3,7,10,14],min9:[0,3,7,10,14],
+    "11":[0,7,10,14,17],m11:[0,3,7,10,14,17],"13":[0,4,7,10,14,21],maj13:[0,4,7,11,14,21],M13:[0,4,7,11,14,21],m13:[0,3,7,10,14,21]};
+  function chordRootPc(s){const m=/^([A-G])([#b]?)/.exec(s);if(!m)return null;
+    const map={C:0,D:2,E:4,F:5,G:7,A:9,B:11};let r=map[m[1]];if(m[2]==="#")r++;if(m[2]==="b")r--;return((r%12)+12)%12;}
+  function parseChord(tok,oct){let bass=null;const sl=tok.indexOf("/");
+    if(sl>=0){bass=chordRootPc(tok.slice(sl+1));tok=tok.slice(0,sl);}
+    const m=/^([A-G])([#b]?)(.*)$/.exec(tok);if(!m)return null;
     const map={C:0,D:2,E:4,F:5,G:7,A:9,B:11};let root=map[m[1]];if(m[2]==="#")root++;if(m[2]==="b")root--;
-    const iv=CHORDS[m[3]];if(!iv)return null;const rm=12*(oct+1)+root;return iv.map(i=>rm+i);}
+    const iv=CHORDS[m[3]];if(!iv)return null;const rm=12*(oct+1)+root;const notes=iv.map(i=>rm+i);
+    if(bass!=null)notes.unshift(12*oct+bass);return notes;}
   // roman-numeral chords against the key: I ii iii IV V vi vii (+7). Diatonic.
   function romanToChord(tok,k){if(!k)return null;
     const m=/^(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)(7?)$/.exec(tok);if(!m)return null;
@@ -685,6 +698,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     dorian:"# cool minor with a bright 6th (jazzy/celtic).\nkey:   d dorian\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x . | every 4 fast 2\nbass:  1, . . . 5, . . . 6, . . . 5, . . . | saw\nlead:  1 . 3 . 5 6 5 3 | tri | gain 0.2",
     phrygian:"# dark & spanish: the flat 2nd does the magic.\nkey:   e phrygian\nkick:  x . . . x . . .\nsnare: . . . . x . . .\nhat:   x . x . x . x x\nbass:  1, . 2, . 1, . 7, . | saw | gain 0.4\nlead:  1 2 1 7, 1 . 3 2 | pulse | gain 0.18",
     penta:"# 5-note scale: every note sounds right.\nkey:   c minpent\nkick:  x . . . x . . .\nsnare: . . x . . . x .\nhat:   x x x x x x x x | every 4 fast 2\nbass:  1, . . 3, . . 5, . | saw\nlead:  1 3 4 5 4 3 1 5, | tri | gain 0.2",
+    jazz:"# accords etendus + renversements (slash) : couleur jazz.\nkey:   c major\nkick:  x . . . . . . . x . . . . . . . | sample kick2 | gain 0.6\nride:  . . x . . . x . . . x . . . x . | sample ride | gain 0.13 | pan 0.3\nkeys:  Cmaj9 . . . Am11 . . . Dm9 . . . G13 . . . | sine | env 0.05 0.4 0.7 0.6 | reverb 0.4 | gain 0.13\nbass:  c2 . . . a1 . . . d2 . . . g1 . . . | sample bass | gain 0.6\nlead:  . . 7 . . 9 . . 6 . . 5 . . 3 . | sample sax | gain 0.4 | delay 0.25 | reverb 0.3",
     prog:"# roman-numeral chords build on the key: I ii iii IV V vi vii (+7).\n# the famous I-V-vi-IV progression, plus an arpeggio of the same.\nkey:   c major\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.13\nkeys:  I . . . V . . . vi . . . IV . . . | sine | env 0.05 0.2 0.7 0.4 | gain 0.16\narp:   I . . . V . . . vi . . . IV . . . | arp up | saw | lp 1600 q 4 | gain 0.13\nbass:  1 . . . 5 . . . 6 . . . 4 . . . | saw | lp 500 | oct 2",
     harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2",
     hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
@@ -711,7 +725,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     set:"# SET techno — morceau long qui evolue. Charge, RUN, ou RENDER pour le WAV.\nseed:  7\nduck:  65\nkey:   a minor\nsong:  intro*8 build*8 main*16 break*8 main*16 peak*16 outro*8\nkick:  x . . . x . . . x . . . x . . . | sample bd\nkick@intro: x . . . . . . . x . . . . . . . | sample bd\nkick@break: . . . . . . . . . . . . . . . .\nclap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | in build main peak outro\nclap@peak: . . . . x . . x . . . . x . . x | sample cp | gain 0.4\nhat:   e(9,16) | sample hh | gain 0.2 | pan 0.2 | in build main break peak outro\nhat@peak: e(13,16) | sample hh | gain 0.2 | pan 0.2\noh:    . . x . . . x . . . x . . . x . | sample oh | gain 0.15 | in main peak\nbass:  . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | saw | unison 3 | detune 16 | lp 520 q 6 | drive 0.3 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22 | in build main peak outro\nbass@peak: . 1 . 1 . 1 5, . . 1 . 1 . 7, 1 . | saw | unison 3 | detune 18 | lp 760 q 7 | drive 0.4 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22\nstab@main: . . . . . . Am . . . . . . . . . | saw | unison 3 | lp 1500 q 6 | env 0.01 0.1 0.2 0.2 | gain 0.12 | reverb 0.3\nstab@peak: . . Am . . . F . . . Am . . . G . | saw | unison 3 | lp 2000 q 6 | env 0.01 0.1 0.2 0.2 | gain 0.13 | reverb 0.3\narp@peak: 1 5 1' 5 3 5 1' 5 1 5 1' 5 4 5 1' 5 | sample arpy | gain 0.28 | delay 0.3 | pan -0.2\npad:   Am7 . . . . . . . | saw | unison 4 | lp 820 | env 0.8 0.5 0.7 2 | reverb 0.5 | gain 0.13 | in intro break outro"};
   const PRESET_GROUPS=[
     ["Genres & samples",["set","techno","house","dnb","ambient","synthwave","chip","samples","world","band","amen","dub"]],
-    ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","raga","harmonic","prog","chords","arp"]],
+    ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","chance","rolls","vary","shift","poly","song","long","auto"]],
     ["Sound design",["pad","supersaw","pump"]]
   ];
@@ -763,7 +777,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Notes & degrés","7#  3b  5b","altération chromatique (en suffixe)"],
     ["Gammes","scale: dorian","major minor dorian phrygian lydian mixolydian locrian · pentatonic minpent · harmonic_minor melodic_minor whole_tone blues chromatic"],
     ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi slendro pelog hirajoshi insen iwato egyptian"],
-    ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : maj m dim aug 7 maj7 m7 m7b5 dim7 6 m6 sus2 sus4 add9 9 maj9 m9"],
+    ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : 5 maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13"],
+    ["Accords","Cm7/G   C/E","renversement / slash : la note après / passe à la basse"],
     ["Accords","I ii iii IV V vi vii (+7)","chiffres romains = accords diatoniques de la key"],
     ["Accords","| arp up","arpège : up / down / updown / downup"],
     ["Verbes","| rev","inverse le motif"],
@@ -896,11 +911,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- One voice per line: name: pattern | verb | verb",
     "- Drum voices use x (hit) and . (rest). Drum names: kick, snare, hat, clap.",
     "- Melodic voices use any other name (bass, lead, arp, pad). Tokens are note names like c2 eb2 g3 a4 (a-g, optional # or b, octave 1-5). . means rest.",
-    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues chromatic, plus world scales: hijaz hijazkar nahawand kurd ajam bhairav yaman todi slendro pelog hirajoshi insen iwato egyptian). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
+    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
-    "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: maj m dim aug 7 maj7 m7 m7b5 dim7 6 m6 sus2 sus4 add9 9 maj9 m9. Use on a pad/keys voice for harmony, e.g. keys: Cm7 . . . Fm7 . . . | sine.",
+    "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
     "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",
     "- Probability: add ? to a token to make it fire only sometimes. x? ~50%, x?70 = 70%, c3?25 = 25%. Works on any token (drums, notes, degrees, chords). Use it for humanized hats, ghost notes, evolving patterns.",
