@@ -89,8 +89,8 @@ pub struct Event {
     pub is_drum: bool,
 }
 
-/// Names that introduce a *directive* (key/scale/seed/song/duck/…), not a voice.
-const DIRECTIVES: [&str; 6] = ["key", "scale", "seed", "song", "arrange", "duck"];
+/// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
+const DIRECTIVES: [&str; 7] = ["key", "scale", "seed", "song", "arrange", "duck", "feel"];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
 /// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.

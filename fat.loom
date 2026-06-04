@@ -1,0 +1,32 @@
+# FAT — techno layered (gros son). Chaque element est empile.
+seed:  4
+duck:  70
+key:   a minor
+song:  intro*4 main*16 break*4 main*16 peak*16 outro*4
+
+# KICK = punch sample + sub sinus (poids)
+kick:        x . . . x . . . x . . . x . . . | sample bd
+ksub:        1 . . . 1 . . . 1 . . . 1 . . . | sine | oct 1 | env 0.002 0.11 0 0.05 | gain 0.5 | in main peak outro
+kick@intro:  x . . . . . . . x . . . . . . . | sample bd
+kick@break:  . . . . . . . . . . . . . . . .
+
+clap:        . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | in main peak outro
+clap@peak:   . . . . x . . x . . . . x . . x | sample cp | gain 0.4
+
+hat:         e(11,16) | sample hh | gain 0.18 | pan 0.2 | in main break peak outro
+oh:          . . x . . . x . . . x . . . x . | sample oh | gain 0.14 | pan -0.2 | in main peak
+
+# BASS layered : sub pur + medium sature
+bsub:        . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | sine | oct 2 | env 0.004 0.06 0.2 0.05 | gain 0.4 | in main peak outro
+bmid:        . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | saw | unison 3 | detune 16 | lp 700 q 6 | drive 0.4 | env 0.004 0.06 0.2 0.05 | oct 2 | gain 0.16 | in main peak outro
+bmid@peak:   . 1 . 1 . 1 5, . . 1 . 1 . 7, 1 . | saw | unison 3 | detune 18 | lp 900 q 7 | drive 0.5 | oct 2 | gain 0.16
+
+stab@main:   . . . . . . Am . . . . . . . . . | saw | unison 3 | lp 1600 q 6 | env 0.01 0.1 0.2 0.2 | reverb 0.3 | gain 0.12
+stab@peak:   . . Am . . . F . . . Dm . . . E . | saw | unison 3 | lp 2200 q 6 | env 0.01 0.1 0.2 0.2 | reverb 0.3 | gain 0.13
+
+acid@break:  1 1 1' 1 5 1 1' 5 | saw | unison 3 | lp 250..5000 | over 4 | q 9 | drive 0.4 | gain 0.13
+arp@peak:    1 5 1' 5 3 5 1' 5 | sample arpy | gain 0.28 | delay 0.3 | pan -0.3
+
+# PAD double (deux nappes)
+pad:         Am7 . . . . . . . | saw | unison 4 | lp 900 | env 0.7 0.5 0.7 1.6 | reverb 0.5 | gain 0.12 | in intro break outro
+pad2:        Am7 . . . . . . . | sine | oct 4 | env 1 0.6 0.7 2 | reverb 0.6 | gain 0.08 | in intro break outro
