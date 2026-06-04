@@ -93,7 +93,8 @@
   .cell{width:22px;height:22px;border:1px solid var(--dim);background:transparent;border-radius:2px;}
   .cell.on{background:rgba(92,255,74,0.18);}
   .cell.play{outline:2px solid var(--amber);}
-  .cell.hit{background:var(--glow)!important;box-shadow:0 0 8px var(--green);}
+  .cell{transition:transform .04s,box-shadow .12s;}
+  .cell.hit{background:var(--glow)!important;box-shadow:0 0 14px var(--glow),0 0 4px var(--green);transform:scale(1.25);z-index:2;}
   .cell:hover{border-color:var(--green);}
   .row{transition:opacity .2s;}
   /* section timeline */
@@ -202,7 +203,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   </div>
 
   <div id="timeline" class="wide" style="display:none"></div>
-  <canvas id="scope" class="wide" title="clique : onde → spectre → off" style="width:100%;height:110px;display:block;border:1px solid var(--dim);border-radius:3px;margin:4px 0 10px;cursor:pointer"></canvas>
+  <canvas id="scope" class="wide" title="clique : onde → spectre → off" style="width:100%;height:150px;display:block;border:1px solid var(--dim);border-radius:3px;margin:6px 0 12px;cursor:pointer;transition:box-shadow .05s"></canvas>
   <div id="grid" class="wide"></div>
   <div id="console" class="wide">[ idle ] press RUN to begin</div>
 
@@ -742,26 +743,30 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     drawScope();
     requestAnimationFrame(animate);}
   function drawScope(){const cv=$("scope");if(!cv||!cv.getContext||!analyser||scopeMode==="off")return;
-    const W=cv.width=cv.clientWidth||600,H=cv.height=110;const c2=cv.getContext("2d");
+    const W=cv.width=cv.clientWidth||600,H=cv.height=150;const c2=cv.getContext("2d");
     let fg="#9dff8a",am="#ffc04a",cy="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
       fg=cs.getPropertyValue("--glow").trim()||fg;am=cs.getPropertyValue("--amber").trim()||am;
       cy=cs.getPropertyValue("--cyan").trim()||cy;dim=cs.getPropertyValue("--dim").trim()||dim;}catch(_){}
+    // overall level -> the whole scope pulses with the music
+    const td=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(td);
+    let peak=0;for(let i=0;i<td.length;i+=6){const d=Math.abs(td[i]-128);if(d>peak)peak=d;}
+    const level=Math.min(1,peak/110);cv.style.boxShadow="0 0 "+(5+level*30).toFixed(0)+"px "+fg;
     c2.clearRect(0,0,W,H);
-    // faint centre line
     c2.strokeStyle=dim;c2.globalAlpha=0.5;c2.lineWidth=1;c2.beginPath();c2.moveTo(0,H/2);c2.lineTo(W,H/2);c2.stroke();c2.globalAlpha=1;
-    if(scopeMode==="wave"){const buf=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(buf);
-      // soft fill under the curve
-      c2.beginPath();c2.moveTo(0,H/2);for(let i=0;i<buf.length;i++)c2.lineTo(i/buf.length*W,buf[i]/255*H);c2.lineTo(W,H/2);c2.closePath();
+    if(scopeMode==="wave"){
+      c2.beginPath();c2.moveTo(0,H/2);for(let i=0;i<td.length;i++)c2.lineTo(i/td.length*W,td[i]/255*H);c2.lineTo(W,H/2);c2.closePath();
       const fillg=c2.createLinearGradient(0,0,0,H);fillg.addColorStop(0,fg);fillg.addColorStop(1,dim);
-      c2.globalAlpha=0.14;c2.fillStyle=fillg;c2.fill();c2.globalAlpha=1;
-      // glowing line
-      c2.lineWidth=2.4;c2.strokeStyle=fg;c2.shadowBlur=10;c2.shadowColor=fg;c2.lineJoin="round";c2.beginPath();
-      for(let i=0;i<buf.length;i++){const x=i/buf.length*W,y=buf[i]/255*H;i?c2.lineTo(x,y):c2.moveTo(x,y);}c2.stroke();c2.shadowBlur=0;}
+      c2.globalAlpha=0.16;c2.fillStyle=fillg;c2.fill();c2.globalAlpha=1;
+      c2.lineWidth=2.4;c2.strokeStyle=fg;c2.shadowBlur=12;c2.shadowColor=fg;c2.lineJoin="round";c2.beginPath();
+      for(let i=0;i<td.length;i++){const x=i/td.length*W,y=td[i]/255*H;i?c2.lineTo(x,y):c2.moveTo(x,y);}c2.stroke();c2.shadowBlur=0;}
     else{const n=analyser.frequencyBinCount,buf=new Uint8Array(n);analyser.getByteFrequencyData(buf);
-      const bars=80,step=Math.max(1,Math.floor(n*0.66/bars)),bw=W/bars;c2.shadowBlur=8;
-      for(let i=0;i<bars;i++){const h=Math.pow(buf[i*step]/255,1.4)*H;
-        const g=c2.createLinearGradient(0,H,0,H-h);g.addColorStop(0,cy);g.addColorStop(0.6,fg);g.addColorStop(1,am);
-        c2.fillStyle=g;c2.shadowColor=fg;c2.fillRect(i*bw,H-h,bw-1.5,h);}c2.shadowBlur=0;}}
+      // mirrored spectrum: low freqs in the centre, bars fan out both sides
+      const bars=56,step=Math.max(1,Math.floor(n*0.55/bars)),cx=W/2,bw=(W/2)/bars;c2.shadowBlur=10;
+      for(let i=0;i<bars;i++){const h=Math.pow(buf[i*step]/255,1.5)*H;
+        const g=c2.createLinearGradient(0,H,0,H-h);g.addColorStop(0,cy);g.addColorStop(0.55,fg);g.addColorStop(1,am);
+        c2.fillStyle=g;c2.shadowColor=fg;
+        c2.fillRect(cx+i*bw+0.5,H-h,bw-1.5,h);c2.fillRect(cx-(i+1)*bw+0.5,H-h,bw-1.5,h);}
+      c2.shadowBlur=0;}}
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
@@ -1155,6 +1160,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("rec").addEventListener("click",toggleRec);
   $("renderBtn").addEventListener("click",renderOffline);
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
+    if(scopeMode==="off")$("scope").style.boxShadow="none";
     log("[ scope ] "+(scopeMode==="wave"?"oscilloscope (onde)":scopeMode==="spectrum"?"spectre (fréquences)":"éteint"),"ai");});
   $("vibeBtn").addEventListener("click",vibe);
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
