@@ -25,10 +25,11 @@
   body.flat h1{text-shadow:none;}
   /* desktop: spread panels across the width (mobile stays a single column) */
   @media (min-width:980px){
-    body{max-width:1080px;}
-    #ws{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;grid-auto-flow:row dense;}
-    #ws>*{margin-bottom:0;}
-    #ws>.wide{grid-column:1 / -1;}
+    body{max-width:1120px;}
+    /* newspaper columns: small panels flow into 2 cols, key blocks span full */
+    #ws{column-count:2;column-gap:20px;}
+    #ws>*{break-inside:avoid;margin-bottom:16px;}
+    #ws>.wide{column-span:all;}
     textarea{height:240px;}
   }
   h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
@@ -136,7 +137,7 @@
   </div>
 
   <div id="ws">
-  <div class="card cyan">
+  <div class="card cyan wide">
     <div class="head">vibe &mdash; describe it, ai writes it (free)</div>
     <div class="vibe-row">
       <input type="text" id="vibeIn" placeholder="ex: dark dnb beat, rolling bass — ou parle au micro">
