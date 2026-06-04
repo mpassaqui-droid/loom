@@ -175,6 +175,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   <div class="presets" style="align-items:center">
     <span style="color:var(--dim);font-size:16px;margin-right:2px">presets &#9656;</span>
     <select id="presetSel" class="menu" title="charger un preset" style="flex:1;min-width:140px"></select>
+    <button class="tiny" id="presetNext" title="preset suivant">&#9654;</button>
+    <button class="tiny" id="presetRand" title="preset au hasard">&#9860;</button>
   </div>
 
   <div class="card" id="songsCard">
@@ -690,9 +692,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     song:"# a LONG track: sections by bar count. tag voices with | in <sections>.\n# watch the console show the current section as it plays.\nsong:  intro*2 verse*4 chorus*4 verse*4 chorus*4 outro*2\nkey:   a minor\nkick:  x . . . x . . .\nhat:   x x x x x x x x | gain 0.14 | in verse chorus\nclap:  . . . . x . . . | in chorus\nbass:  1 . 1 . 5, . 6, . | saw | oct 2 | in verse chorus\narp:   Am . . . F . . . C . . . G . . . | arp up | pulse | gain 0.18 | in chorus\npad:   Am . . . . . . . | sine | gain 0.2 | in intro outro chorus",
     pad:"# filter (lp) + ADSR env (a d s r). lush, evolving pad sound.\nkey:   c minor\nkick:  x . . . . . . . x . . . . . . .\npad:   Cm7 . . . . . . . Ab . . . . . . . | saw | lp 700 q 6 | env 0.5 0.4 0.7 1.4 | gain 0.16\nbass:  1 . . . . . . . 6, . . . . . . . | saw | lp 400 | env 0.01 0.1 0.5 0.2 | oct 2\nlead:  5 . 7 . 1' . 7 . 5 . 4 . 3 . . . | tri | lp 1800 q 4 | env 0.02 0.15 0.4 0.3 | gain 0.16",
     supersaw:"# unison super-saw + drive + moving filter (lfo). big synth lead.\nkey:   f minor\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   x x x x x x x x | gain 0.13\nsaw:   1 . 3 . 5 . 1' 5 4 . 6 . 5 . 3 . | saw | unison 5 | detune 18 | lp 1400 q 5 | lfo cutoff 0.25 0.6 | env 0.02 0.2 0.6 0.3 | gain 0.12\nbass:  1 1 1 1 5, 5, 6, 6, | saw | drive 0.5 | lp 500 | oct 2 | gain 0.2",
-    pump:"# duck: 70 = sidechain pump on every kick (techno/house groove).\nduck:  70\nkey:   a minor\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x . | gain 0.13\npad:   Am7 . . . . . . . F . . . . . . . | saw | unison 4 | lp 1200 | env 0.1 0.2 0.8 0.3 | gain 0.16\nbass:  1 1 5, 5, 6, 6, 5, 5, | saw | lp 600 | oct 2 | gain 0.2"};
+    pump:"# duck: 70 = sidechain pump on every kick (techno/house groove).\nduck:  70\nkey:   a minor\nkick:  x . . . x . . . x . . . x . . .\nclap:  . . . . x . . . . . . . x . . .\nhat:   . . x . . . x . . . x . . . x . | gain 0.13\npad:   Am7 . . . . . . . F . . . . . . . | saw | unison 4 | lp 1200 | env 0.1 0.2 0.8 0.3 | gain 0.16\nbass:  1 1 5, 5, 6, 6, 5, 5, | saw | lp 600 | oct 2 | gain 0.2",
+    set:"# SET techno — morceau long qui evolue. Charge, RUN, ou RENDER pour le WAV.\nseed:  7\nduck:  65\nkey:   a minor\nsong:  intro*8 build*8 main*16 break*8 main*16 peak*16 outro*8\nkick:  x . . . x . . . x . . . x . . . | sample bd\nkick@intro: x . . . . . . . x . . . . . . . | sample bd\nkick@break: . . . . . . . . . . . . . . . .\nclap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | in build main peak outro\nclap@peak: . . . . x . . x . . . . x . . x | sample cp | gain 0.4\nhat:   e(9,16) | sample hh | gain 0.2 | pan 0.2 | in build main break peak outro\nhat@peak: e(13,16) | sample hh | gain 0.2 | pan 0.2\noh:    . . x . . . x . . . x . . . x . | sample oh | gain 0.15 | in main peak\nbass:  . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | saw | unison 3 | detune 16 | lp 520 q 6 | drive 0.3 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22 | in build main peak outro\nbass@peak: . 1 . 1 . 1 5, . . 1 . 1 . 7, 1 . | saw | unison 3 | detune 18 | lp 760 q 7 | drive 0.4 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22\nstab@main: . . . . . . Am . . . . . . . . . | saw | unison 3 | lp 1500 q 6 | env 0.01 0.1 0.2 0.2 | gain 0.12 | reverb 0.3\nstab@peak: . . Am . . . F . . . Am . . . G . | saw | unison 3 | lp 2000 q 6 | env 0.01 0.1 0.2 0.2 | gain 0.13 | reverb 0.3\narp@peak: 1 5 1' 5 3 5 1' 5 1 5 1' 5 4 5 1' 5 | sample arpy | gain 0.28 | delay 0.3 | pan -0.2\npad:   Am7 . . . . . . . | saw | unison 4 | lp 820 | env 0.8 0.5 0.7 2 | reverb 0.5 | gain 0.13 | in intro break outro"};
   const PRESET_GROUPS=[
-    ["Genres & samples",["chip","techno","house","dnb","ambient","synthwave","samples","world","band","amen","dub"]],
+    ["Genres & samples",["set","techno","house","dnb","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","raga","harmonic","prog","chords","arp"]],
     ["Génératif & rythme",["euclid","chance","rolls","vary","shift","poly","song","long"]],
     ["Sound design",["pad","supersaw","pump"]]
@@ -701,7 +704,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     el.innerHTML='<option value="">— charger un preset —</option>'+PRESET_GROUPS.map(g=>'<optgroup label="'+g[0]+'">'+
       g[1].filter(p=>PRESETS[p]).map(p=>'<option value="'+p+'">'+p.toUpperCase()+'</option>').join("")+'</optgroup>').join("");}
   buildPresetMenu();
-  $("presetSel").addEventListener("change",e=>{const p=e.target.value;if(p&&PRESETS[p]){editor.value=PRESETS[p];run();e.target.value="";}});
+  const PRESET_ORDER=PRESET_GROUPS.flatMap(g=>g[1].filter(p=>PRESETS[p]));let presetIdx=-1;
+  function loadPreset(p){if(!PRESETS[p])return;editor.value=PRESETS[p];run();$("presetSel").value="";presetIdx=PRESET_ORDER.indexOf(p);}
+  $("presetSel").addEventListener("change",e=>{if(e.target.value)loadPreset(e.target.value);});
+  $("presetNext").addEventListener("click",()=>{presetIdx=(presetIdx+1)%PRESET_ORDER.length;loadPreset(PRESET_ORDER[presetIdx]);});
+  $("presetRand").addEventListener("click",()=>{loadPreset(PRESET_ORDER[Math.floor(Math.random()*PRESET_ORDER.length)]);});
 
   // --- COURS: interactive step-by-step lessons (clickable examples) ---
   const LESSONS=[
