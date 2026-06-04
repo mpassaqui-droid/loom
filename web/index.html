@@ -802,8 +802,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     drawScope();if(stageOn)drawStage();
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
-  let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0;
-  const SCENES=["radial","tunnel","bars"];
+  let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[];
+  const SCENES=["radial","tunnel","bars","starfield"];
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
   // each VOICE has its own colour (from its name) and shoots particles in its
@@ -840,6 +840,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         c.fillStyle=grd;c.shadowColor=fg;c.fillRect(cx+i*bw+1,H-h,bw-2,h);c.fillRect(cx-(i+1)*bw+1,H-h,bw-2,h);}c.shadowBlur=0;
       c.strokeStyle=am;c.lineWidth=2;c.shadowBlur=8;c.shadowColor=am;c.beginPath();
       for(let i=0;i<tb.length;i+=4){const x=i/tb.length*W,y=cy+(tb[i]-128)/128*H*0.18;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.shadowBlur=0;}
+    else if(sceneMode==="starfield"){
+      if(stars.length===0)for(let i=0;i<260;i++)stars.push({x:(Math.random()-0.5)*2,y:(Math.random()-0.5)*2,z:Math.random()*0.9+0.1});
+      const sp=0.004+bass*0.035;c.shadowBlur=6;
+      for(const s of stars){s.z-=sp;if(s.z<=0.02){s.x=(Math.random()-0.5)*2;s.y=(Math.random()-0.5)*2;s.z=1;}
+        const k=0.5/s.z,sx=cx+s.x*k*W,sy=cy+s.y*k*H,sz=1-s.z;
+        if(sx<0||sx>W||sy<0||sy>H)continue;c.fillStyle=hexA(sz>0.6?fg:cyn,Math.min(1,sz+0.2));c.shadowColor=fg;
+        c.beginPath();c.arc(sx,sy,sz*3+0.4,0,7);c.fill();}c.shadowBlur=0;}
     else{ // radial (default)
       const rg=c.createRadialGradient(cx,cy,0,cx,cy,R*(1.3+bass*1.8));
       rg.addColorStop(0,hexA(fg,0.5));rg.addColorStop(0.4,hexA(fg,0.1));rg.addColorStop(1,hexA(bg,0));
@@ -1068,7 +1075,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
@@ -1256,7 +1263,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
-    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200.",
+    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
