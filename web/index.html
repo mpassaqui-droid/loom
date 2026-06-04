@@ -220,6 +220,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <b>long</b>: <i>nom@section:</i> = pattern différent d'une voix par section (ex. <i>bass@drop: 1 1 1 1</i>) &mdash; morceaux longs qui évoluent<br>
     <b>son</b> (après |): <i>lp N</i> / <i>hp N</i> filtre (+ <i>q R</i> résonance) &middot; <i>env A D S R</i> enveloppe ADSR<br>
     <b>synth</b> (après |): <i>unison N</i> + <i>detune C</i> (super-saw) &middot; <i>drive X</i> (disto) &middot; <i>lfo cutoff/pitch/gain RATE DEPTH</i><br>
+    <b>automation</b>: <i>A..B</i> sur un param = rampe dans le temps (ex. <i>lp 300..6000</i>) &middot; <i>over N</i> = durée en mesures<br>
     <b>stéréo</b> (après |): <i>pan P</i> (-1 gauche … 1 droite) &middot; bus master compressé/limité (glue studio)<br>
     <b>espace</b> (après |): <i>reverb N</i> (0-1, profondeur) &middot; <i>delay N</i> (0-1, écho) &mdash; send par voix<br>
     <b>MIDI</b> (après |): <i>midi CH</i> (1-16) &mdash; envoie la voix vers ton DAW/synthé matériel (drums → canal 10)<br>
@@ -317,14 +318,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     log("[ render ] rendu de "+nbars+" mesures…","ai");
     const rate=ctx.sampleRate||44100,total=cycleLen*nbars+1.5;
     const off=new OAC(2,Math.ceil(total*rate),rate);
-    const sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf},svMidi=midiOut;
-    midiOut=null;ctx=off;buildGraph();
+    const sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf},svMidi=midiOut,svTS=transportStart;
+    midiOut=null;ctx=off;transportStart=0;buildGraph();   // transportStart=0 so automation lines up
     for(let b=0;b<nbars;b++)scheduleBar(b*cycleLen,b);
     let buf=null;
     try{buf=await off.startRendering();}
     catch(e){log("[ render ] erreur: "+(e.message||e),"err");}
     finally{ctx=sv.ctx;master=sv.master;comp=sv.comp;bus=sv.bus;scGain=sv.scGain;delay=sv.delay;fb=sv.fb;
-      echoSend=sv.echoSend;conv=sv.conv;spaceSend=sv.spaceSend;noiseBuf=sv.noiseBuf;midiOut=svMidi;btn.disabled=false;}
+      echoSend=sv.echoSend;conv=sv.conv;spaceSend=sv.spaceSend;noiseBuf=sv.noiseBuf;midiOut=svMidi;transportStart=svTS;btn.disabled=false;}
     if(!buf)return;
     const L=buf.getChannelData(0),R=buf.numberOfChannels>1?buf.getChannelData(1):L;
     const url=URL.createObjectURL(encodeWAV(L,R,rate));
@@ -387,6 +388,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     g.gain.setValueAtTime(0.28,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.045);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.06);}
   function clap(t){const s=noise(),f=ctx.createBiquadFilter(),g=ctx.createGain();f.type="bandpass";f.frequency.value=1800;f.Q.value=1.2;
     g.gain.setValueAtTime(0.5,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.1);s.connect(f).connect(g).connect(bus);s.start(t);s.stop(t+0.12);}
+  // automation: "A..B" parses to a sweep; autoProgress gives 0..1 over the
+  // current section (or `over N` bars / 16 default), so params evolve in time.
+  function pval(s){if(s==null)return null;const m=/^(-?\d*\.?\d+)\.\.(-?\d*\.?\d+)$/.exec(s);
+    if(m)return{a:parseFloat(m[1]),b:parseFloat(m[2])};const n=parseFloat(s);return isNaN(n)?null:n;}
+  function autoProgress(v,t){const bars=(t-transportStart)/cycleLen;
+    if(v.over)return(((bars%v.over)+v.over)%v.over)/v.over;
+    if(song.length){const total=song.reduce((a,s)=>a+s[1],0)||1;let pos=((bars%total)+total)%total,acc=0;
+      for(const s of song){if(pos<acc+s[1])return(pos-acc)/s[1];acc+=s[1];}}
+    return(((bars%16)+16)%16)/16;}
+  function swv(x,p){return(x&&typeof x==="object"&&x.a!=null)?x.a+(x.b-x.a)*p:x;}
   function driveCurve(amount){const k=Math.max(0,amount)*120,n=1024,c=new Float32Array(n);
     for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=(1+k)*x/(1+k*Math.abs(x));}return c;}
   // tone(t,freq,dur,v[,opt]) — v carries the full per-voice synth:
@@ -397,24 +408,26 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function tone(t,freq,dur,v,opt){
     v=v||{};
     const peak=(opt&&opt.gain!=null)?opt.gain:(v.gain!=null?v.gain:0.22);
+    const ap=autoProgress(v,t);                       // 0..1 automation position
+    const cutoff=swv(v.cutoff,ap),drive=swv(v.drive,ap),pan=swv(v.pan,ap);
     const g=ctx.createGain();
     // source: unison detuned oscillators
     const uni=Math.max(1,Math.min(7,v.unison||1));
     const det=v.detune!=null?v.detune:(uni>1?14:0);
     let preG=g,filter=null;
-    if(v.cutoff){filter=ctx.createBiquadFilter();filter.type=v.filterType||"lowpass";
-      filter.frequency.setValueAtTime(v.cutoff,t);filter.Q.value=v.q||1;filter.connect(g);preG=filter;}
+    if(cutoff){filter=ctx.createBiquadFilter();filter.type=v.filterType||"lowpass";
+      filter.frequency.setValueAtTime(Math.max(20,Math.min(20000,cutoff)),t);filter.Q.value=v.q||1;filter.connect(g);preG=filter;}
     const uniGain=ctx.createGain();uniGain.gain.value=1/Math.sqrt(uni);uniGain.connect(preG);
     const oscs=[];
     for(let i=0;i<uni;i++){const o=ctx.createOscillator();o.type=v.wave||"square";o.frequency.setValueAtTime(freq,t);
       if(uni>1)o.detune.setValueAtTime(det*(i-(uni-1)/2),t);o.connect(uniGain);oscs.push(o);}
     // g -> [drive] -> [tremolo] -> bus
     let out=g;
-    if(v.drive){const ws=ctx.createWaveShaper();ws.curve=driveCurve(v.drive);ws.oversample="2x";
-      const post=ctx.createGain();post.gain.value=1/(1+v.drive);out.connect(ws);ws.connect(post);out=post;}
+    if(drive){const dr=Math.max(0,Math.min(1,drive));const ws=ctx.createWaveShaper();ws.curve=driveCurve(dr);ws.oversample="2x";
+      const post=ctx.createGain();post.gain.value=1/(1+dr);out.connect(ws);ws.connect(post);out=post;}
     let trem=null;
     if(v.lfo&&(v.lfo.target==="gain"||v.lfo.target==="vol")){trem=ctx.createGain();trem.gain.value=1;out.connect(trem);out=trem;}
-    if(v.pan!=null&&ctx.createStereoPanner){const pn=ctx.createStereoPanner();pn.pan.value=Math.max(-1,Math.min(1,v.pan));out.connect(pn);out=pn;}
+    if(pan!=null&&ctx.createStereoPanner){const pn=ctx.createStereoPanner();pn.pan.value=Math.max(-1,Math.min(1,pan));out.connect(pn);out=pn;}
     out.connect(bus);connectFx(out,v);
     // LFO routing
     let lfoOsc=null;
@@ -535,13 +548,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,sample=null,root=null,reverb=null,dly=null,midi=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
       else if(p[0]==="arp")arp=p[1]||"up";
       else if(p[0]==="in")sections=p.slice(1).map(s=>s.toLowerCase());
-      else if(p[0]==="lp"||p[0]==="hp"){filterType=p[0]==="lp"?"lowpass":"highpass";cutoff=Math.max(20,parseFloat(p[1])||800);
+      else if(p[0]==="lp"||p[0]==="hp"){filterType=p[0]==="lp"?"lowpass":"highpass";cutoff=pval(p[1])!=null?pval(p[1]):800;
         const qi=p.indexOf("q");if(qi>=0)q=Math.max(0.1,Math.min(20,parseFloat(p[qi+1])||1));}
       else if(p[0]==="q")q=Math.max(0.1,Math.min(20,parseFloat(p[1])||1));
       else if(p[0]==="env")env={a:Math.max(0,parseFloat(p[1])||0.01),d:Math.max(0,parseFloat(p[2])||0.1),
@@ -549,15 +562,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="lfo")lfo={target:(p[1]||"cutoff"),rate:parseFloat(p[2])||4,depth:p[3]!==undefined?parseFloat(p[3]):0.5};
       else if(p[0]==="unison")unison=Math.max(1,Math.min(7,parseInt(p[1],10)||1));
       else if(p[0]==="detune")detune=Math.max(0,Math.min(100,parseFloat(p[1])||0));
-      else if(p[0]==="drive")drive=Math.max(0,Math.min(1,parseFloat(p[1])||0));
-      else if(p[0]==="pan")pan=Math.max(-1,Math.min(1,parseFloat(p[1])||0));
+      else if(p[0]==="drive")drive=pval(p[1]);
+      else if(p[0]==="pan")pan=pval(p[1]);
+      else if(p[0]==="over"){const o=parseFloat(p[1]);if(!isNaN(o)&&o>0)over=o;}
       else if(p[0]==="sample"||p[0]==="s")sample=p[1]||null;
       else if(p[0]==="root")root=p[1]||null;
       else if(p[0]==="reverb"||p[0]==="room")reverb=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,sample,root,reverb,dly,midi,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -675,6 +689,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2",
     hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
     raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2",
+    auto:"# AUTOMATION : un param ecrit A..B evolue dans le temps (filtre qui s'ouvre, riser).\nseed:  3\nduck:  60\nkey:   a minor\nsong:  build*8 drop*8\nkick:  x . . . x . . . | sample bd | in drop\nclap:  . . . . x . . . | sample cp | gain 0.4 | in drop\nhat:   e(11,16) | sample hh | gain 0.18\nriser: 1 . . . . . . . | saw | unison 5 | lp 200..7000 | over 8 | env 0.3 0.3 0.9 0.5 | gain 0.12 | in build\nlead:  1 5 1' 5 3 5 1' 5 | saw | unison 4 | detune 16 | lp 600..4000 | over 8 | drive 0..0.5 | gain 0.14 | in drop\nbass:  . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | saw | unison 3 | lp 500 q 6 | drive 0.3 | oct 2 | gain 0.22 | in drop",
     shift:"# transformations facon Tidal : iter, rot, palindrome (le motif evolue).\nkey:    c minor\nkick:   x . . . x . . . x . . . x . . .\nhat:    x . x x . x . x | iter 4 | gain 0.14\nbass:   1 . 5, . 6, . 3 . | iter 8 | saw | oct 2\nlead:   1 3 5 1' 5 3 4 2 | palindrome | pulse | gain 0.16\nperc:   x . . x . . x . | rot 2 | sample perc | gain 0.3 | pan 0.3",
     vary:"# A/B variation: <a/b/...> picks one alternative per bar (changes each bar).\nkey:   c minor\nkick:  x . . . <x/.> . . . x . . . x . <./x*2> .\nsnare: . . . . x . . . . . . . x . . <./x>\nhat:   x x x x x x x x | gain 0.14\nbass:  1 . <3/5> . 5, . <6,/4,> . | saw | oct 2\nlead:  <1/5> . 3 . <5/1'> . 4 . | pulse | gain 0.18",
     samples:"# VRAIS samples (drums 808 + basse + arpy). Chargés du net au 1er RUN\n# (attends 1-2s puis re-RUN si le 1er tour sonne encore synthe).\nduck:  55\nkey:   a minor\nkick:  x . . . x . . . x . . . x . . . | sample bd\nsnare: . . . . x . . . . . . . x . . . | sample sd\nhat:   x x x x x x x x x x x x x x x x | sample hh | gain 0.3 | pan 0.25\nclap:  . . . . x . . . | sample cp | gain 0.4\nbass:  1 . 1 . 5, . 6, . | sample bass | oct 2\narp:   1 . 3 . 5 . 1' . 5 . 3 . 1 . 5, . | sample arpy | pan -0.3 | gain 0.5",
@@ -697,7 +712,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   const PRESET_GROUPS=[
     ["Genres & samples",["set","techno","house","dnb","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","raga","harmonic","prog","chords","arp"]],
-    ["Génératif & rythme",["euclid","chance","rolls","vary","shift","poly","song","long"]],
+    ["Génératif & rythme",["euclid","chance","rolls","vary","shift","poly","song","long","auto"]],
     ["Sound design",["pad","supersaw","pump"]]
   ];
   function buildPresetMenu(){const el=$("presetSel");if(!el)return;
@@ -772,6 +787,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Son","| unison N   | detune C","super-saw (oscillateurs désaccordés)"],
     ["Son","| drive X","distorsion / chaleur (0-1)"],
     ["Son","| lfo cutoff|pitch|gain RATE DEPTH","modulation (mouvement, vibrato, tremolo)"],
+    ["Automation","| lp 300..6000   (| over N)","rampe d'un paramètre dans le temps (filtre qui s'ouvre, riser)"],
+    ["Automation","| drive 0..0.6   | pan -1..1","tout param A..B évolue sur la section (ou N mesures)"],
     ["Effets & mix","| pan P","panoramique (-1 gauche … 1 droite)"],
     ["Effets & mix","| reverb N   | delay N","sends d'effet par voix (0-1)"],
     ["Effets & mix","duck: N","sidechain : tout pompe sur le kick"],
@@ -895,6 +912,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- MIDI out: add | midi CH (1-16) to a voice to send it as MIDI notes to your DAW / hardware synth instead of the built-in sound (the browser asks permission on the first RUN). Melodic voices send their pitches; drum voices send the General-MIDI drum notes (kick=36 snare=38 hat=42 clap=39) — put drums on | midi 10. e.g. bass: 1 . 5 . | midi 1 , kick: x . x . | midi 10. If no MIDI device is connected it falls back to the internal sound.",
     "- Per-voice space: reverb N adds that voice to the reverb (N 0-1, depth/room), delay N adds an echo send (N 0-1). e.g. lead: 1 . 3 . | delay 0.4 | reverb 0.3 , snare: . . x . | reverb 0.5. Use sparingly on a few voices for depth. (The global SPACE/ECHO knobs still apply to everything.)",
     "- Stereo: pan P places a voice in the stereo field, P from -1 (left) to 1 (right), e.g. hat: ... | pan -0.4 , arp: ... | pan 0.5. Spread voices for width. (The master bus runs through a gentle compressor/limiter for studio glue.)",
+    "- Automation (movement over time): write a parameter as A..B to sweep it, e.g. | lp 300..6000 opens the filter, | drive 0..0.6 grows the grit, | pan -1..1 sweeps across. The sweep spans the current section (or | over N bars). Perfect for builds/risers and evolving long tracks — use it on the build section of a song.",
     "- Sidechain pump: add a line duck: 60 (0-100, or 0-1) so the whole mix ducks on every kick — the classic techno/house pumping groove. Higher = more pump. Needs a kick voice. Omit the line for no pumping.",
     "- A/B variation: a token <a/b/c> picks ONE alternative per bar, cycling each bar, so the pattern changes over time. e.g. kick: <x/.> x x x (a kick that drops out every other bar), or lead: <1/3/5> . . . . The alternatives can be notes, degrees, chords, rests, even with ?/* mods.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
