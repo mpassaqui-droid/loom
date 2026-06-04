@@ -117,14 +117,35 @@ fn expand_euclid_token(tok: &str) -> Option<Vec<String>> {
         .collect())
 }
 
-/// Expand any euclidean tokens in a pattern in place.
+/// `morse(n)` -> the first n terms of the Thue-Morse sequence as x/. (a famously
+/// non-repeating, self-similar rhythm: `x` when popcount(i) is odd).
+fn expand_morse_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("morse(")?.strip_suffix(')')?.trim().parse().ok()?;
+    Some((0..n).map(|i| if (i as u32).count_ones() & 1 == 1 { "x".into() } else { ".".into() }).collect())
+}
+
+/// `fib(n)` -> the first n terms of the Fibonacci word as x/. (substitution
+/// 0->01, 1->0), a quasi-periodic self-similar pattern.
+fn expand_fib_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("fib(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let mut s = vec![0u8];
+    while s.len() < n {
+        let mut nx = Vec::with_capacity(s.len() * 2);
+        for c in &s { if *c == 0 { nx.push(0); nx.push(1); } else { nx.push(0); } }
+        s = nx;
+    }
+    s.truncate(n);
+    Some(s.iter().map(|c| if *c == 0 { "x".into() } else { ".".into() }).collect())
+}
+
+/// Expand any generative pattern tokens (euclid / morse / fib) in place.
 fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
     let mut out = Vec::with_capacity(tokens.len());
     for t in tokens {
-        match expand_euclid_token(&t) {
-            Some(seq) => out.extend(seq),
-            None => out.push(t),
-        }
+        if let Some(seq) = expand_euclid_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_morse_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_fib_token(&t) { out.extend(seq); }
+        else { out.push(t); }
     }
     out
 }
@@ -1029,6 +1050,16 @@ mod tests {
     fn euclidean_expands_to_tresillo() {
         let v = parse("kick: e(3,8)");
         assert_eq!(v[0].tokens, ["x",".",".","x",".",".","x","."]);
+    }
+
+    #[test]
+    fn morse_and_fibonacci_generators() {
+        // Thue-Morse: popcount parity of 0..8
+        let m = parse("d: morse(8)");
+        assert_eq!(m[0].tokens, [".","x","x",".","x",".",".","x"]);
+        // Fibonacci word (0->01, 1->0), 0=x 1=.
+        let f = parse("d: fib(8)");
+        assert_eq!(f[0].tokens, ["x",".","x","x",".","x",".","x"]);
     }
 
     #[test]

@@ -517,6 +517,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     rot=((rot%n)+n)%n;return v.slice(rot).concat(v.slice(0,rot));}
   function expandEuclid(tok){const m=/^e\((\d+),(\d+)(?:,(-?\d+))?\)$/.exec(tok);if(!m)return null;
     return euclid(+m[1],+m[2],m[3]?+m[3]:0).map(b=>b?"x":".");}
+  function popcount(x){let c=0;while(x){c+=x&1;x>>>=1;}return c;}
+  function expandMorse(tok){const m=/^morse\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
+    let o=[];for(let i=0;i<n;i++)o.push(popcount(i)&1?"x":".");return o;}
+  function expandFib(tok){const m=/^fib\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
+    let s=[0];while(s.length<n){let nx=[];for(const c of s){if(c===0){nx.push(0,1);}else nx.push(0);}s=nx;}
+    return s.slice(0,n).map(c=>c===0?"x":".");}
+  function expandGen(tok){return expandEuclid(tok)||expandMorse(tok)||expandFib(tok);}
   // chords: UPPERCASE root = chord (Cm7, F, G7); lowercase stays a single note
   const CHORDS={"":[0,4,7],maj:[0,4,7],M:[0,4,7],m:[0,3,7],min:[0,3,7],"-":[0,3,7],"5":[0,7],
     dim:[0,3,6],o:[0,3,6],aug:[0,4,8],"+":[0,4,8],sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],
@@ -576,7 +583,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     let tokens=[];for(const t of segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"))){
-      const e=expandEuclid(t);if(e)tokens.push(...e);else tokens.push(t);}
+      const e=expandGen(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
     let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null;const verbs=[];
@@ -846,6 +853,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Verbes","| rot N    | iter N","rotation fixe / décalage d'un pas par mesure"],
     ["Génératif","e(k,n)   e(k,n,rot)","rythme euclidien (k frappes sur n pas)"],
     ["Génératif (maths)","ca(rule,n)","automate cellulaire (Wolfram) qui évolue chaque mesure — rules 90 30 110 18 150"],
+    ["Génératif (maths)","morse(n)   fib(n)","suites de Thue-Morse / mot de Fibonacci comme rythme (auto-similaire)"],
     ["Génératif (maths)","| poly N","vraie polymétrie : la voix tourne à N pas/mesure et dérive (phasing à la Reich)"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","seed: 42","rend l'aléatoire reproductible"],
@@ -1022,6 +1030,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian; microtonal maqam with true quarter tones: bayati rast saba sikah huzam jiharkah). You can also bend any note by cents with +N or -N, e.g. 3+50 c3-30 (great for blue notes or maqam inflections). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
+    "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
