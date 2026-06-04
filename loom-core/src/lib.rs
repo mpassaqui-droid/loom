@@ -21,6 +21,9 @@ pub struct Voice {
     /// Sections this voice plays in (`| in verse chorus`). `None` = always on.
     /// Only consulted when the program declares a `song:` arrangement.
     pub sections: Option<Vec<String>>,
+    /// If this is a per-section variant (`bass@chorus:`), the section it's for.
+    /// `None` = the base voice (used when no variant matches the section).
+    pub section: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,8 +136,13 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') { continue; }
         let Some(colon) = line.find(':') else { continue };
-        let name = line[..colon].trim().to_lowercase();
-        if DIRECTIVES.contains(&name.as_str()) { continue; }
+        let full = line[..colon].trim().to_lowercase();
+        if DIRECTIVES.contains(&full.as_str()) { continue; }
+        // `name@section` = a per-section variant of the voice `name`
+        let (name, section) = match full.split_once('@') {
+            Some((b, s)) => (b.to_string(), Some(s.to_string())),
+            None => (full, None),
+        };
         let rest = &line[colon + 1..];
         let mut segs = rest.split('|').map(|s| s.trim());
 
@@ -176,7 +184,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave, arp, sections });
+        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave, arp, sections, section });
     }
     out
 }
@@ -709,16 +717,29 @@ impl Program {
     /// current section. With no `song:`, every voice always plays.
     pub fn schedule_bar(&self, bar: i64) -> Vec<Event> {
         let active: Vec<Voice> = if self.song.is_empty() {
-            self.voices.clone()
+            // no arrangement: play the base voices (section variants need a song)
+            self.voices.iter().filter(|v| v.section.is_none()).cloned().collect()
         } else {
             let sec = section_at_bar(&self.song, bar);
-            self.voices.iter()
-                .filter(|v| match &v.sections {
-                    None => true,
-                    Some(set) => sec.map_or(false, |s| set.iter().any(|x| x == s)),
-                })
-                .cloned()
-                .collect()
+            // For each base voice name, pick its variant for this section if one
+            // exists (`name@section`), else the base voice; then apply `| in`.
+            let mut seen: Vec<&str> = Vec::new();
+            let mut out: Vec<Voice> = Vec::new();
+            for v in &self.voices {
+                if seen.contains(&v.name.as_str()) { continue; }
+                seen.push(&v.name);
+                let chosen = self.voices.iter()
+                    .find(|w| w.name == v.name && w.section.as_deref() == sec)
+                    .or_else(|| self.voices.iter().find(|w| w.name == v.name && w.section.is_none()));
+                if let Some(c) = chosen {
+                    let plays = match &c.sections {
+                        None => true,
+                        Some(set) => sec.map_or(false, |s| set.iter().any(|x| x == s)),
+                    };
+                    if plays { out.push(c.clone()); }
+                }
+            }
+            out
         };
         schedule_bar_seeded(&active, self.key.as_ref(), bar, self.seed)
     }
@@ -1051,6 +1072,15 @@ mod tests {
         assert_eq!(section_at_bar(&song, 6), Some("outro"));
         // loops: bar 8 == bar 0
         assert_eq!(section_at_bar(&song, 8), Some("intro"));
+    }
+
+    #[test]
+    fn per_section_variant_overrides_base() {
+        let src = "song: intro*1 drop*1\nbass: 1 . . .\nbass@drop: 1 1 1 1";
+        let prog = Program::parse(src);
+        // intro -> base bass (1 hit), drop -> the @drop variant (4 hits)
+        assert_eq!(prog.schedule_bar(0).iter().filter(|e| e.voice=="bass").count(), 1);
+        assert_eq!(prog.schedule_bar(1).iter().filter(|e| e.voice=="bass").count(), 4);
     }
 
     #[test]
