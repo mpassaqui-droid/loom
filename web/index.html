@@ -629,18 +629,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function parseFeel(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="feel"){let n=parseFloat(line.slice(i+1).trim());if(isNaN(n))return 0;
       if(n>1)n/=100;return Math.max(0,Math.min(1,n));}}return 0;}
+  function parseScene(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="scene"){const s=line.slice(i+1).trim().toLowerCase();if(SCENES.includes(s))return s;}}return null;}
 
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const full=line.slice(0,i).trim().toLowerCase();
-    if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel")continue;
+    if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel"||full==="scene")continue;
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     let tokens=[];for(const t of segs[0].split(/\s+/).filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"))){
       const e=expandGen(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -665,8 +667,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
       else if(p[0]==="fm")fm={ratio:Math.max(0.1,Math.min(16,parseFloat(p[1])||2)),index:Math.max(0,Math.min(12,parseFloat(p[2])!=null&&!isNaN(parseFloat(p[2]))?parseFloat(p[2]):3))};
       else if(p[0]==="eq"){const cl=x=>Math.max(-18,Math.min(18,parseFloat(x)||0));eq={l:cl(p[1]),m:cl(p[2]),h:cl(p[3])};}
+      else if(p[0]==="viz")viz=p[1]||"burst";
+      else if(p[0]==="hue"){const h=parseFloat(p[1]);if(!isNaN(h))hue=((h%360)+360)%360;}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -739,7 +743,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     if(ch)return ch.map(midiToFreq);
     const f=noteToFreq(tok);return f?[f]:[];}
   function trigger(v,tok,t,durOverride,velMul){const vm=velMul||1;if(tok==="."||tok==="~")return;
-    if(stageOn&&vizQ.length<400)vizQ.push({t:t,hue:voiceHue(v.name),g:Math.min(1,(v.gain||0.25)*2)});
+    if(stageOn&&vizQ.length<400)vizQ.push({t:t,hue:(v.hue!=null?v.hue:voiceHue(v.name)),g:Math.min(1,(v.gain||0.25)*2),style:v.viz||"burst"});
     if(v.type==="drum"){const n=v.name;
       if(v.midi&&midiOut){const gm={kick:36,bd:36,snare:38,sd:38,hat:42,hh:42,clap:39,cp:39}[n]||37;sendMidi(v.midi,gm,Math.round(110*vm),t,0.1);return;}
       if((n==="kick"||n==="bd")&&duckAmt>0)duckPump(t);
@@ -798,7 +802,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     drawScope();if(stageOn)drawStage();
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
-  let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[];
+  let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0;
+  const SCENES=["radial","tunnel","bars"];
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
   // each VOICE has its own colour (from its name) and shoots particles in its
@@ -822,24 +827,52 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const n=analyser.frequencyBinCount,fb=new Uint8Array(n);analyser.getByteFrequencyData(fb);
     const tb=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(tb);
     let bass=0;for(let i=0;i<10;i++)bass+=fb[i];bass=Math.min(1,bass/2550*1.5);
-    // motion-blur trails
-    c.globalAlpha=0.2;c.fillStyle=bg;c.fillRect(0,0,W,H);c.globalAlpha=1;
-    const R=Math.min(W,H)*0.2;
-    // central bass bloom
-    const rg=c.createRadialGradient(cx,cy,0,cx,cy,R*(1.3+bass*1.8));
-    rg.addColorStop(0,hexA(fg,0.5));rg.addColorStop(0.4,hexA(fg,0.1));rg.addColorStop(1,hexA(bg,0));
-    c.fillStyle=rg;c.beginPath();c.arc(cx,cy,R*(1.3+bass*1.8),0,7);c.fill();
-    // shockwave rings on bass hits
-    if(bass>0.55&&bass-lastBass>0.12)rings.push({r:R*0.85,a:0.55});lastBass=bass;
+    c.globalAlpha=0.2;c.fillStyle=bg;c.fillRect(0,0,W,H);c.globalAlpha=1;  // motion-blur trails
+    const R=Math.min(W,H)*0.2,maxR=Math.hypot(W,H)/2;c.lineCap="round";
+
+    // ---- background visualizer (depends on the chosen scene) ----
+    if(sceneMode==="tunnel"){sceneTime+=0.008+bass*0.05;const N=16;
+      for(let k=0;k<N;k++){const ph=((sceneTime+k/N)%1),r=ph*maxR*1.05,al=(1-ph)*0.6;
+        c.strokeStyle=hexA(k%2?fg:cyn,al);c.lineWidth=2+bass*10;c.shadowBlur=10;c.shadowColor=fg;c.beginPath();c.arc(cx,cy,r,0,7);c.stroke();}c.shadowBlur=0;}
+    else if(sceneMode==="bars"){const nb=72,step=Math.max(1,Math.floor(n*0.6/nb)),bw=(W/2)/nb;c.shadowBlur=12;
+      for(let i=0;i<nb;i++){const h=Math.pow(fb[i*step]/255,1.4)*H*0.46;
+        const grd=c.createLinearGradient(0,H,0,H-h);grd.addColorStop(0,cyn);grd.addColorStop(0.6,fg);grd.addColorStop(1,am);
+        c.fillStyle=grd;c.shadowColor=fg;c.fillRect(cx+i*bw+1,H-h,bw-2,h);c.fillRect(cx-(i+1)*bw+1,H-h,bw-2,h);}c.shadowBlur=0;
+      c.strokeStyle=am;c.lineWidth=2;c.shadowBlur=8;c.shadowColor=am;c.beginPath();
+      for(let i=0;i<tb.length;i+=4){const x=i/tb.length*W,y=cy+(tb[i]-128)/128*H*0.18;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.shadowBlur=0;}
+    else{ // radial (default)
+      const rg=c.createRadialGradient(cx,cy,0,cx,cy,R*(1.3+bass*1.8));
+      rg.addColorStop(0,hexA(fg,0.5));rg.addColorStop(0.4,hexA(fg,0.1));rg.addColorStop(1,hexA(bg,0));
+      c.fillStyle=rg;c.beginPath();c.arc(cx,cy,R*(1.3+bass*1.8),0,7);c.fill();
+      const bars=104;c.lineWidth=Math.max(2,W/700);c.shadowBlur=16;
+      for(let i=0;i<bars;i++){const a=i/bars*Math.PI*2-Math.PI/2,m=Math.pow(fb[Math.floor(i*n*0.5/bars)]/255,1.3);
+        const len=m*R*1.6,x1=cx+Math.cos(a)*R,y1=cy+Math.sin(a)*R,x2=cx+Math.cos(a)*(R+len),y2=cy+Math.sin(a)*(R+len);
+        c.strokeStyle=i%3===0?cyn:fg;c.shadowColor=c.strokeStyle;c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();}c.shadowBlur=0;
+      c.lineWidth=2;c.strokeStyle=am;c.shadowBlur=10;c.shadowColor=am;c.beginPath();
+      for(let i=0;i<tb.length;i+=2){const a=i/tb.length*Math.PI*2,rr=R*0.66+(tb[i]-128)/128*R*0.2;
+        const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?c.lineTo(x,y):c.moveTo(x,y);}c.closePath();c.stroke();c.shadowBlur=0;}
+
+    // ---- bass shockwave rings (all scenes) ----
+    if(bass>0.55&&bass-lastBass>0.12)rings.push({r:R*0.85,a:0.55,hue:null});lastBass=bass;
     const grow=Math.max(W,H)*0.013;
     for(let i=rings.length-1;i>=0;i--){const rr=rings[i];rr.r+=grow;rr.a-=0.012;
       if(rr.a<=0){rings.splice(i,1);continue;}
-      c.strokeStyle=hexA(cyn,rr.a);c.lineWidth=Math.max(1.5,W/900);c.beginPath();c.arc(cx,cy,rr.r,0,7);c.stroke();}
-    // per-voice bursts: fire each scheduled note's coloured particles at its time
+      c.strokeStyle=rr.hue!=null?"hsla("+rr.hue+",90%,60%,"+rr.a+")":hexA(cyn,rr.a);c.lineWidth=Math.max(1.5,W/900);c.beginPath();c.arc(cx,cy,rr.r,0,7);c.stroke();}
+
+    // ---- per-voice events: fire each note's chosen visual at its scheduled time ----
     const now=ctx.currentTime;
-    for(let i=vizQ.length-1;i>=0;i--){if(vizQ[i].t<=now){emitVoiceBurst(cx,cy,W,H,vizQ[i].hue,vizQ[i].g);vizQ.splice(i,1);}
-      else if(vizQ[i].t>now+4)vizQ.splice(i,1);}
-    // ambient dust on overall level
+    for(let i=vizQ.length-1;i>=0;i--){const e=vizQ[i];if(e.t<=now){const hcol="hsl("+e.hue+",90%,62%)";
+        if(e.style==="ring")rings.push({r:R*0.4,a:0.6,hue:e.hue});
+        else if(e.style==="beam")beams.push({ang:e.hue/360*6.2831853,life:1,hue:e.hue});
+        else if(e.style==="flash")flash={hue:e.hue,life:0.5*Math.min(1,e.g+0.3)};
+        else emitVoiceBurst(cx,cy,W,H,e.hue,e.g);
+        vizQ.splice(i,1);}else if(e.t>now+4)vizQ.splice(i,1);}
+    // beams
+    for(let i=beams.length-1;i>=0;i--){const b=beams[i];b.life-=0.05;if(b.life<=0){beams.splice(i,1);continue;}
+      c.globalAlpha=b.life*0.7;c.strokeStyle="hsl("+b.hue+",90%,62%)";c.shadowColor=c.strokeStyle;c.shadowBlur=14;c.lineWidth=2+b.life*5;
+      c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(b.ang)*maxR,cy+Math.sin(b.ang)*maxR);c.stroke();}
+    c.globalAlpha=1;c.shadowBlur=0;
+    // ambient dust + particles
     let lvl0=0;for(let i=0;i<tb.length;i+=12){const d=Math.abs(tb[i]-128);if(d>lvl0)lvl0=d;}lvl0=Math.min(1,lvl0/110);
     if(lvl0>0.12&&particles.length<500&&Math.random()<0.5)emitParticles(cx,cy,2,Math.max(W,H)*0.004);
     if(particles.length>700)particles.splice(0,particles.length-700);
@@ -849,21 +882,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       if(p.col){c.globalAlpha=p.life;c.fillStyle=p.col;c.shadowColor=p.col;}else{c.globalAlpha=1;c.fillStyle=hexA(i%2?fg:cyn,p.life*0.9);c.shadowColor=fg;}
       c.beginPath();c.arc(p.x,p.y,2+p.life*2.8,0,7);c.fill();}
     c.globalAlpha=1;c.shadowBlur=0;
-    // radial spectrum
-    const bars=104;c.lineWidth=Math.max(2,W/700);c.shadowBlur=16;c.lineCap="round";
-    for(let i=0;i<bars;i++){const a=i/bars*Math.PI*2-Math.PI/2;const m=Math.pow(fb[Math.floor(i*n*0.5/bars)]/255,1.3);
-      const len=m*R*1.6,x1=cx+Math.cos(a)*R,y1=cy+Math.sin(a)*R,x2=cx+Math.cos(a)*(R+len),y2=cy+Math.sin(a)*(R+len);
-      c.strokeStyle=i%3===0?cyn:fg;c.shadowColor=c.strokeStyle;c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();}
-    c.shadowBlur=0;
-    // inner waveform ring
-    c.lineWidth=2;c.strokeStyle=am;c.shadowBlur=10;c.shadowColor=am;c.beginPath();
-    for(let i=0;i<tb.length;i+=2){const a=i/tb.length*Math.PI*2,rr=R*0.66+(tb[i]-128)/128*R*0.2;
-      const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?c.lineTo(x,y):c.moveTo(x,y);}c.closePath();c.stroke();c.shadowBlur=0;
-    // section + bar
+    // full-screen flash on flash-style hits
+    if(flash){flash.life-=0.04;if(flash.life<=0)flash=null;else{c.fillStyle="hsla("+flash.hue+",90%,55%,"+(flash.life*0.22)+")";c.fillRect(0,0,W,H);}}
+    // section + controls
     c.textAlign="center";c.fillStyle=fg;c.shadowBlur=14;c.shadowColor=fg;
     const sec=song.length?sectionAtBar(song,Math.max(0,barCount-1)):null;
     c.font="bold "+Math.round(R*0.2)+"px 'Press Start 2P',monospace";c.fillText((sec||"LOOM").toUpperCase(),cx,cy+R*0.06);
-    c.shadowBlur=0;c.fillStyle=dim;c.font="20px 'VT323',monospace";c.fillText("bar "+barCount+"   ·   clique ou ÉCHAP pour sortir",cx,H-34);}
+    c.shadowBlur=0;c.fillStyle=dim;c.font="20px 'VT323',monospace";
+    c.fillText("scène: "+sceneMode+" (N = changer)   ·   bar "+barCount+"   ·   clique/ÉCHAP pour sortir",cx,H-34);}
   function drawScope(){const cv=$("scope");if(!cv||!cv.getContext||!analyser||scopeMode==="off")return;
     const W=cv.width=cv.clientWidth||600,H=cv.height=150;const c2=cv.getContext("2d");
     let fg="#9dff8a",am="#ffc04a",cy="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
@@ -892,7 +918,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});if(voices.some(v=>v.midi))initMidi();buildGrid();buildTimeline();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     if(delay)delay.delayTime.value=cycleLen/8;
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
@@ -1041,7 +1067,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
-    ["Apparence","look ▸   /   🎲","31 thèmes de terminal, mémorisés"],
+    ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","| viz burst|ring|beam|flash · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
   // --- unified APPRENDRE panel: lessons + reference, one search box ---
@@ -1228,6 +1256,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
+    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
@@ -1294,7 +1323,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("renderBtn").addEventListener("click",renderOffline);
   $("stageBtn").addEventListener("click",toggleStage);
   $("stage").addEventListener("click",()=>{if(stageOn)toggleStage();});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stageOn){stageOn=false;$("stage").style.display="none";}});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stageOn){stageOn=false;$("stage").style.display="none";}
+    else if(stageOn&&(e.key==="n"||e.key==="N")){sceneMode=SCENES[(SCENES.indexOf(sceneMode)+1)%SCENES.length];}});
   document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stage").style.display="none";}});
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
     if(scopeMode==="off")$("scope").style.boxShadow="none";
