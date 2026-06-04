@@ -93,6 +93,7 @@
   .cell.on{background:rgba(92,255,74,0.18);}
   .cell.play{outline:2px solid var(--amber);}
   .cell.hit{background:var(--glow)!important;box-shadow:0 0 8px var(--green);}
+  .cell:hover{border-color:var(--green);}
   .row{transition:opacity .2s;}
   /* section timeline */
   #timeline{display:flex;gap:2px;margin:4px 0 12px;height:28px;position:relative;}
@@ -647,9 +648,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function buildGrid(){grid.innerHTML="";for(const v of voices){if(v.section)continue;const row=document.createElement("div");row.className="row";
     const nm=document.createElement("div");nm.className="vname";nm.textContent=v.name;
     const cells=document.createElement("div");cells.className="cells";v.cells=[];
-    v.tokens.forEach(tok=>{const c=document.createElement("span");c.className="cell";
-      if(tok!=="."&&tok!=="~")c.classList.add("on");cells.appendChild(c);v.cells.push(c);});
+    v.tokens.forEach((tok,i)=>{const c=document.createElement("span");c.className="cell";
+      if(tok!=="."&&tok!=="~")c.classList.add("on");
+      if(v.type==="drum"){c.style.cursor="pointer";c.addEventListener("click",()=>toggleStep(v,i,c));}
+      cells.appendChild(c);v.cells.push(c);});
     row.appendChild(nm);row.appendChild(cells);grid.appendChild(row);v.row=row;}}
+  // clickable step sequencer: toggle a drum cell -> live change + sync to editor
+  function toggleStep(v,i,c){const on=v.tokens[i]!=="."&&v.tokens[i]!=="~";v.tokens[i]=on?".":"x";
+    c.classList.toggle("on",!on);syncVoiceToEditor(v);}
+  function syncVoiceToEditor(v){const lines=editor.value.split("\n");
+    for(let li=0;li<lines.length;li++){const idx=lines[li].indexOf(":");if(idx<0)continue;
+      if(lines[li].slice(0,idx).trim().toLowerCase()!==v.name)continue;
+      const segs=lines[li].slice(idx+1).split("|");segs[0]=" "+v.tokens.join(" ")+" ";
+      lines[li]=lines[li].slice(0,idx)+":"+segs.join("|");break;}
+    editor.value=lines.join("\n");}
   function buildTimeline(){const el=$("timeline");if(!el)return;
     if(!song.length){el.style.display="none";el.innerHTML="";return;}
     el.style.display="flex";
