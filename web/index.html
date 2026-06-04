@@ -505,6 +505,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     if(v.lfo&&(v.lfo.target==="gain"||v.lfo.target==="vol")){trem=ctx.createGain();trem.gain.value=1;out.connect(trem);out=trem;}
     if(pan!=null&&ctx.createStereoPanner){const pn=ctx.createStereoPanner();pn.pan.value=Math.max(-1,Math.min(1,pan));out.connect(pn);out=pn;}
     out.connect(bus);connectFx(out,v);
+    // chorus: two modulated delay voices panned L/R = lush stereo width
+    if(v.chorus&&ctx.createStereoPanner){const wet=Math.max(0,Math.min(1,v.chorus));
+      const mk=(dt,rate,pn)=>{const d=ctx.createDelay(0.05);d.delayTime.value=dt;
+        const lo=ctx.createOscillator();lo.frequency.value=rate;const lg=ctx.createGain();lg.gain.value=0.003;
+        lo.connect(lg);lg.connect(d.delayTime);mods.push(lo);
+        const p=ctx.createStereoPanner();p.pan.value=pn;const wg=ctx.createGain();wg.gain.value=wet*0.5;
+        out.connect(d);d.connect(p);p.connect(wg);wg.connect(bus);};
+      mk(0.015,0.6,-0.7);mk(0.022,0.45,0.7);}
     // LFO routing
     let lfoOsc=null;
     if(v.lfo){lfoOsc=ctx.createOscillator();lfoOsc.frequency.value=Math.max(0.01,v.lfo.rate||4);
@@ -653,7 +661,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandGen(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -681,8 +689,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="viz")viz=p[1]||"burst";
       else if(p[0]==="hue"){const h=parseFloat(p[1]);if(!isNaN(h))hue=((h%360)+360)%360;}
       else if(p[0]==="wt")wt=p[1]||null;
+      else if(p[0]==="chorus")chorus=Math.max(0,Math.min(1,parseFloat(p[1])!=null&&!isNaN(parseFloat(p[1]))?parseFloat(p[1]):0.5));
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -816,7 +825,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
   let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[];
   const SCENES=["radial","tunnel","bars","starfield","kaleido"];
-  let bloomCv=null;  // offscreen canvas for the bloom/glow post-process
+  let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
   // each VOICE has its own colour (from its name) and shoots particles in its
@@ -891,12 +900,19 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         if(e.style==="ring")rings.push({r:R*0.4,a:0.6,hue:e.hue});
         else if(e.style==="beam")beams.push({ang:e.hue/360*6.2831853,life:1,hue:e.hue});
         else if(e.style==="flash")flash={hue:e.hue,life:0.5*Math.min(1,e.g+0.3)};
+        else if(e.style==="shape")shapes.push({r:R*0.3,life:1,hue:e.hue,sides:3+Math.floor(e.hue/72)});
         else emitVoiceBurst(cx,cy,W,H,e.hue,e.g);
         vizQ.splice(i,1);}else if(e.t>now+4)vizQ.splice(i,1);}
     // beams
     for(let i=beams.length-1;i>=0;i--){const b=beams[i];b.life-=0.05;if(b.life<=0){beams.splice(i,1);continue;}
       c.globalAlpha=b.life*0.7;c.strokeStyle="hsl("+b.hue+",90%,62%)";c.shadowColor=c.strokeStyle;c.shadowBlur=14;c.lineWidth=2+b.life*5;
       c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(b.ang)*maxR,cy+Math.sin(b.ang)*maxR);c.stroke();}
+    c.globalAlpha=1;c.shadowBlur=0;
+    // shape polygons (viz shape)
+    for(let i=shapes.length-1;i>=0;i--){const s=shapes[i];s.r+=Math.max(W,H)*0.006;s.life-=0.03;
+      if(s.life<=0){shapes.splice(i,1);continue;}
+      c.strokeStyle="hsl("+s.hue+",90%,62%)";c.globalAlpha=s.life;c.lineWidth=2.5;c.shadowColor=c.strokeStyle;c.shadowBlur=12;c.beginPath();
+      for(let k=0;k<=s.sides;k++){const a=k/s.sides*6.2831853+s.r*0.002,x=cx+Math.cos(a)*s.r,y=cy+Math.sin(a)*s.r;k?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();}
     c.globalAlpha=1;c.shadowBlur=0;
     // ambient dust + particles
     let lvl0=0;for(let i=0;i<tb.length;i+=12){const d=Math.abs(tb[i]-128);if(d>lvl0)lvl0=d;}lvl0=Math.min(1,lvl0/110);
@@ -1094,6 +1110,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Effets & mix","| pan P","panoramique (-1 gauche … 1 droite)"],
     ["Effets & mix","| reverb N   | delay N","sends d'effet par voix (0-1)"],
     ["Effets & mix","| eq L M H","EQ 3 bandes par voix en dB (grave/médium/aigu)"],
+    ["Effets & mix","| chorus N","chorus stéréo (0-1) — élargit/épaissit (nappes, leads)"],
     ["Effets & mix","duck: N","sidechain : tout pompe sur le kick"],
     ["Groove","feel: N","humanise le timing/vélocité (0-100) — ça respire au lieu d'être mécanique"],
     ["Samples (drums)","| sample bd","bd sd hh cp kick2 kick909 clubkick clap2 oh rim cow perc tom tom2 tom3 ride tabla"],
@@ -1106,7 +1123,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
     ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido","choisit le visualiseur plein écran (touche N pour changer)"],
-    ["Visuel (SCÈNE)","| viz burst|ring|beam|flash · | hue N","apparence/couleur d'une voix dans la scène"],
+    ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
   // --- unified APPRENDRE panel: lessons + reference, one search box ---
@@ -1283,6 +1300,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
     "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Drums: bd sd hh cp kick2 kick909 clubkick clap2 oh(open hat) rim cow perc tom tom2 tom3 ride tabla. Melodic (repitched): bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo. Loops/breaks (one-shot a whole drum loop): amen break amencut. Vocal/texture: vox yeah breath wood metal glass bottle. e.g. kick: x . x . | sample kick909 , lead: 1 3 5 1' | sample sitar , break: x . . . | sample amen. A melodic sample is repitched assuming its natural pitch is c3; if it sounds off, tune it with | root NOTE (e.g. | sample gtr | root c4). Samples load on the first RUN (a moment of delay; until then it falls back to the synth).",
     "- MIDI out: add | midi CH (1-16) to a voice to send it as MIDI notes to your DAW / hardware synth instead of the built-in sound (the browser asks permission on the first RUN). Melodic voices send their pitches; drum voices send the General-MIDI drum notes (kick=36 snare=38 hat=42 clap=39) — put drums on | midi 10. e.g. bass: 1 . 5 . | midi 1 , kick: x . x . | midi 10. If no MIDI device is connected it falls back to the internal sound.",
+    "- Chorus / width: chorus N (0-1) thickens and widens a voice with modulated stereo delays — lovely on pads, keys and leads, e.g. pad: ... | chorus 0.6.",
     "- Per-voice EQ: eq LOW MID HIGH shapes a voice's tone in dB (low shelf ~180Hz, mid peak ~1.2kHz, high shelf ~5kHz). e.g. bass: ... | eq 3 -2 -4 (more lows, less highs), hat: ... | eq -6 0 3 (thinner, brighter). Great for sitting voices in the mix.",
     "- Per-voice space: reverb N adds that voice to the reverb (N 0-1, depth/room), delay N adds an echo send (N 0-1). e.g. lead: 1 . 3 . | delay 0.4 | reverb 0.3 , snare: . . x . | reverb 0.5. Use sparingly on a few voices for depth. (The global SPACE/ECHO knobs still apply to everything.)",
     "- Stereo: pan P places a voice in the stereo field, P from -1 (left) to 1 (right), e.g. hat: ... | pan -0.4 , arp: ... | pan 0.5. Spread voices for width. (The master bus runs through a gentle compressor/limiter for studio glue.)",
