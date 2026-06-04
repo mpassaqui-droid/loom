@@ -290,9 +290,23 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       delayL.connect(pL);pL.connect(echoSend);delayR.connect(pR);pR.connect(echoSend);}
     else{delayL.connect(echoSend);delayR.connect(echoSend);}
     bus.connect(delay);echoSend.connect(master);
-    conv=ctx.createConvolver();conv.buffer=makeImpulse(2.8,2.1);
+    // Algorithmic reverb (Schroeder/Moorer): 4 damped comb filters in parallel
+    // -> 2 all-pass diffusers in series. Richer & cheaper than the old convolver.
+    // `conv` stays the single input node (per-voice reverb sends connect to it).
+    conv=ctx.createGain();
+    const combSum=ctx.createGain(),combTimes=[0.0297,0.0371,0.0411,0.0437],combFb=0.8;
+    for(const ct of combTimes){const d=ctx.createDelay(1);d.delayTime.value=ct;
+      const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=3800;  // damping: highs decay faster (natural)
+      const g=ctx.createGain();g.gain.value=combFb;
+      conv.connect(d);d.connect(combSum);d.connect(lp);lp.connect(g);g.connect(d);}
+    const allpass=(time,gg)=>{const inp=ctx.createGain(),outp=ctx.createGain(),
+      d=ctx.createDelay(1);d.delayTime.value=time;const fbk=ctx.createGain();fbk.gain.value=gg;
+      const ffd=ctx.createGain();ffd.gain.value=-gg;
+      inp.connect(d);inp.connect(ffd);ffd.connect(outp);d.connect(outp);d.connect(fbk);fbk.connect(d);
+      return{input:inp,output:outp};};
+    let revNode=combSum;for(const ap of[[0.005,0.5],[0.0017,0.5]]){const a=allpass(ap[0],ap[1]);revNode.connect(a.input);revNode=a.output;}
     spaceSend=ctx.createGain();spaceSend.gain.value=+$("space").value/100*0.9;
-    bus.connect(conv);conv.connect(spaceSend);spaceSend.connect(master);
+    bus.connect(conv);revNode.connect(spaceSend);spaceSend.connect(master);
     scGain=ctx.createGain();scGain.gain.value=1;bus.connect(scGain);scGain.connect(master);
     // master glue: a gentle compressor/limiter so the mix sounds cohesive & loud
     comp=ctx.createDynamicsCompressor();
@@ -873,8 +887,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     drawScope();if(stageOn)drawStage();
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
-  let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[];
-  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs"];
+  let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[],flowP=[];
+  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
@@ -942,6 +956,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         const g=c.createRadialGradient(bx,by,0,bx,by,R3);
         g.addColorStop(0,hexA(col,0.55+m*0.4));g.addColorStop(0.5,hexA(col,0.12));g.addColorStop(1,hexA(col,0));
         c.fillStyle=g;c.beginPath();c.arc(bx,by,R3,0,7);c.fill();}
+      c.globalCompositeOperation="source-over";}
+    else if(sceneMode==="flow"){sceneTime+=0.004+bass*0.02;
+      if(flowP.length===0)for(let i=0;i<420;i++)flowP.push({x:Math.random()*W,y:Math.random()*H});
+      c.globalCompositeOperation="lighter";c.lineWidth=1.4;const sp=1.6+bass*5;
+      for(const p of flowP){const a=(Math.sin(p.x*0.004+sceneTime)+Math.cos(p.y*0.004-sceneTime*0.7))*3.14159,
+        nx=p.x+Math.cos(a)*sp,ny=p.y+Math.sin(a)*sp,m=fb[Math.floor((p.x/W)*n*0.5)%n]/255;
+        c.strokeStyle=hexA(m>0.55?fg:cyn,0.13+m*0.5);c.beginPath();c.moveTo(p.x,p.y);c.lineTo(nx,ny);c.stroke();
+        p.x=nx<0?W:nx>W?0:nx;p.y=ny<0?H:ny>H?0:ny;}
       c.globalCompositeOperation="source-over";}
     else if(sceneMode==="kaleido"){sceneTime+=0.005;const seg=8,R2=Math.min(W,H)*0.5;c.shadowBlur=14;
       for(let sgi=0;sgi<seg;sgi++){c.save();c.translate(cx,cy);c.rotate(sceneTime+sgi/seg*6.2831853);if(sgi%2)c.scale(1,-1);
@@ -1208,7 +1230,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
@@ -1400,7 +1422,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
-    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
+    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
