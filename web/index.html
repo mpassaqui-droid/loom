@@ -60,6 +60,7 @@
   button.rec{border-color:#ff5a5a;color:#ff5a5a;text-shadow:0 0 4px #ff5a5a;}
   button.rec:active,button.rec:hover{background:#ff5a5a;color:var(--bg);}
   button.rec.on{background:#ff5a5a;color:var(--bg);animation:blink 1s steps(1) infinite;}
+  button.go.on{background:var(--cyan);color:var(--bg);animation:blink 1s steps(1) infinite;}
   button.tiny{font-size:11px;padding:11px 12px;}
   .bpm{display:flex;align-items:center;gap:8px;font-size:21px;margin-left:auto;}
   input[type=number]{width:64px;background:transparent;border:1px solid var(--dim);color:var(--glow);
@@ -132,11 +133,12 @@
   <div class="card cyan">
     <div class="head">vibe &mdash; describe it, ai writes it (free)</div>
     <div class="vibe-row">
-      <input type="text" id="vibeIn" placeholder="ex: dark dnb beat, rolling bass">
+      <input type="text" id="vibeIn" placeholder="ex: dark dnb beat, rolling bass — ou parle au micro">
+      <button class="go" id="micBtn" title="parler (dictée vocale)">&#127908;</button>
       <button class="go" id="vibeBtn">VIBE</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
-    <div class="opt">leave the key blank to use the free brain.</div>
+    <div class="opt">laisse la clé vide pour le cerveau gratuit &middot; &#127908; = parle, ça écrit et ça génère.</div>
   </div>
 
   <div class="card wide">
@@ -789,7 +791,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
     "- Comments start with #.",
-    "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps. 3-5 voices unless asked. Code only."].join("\n");
+    "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
+    "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
+    "Match the requested mood/genre. Output ONLY the LOOM program, no prose, no backticks."].join("\n");
 
   function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);}
   async function callFree(prompt){
@@ -837,6 +841,19 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("rec").addEventListener("click",toggleRec);
   $("vibeBtn").addEventListener("click",vibe);
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
+  // voice control: speak -> transcribe -> let the AI generate
+  let recog=null,listening=false;
+  function toggleMic(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){log("[ mic ] dictée vocale non supportée ici (essaie Chrome/Edge)","err");return;}
+    if(listening){recog&&recog.stop();return;}
+    recog=new SR();recog.lang="fr-FR";recog.interimResults=true;recog.continuous=false;
+    let txt="";
+    recog.onstart=()=>{listening=true;$("micBtn").classList.add("on");log("[ mic ] parle… dis la musique que tu veux","ai");};
+    recog.onerror=e=>log("[ mic ] "+(e.error||"erreur"),"err");
+    recog.onresult=e=>{txt="";for(let i=0;i<e.results.length;i++)txt+=e.results[i][0].transcript;$("vibeIn").value=txt.trim();};
+    recog.onend=()=>{listening=false;$("micBtn").classList.remove("on");if($("vibeIn").value.trim())vibe();};
+    recog.start();}
+  $("micBtn").addEventListener("click",toggleMic);
   $("exportBtn").addEventListener("click",exportCode);
   $("importBtn").addEventListener("click",importCode);
   $("saveSong").addEventListener("click",saveSong);
