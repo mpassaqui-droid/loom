@@ -116,6 +116,11 @@
   .lesson p{color:var(--dim);font-size:18px;margin-bottom:6px;}
   .lesson pre{color:var(--green);font-size:16px;white-space:pre-wrap;background:rgba(40,80,30,0.15);
     padding:8px;border-radius:3px;margin-bottom:7px;overflow-x:auto;line-height:1.3;}
+  #docBody .cat{color:var(--amber);font-size:17px;text-transform:uppercase;letter-spacing:1px;
+    margin:12px 0 4px;border-bottom:1px solid var(--dim);padding-bottom:2px;}
+  #docBody .de{padding:3px 0;display:flex;gap:10px;flex-wrap:wrap;}
+  #docBody .de code{color:var(--glow);font-size:18px;white-space:nowrap;}
+  #docBody .de span{color:var(--dim);font-size:17px;flex:1;min-width:160px;}
 </style>
 <script src="https://js.puter.com/v2/"></script>
 </head>
@@ -191,6 +196,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <summary style="font-size:22px;color:var(--cyan)">&#9656; COURS &mdash; apprends LOOM pas à pas</summary>
     <div class="opt" style="margin:8px 0 4px">Clique <b>essayer</b> sur une leçon : le code se charge et se joue. Modifie-le, appuie sur RUN.</div>
     <div id="course"></div>
+  </details>
+
+  <details class="card wide" id="docCard">
+    <summary style="font-size:22px">&#9656; RÉFÉRENCE &mdash; toute la syntaxe (cherchable)</summary>
+    <input type="text" id="docSearch" placeholder="filtrer… (ex: accord, reverb, song, sample)" style="width:100%;margin:8px 0;border-color:var(--dim);color:var(--green)">
+    <div id="docBody"></div>
   </details>
   </div><!-- /#ws -->
 
@@ -717,6 +728,63 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("course").addEventListener("click",e=>{const b=e.target.closest("[data-lesson]");if(!b)return;
     editor.value=LESSONS[+b.dataset.lesson].c;run();window.scrollTo({top:0,behavior:"smooth"});});
   renderCourse();
+
+  // --- searchable reference (full syntax) ---
+  const REF=[
+    ["Bases","name: motif | verbe | timbre","une voix par ligne ; le motif remplit une mesure"],
+    ["Bases","x  .","frappe / silence (batterie : kick snare hat clap)"],
+    ["Bases","# ...","commentaire (ligne ignorée)"],
+    ["Notes & degrés","c3 eb2 g4","note absolue (a-g, # ou b, octave 1-5)"],
+    ["Notes & degrés","key: c minor","déclare la tonalité → active les degrés"],
+    ["Notes & degrés","1 2 3 4 5 6 7","degrés de la gamme (1 = tonique)"],
+    ["Notes & degrés","1'   5,","octave : ' monte, , descend"],
+    ["Notes & degrés","7#  3b  5b","altération chromatique (en suffixe)"],
+    ["Gammes","scale: dorian","major minor dorian phrygian lydian mixolydian locrian · pentatonic minpent · harmonic_minor melodic_minor whole_tone blues chromatic"],
+    ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi slendro pelog hirajoshi insen iwato egyptian"],
+    ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : maj m dim aug 7 maj7 m7 m7b5 dim7 6 m6 sus2 sus4 add9 9 maj9 m9"],
+    ["Accords","I ii iii IV V vi vii (+7)","chiffres romains = accords diatoniques de la key"],
+    ["Accords","| arp up","arpège : up / down / updown / downup"],
+    ["Verbes","| rev","inverse le motif"],
+    ["Verbes","| fast N    | slow N","accélère N× / joue une mesure sur N"],
+    ["Verbes","| every N <verbe>","applique un verbe une mesure sur N"],
+    ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
+    ["Verbes","| rot N    | iter N","rotation fixe / décalage d'un pas par mesure"],
+    ["Génératif","e(k,n)   e(k,n,rot)","rythme euclidien (k frappes sur n pas)"],
+    ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
+    ["Génératif","seed: 42","rend l'aléatoire reproductible"],
+    ["Génératif","x*3","ratchet / roll (N frappes dans un pas)"],
+    ["Génératif","<a/b/c>","variation A/B : une alternative par mesure"],
+    ["Structure","song: intro*4 drop*8","arrangement (nom*mesures ; boucle)"],
+    ["Structure","| in verse chorus","la voix ne joue que dans ces sections"],
+    ["Structure (long)","nom@section: motif","pattern différent par section → morceaux longs"],
+    ["Son","| saw sine tri pulse square","forme d'onde"],
+    ["Son","| gain N","volume de la voix (0-1)"],
+    ["Son","| oct N","octave par défaut des degrés"],
+    ["Son","| lp N   | hp N   (q R)","filtre passe-bas / passe-haut (+ résonance)"],
+    ["Son","| env A D S R","enveloppe : attaque déclin sustain(0-1) release"],
+    ["Son","| unison N   | detune C","super-saw (oscillateurs désaccordés)"],
+    ["Son","| drive X","distorsion / chaleur (0-1)"],
+    ["Son","| lfo cutoff|pitch|gain RATE DEPTH","modulation (mouvement, vibrato, tremolo)"],
+    ["Effets & mix","| pan P","panoramique (-1 gauche … 1 droite)"],
+    ["Effets & mix","| reverb N   | delay N","sends d'effet par voix (0-1)"],
+    ["Effets & mix","duck: N","sidechain : tout pompe sur le kick"],
+    ["Samples (drums)","| sample bd","bd sd hh cp kick2 kick909 clubkick clap2 oh rim cow perc tom tom2 tom3 ride tabla"],
+    ["Samples (mélo)","| sample sitar","bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo (repitchés)"],
+    ["Samples (loops/voix)","| sample amen","breaks: amen break amencut · voix/texture: vox yeah breath wood metal glass bottle"],
+    ["Samples","| root NOTE","accorde un sample mélodique à l'oreille"],
+    ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
+    ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
+    ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
+    ["Apparence","look ▸   /   🎲","31 thèmes de terminal, mémorisés"],
+    ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
+  ];
+  function renderDoc(f){f=(f||"").toLowerCase().trim();const el=$("docBody");if(!el)return;let cat="",html="";
+    for(const r of REF){if(f&&!(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(f))continue;
+      if(r[0]!==cat){cat=r[0];html+='<div class="cat">'+cat+'</div>';}
+      html+='<div class="de"><code>'+r[1].replace(/</g,"&lt;")+'</code><span>'+r[2].replace(/</g,"&lt;")+'</span></div>';}
+    el.innerHTML=html||'<div class="opt">rien ne correspond.</div>';}
+  renderDoc("");
+  $("docSearch").addEventListener("input",e=>renderDoc(e.target.value));
 
   // --- terminal theme gallery (cosmetic; swaps CSS vars, persists) ---
   // [bg, fg(text), dim, glow, amber, cyan, flat?]  — fidèles aux vraies machines
