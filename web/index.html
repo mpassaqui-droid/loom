@@ -892,20 +892,49 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     solarized:["#002b36","#859900","#586e75","#93a1a1","#b58900","#2aa198",1],
     monokai:["#272822","#a6e22e","#75715e","#f8f8f2","#e6db74","#66d9ef",1],
     ocean:["#0f1b2d","#6fd0ff","#2a4a6a","#cfeaff","#ffcf6b","#7fe0ff",1],
-    paper:["#f4f1e8","#2a2a2a","#9a9485","#000000","#a8631b","#1f6f8b",1]
+    paper:["#f4f1e8","#2a2a2a","#9a9485","#000000","#a8631b","#1f6f8b",1],
+    // spatial / NASA
+    apollo:["#050805","#33ff88","#0f6a3a","#aaffcc","#ffb000","#66ffcc",0],
+    mission:["#001018","#bfe6ff","#2a5a7a","#e8f6ff","#ffcc66","#7fe0ff",0],
+    radar:["#001400","#33ff33","#0a5a0a","#aaffaa","#9dff4a","#33ffcc",0],
+    // téléphones / LCD
+    minitel:["#000000","#e6e6e6","#5a5a6a","#ffffff","#ffcc44","#55ddff",0],
+    nokia:["#8aa07a","#16240e","#5a6e4a","#0a1604","#3a5a1a","#2a4a3a",1],
+    pager:["#c7e8d4","#1a2a1a","#7a9a82","#0a1a0a","#3a6a3a","#2a6a5a",1],
+    pipboy:["#0a1a0a","#28ff7a","#127a3a","#a6ffc4","#28ff7a","#28ffb0",0],
+    // affichages vintage
+    nixie:["#0a0500","#ff7a18","#7a3a08","#ffb060","#ff9030","#ff7a18",0],
+    vfd:["#00060a","#4fd0e0","#1a5a66","#a0f0ff","#ffcf6b","#7fe6ff",0],
+    led_red:["#0a0000","#ff3030","#6a1010","#ff9090","#ff6030","#ff5050",0],
+    led_blue:["#00040a","#40a8ff","#1a456a","#a8d8ff","#ffcf6b","#60c0ff",0],
+    bsod:["#0000aa","#ffffff","#6a6ad0","#ffffff","#ffff55","#aaddff",1],
+    telegraph:["#14100a","#d8b878","#6a5a3a","#f0dca8","#e0a040","#b89060",0],
+    // écrans modernes
+    eink:["#eae8e0","#1a1a1a","#9a988e","#000000","#7a5a2a","#2a5a6a",1],
+    oled:["#000000","#ffffff","#666666","#ffffff","#ffd24a","#5fe6ff",1],
+    vaporwave:["#241a3a","#ff71ce","#5a4a7a","#ffd6f5","#fffb96","#01cdfe",1],
+    cyberpunk:["#0a0014","#00fff5","#3a2a6a","#b6fffb","#ff206e","#fee801",0],
+    thermal:["#f7f3ea","#222222","#9a948a","#000000","#9a5a2a","#3a6a8a",1]
   };
   const THEME_GROUPS=[
     ["Phosphore (CRT)",["crt","green2","amber","amber2","whitephos","bluephos","matrix"]],
     ["Micro-ordinateurs",["c64","pet","apple2","spectrum","bbc","atari","gameboy","dos"]],
     ["Terminaux & mainframe",["vt100","ibm3270","hercules","tektronix","wyse","next","plan9"]],
-    ["Moderne",["modern","dracula","nord","gruvbox","solarized","monokai","ocean","paper"]]
+    ["Spatial / NASA",["apollo","mission","radar"]],
+    ["Téléphones / LCD",["minitel","nokia","pager","pipboy"]],
+    ["Affichages vintage",["nixie","vfd","led_red","led_blue","bsod","telegraph"]],
+    ["Moderne / écrans",["modern","dracula","nord","gruvbox","solarized","monokai","ocean","paper","eink","oled","vaporwave","cyberpunk","thermal"]]
   ];
   const THEME_LABEL={crt:"Green CRT (P1)",green2:"Bright Green",amber:"Amber (P3)",amber2:"Amber warm",
     whitephos:"White phosphor (P4)",bluephos:"Blue phosphor",matrix:"Matrix",c64:"Commodore 64",pet:"Commodore PET",
     apple2:"Apple II",spectrum:"ZX Spectrum",bbc:"BBC Micro",atari:"Atari 8-bit",gameboy:"Game Boy",dos:"IBM PC / DOS",
     vt100:"DEC VT100",ibm3270:"IBM 3270",hercules:"Hercules amber",tektronix:"Tektronix 4010",wyse:"Wyse 60",
     next:"NeXTSTEP",plan9:"Plan 9 (rio)",modern:"Modern dark",dracula:"Dracula",nord:"Nord",gruvbox:"Gruvbox",
-    solarized:"Solarized",monokai:"Monokai",ocean:"Ocean",paper:"Paper (light)"};
+    solarized:"Solarized",monokai:"Monokai",ocean:"Ocean",paper:"Paper (light)",
+    apollo:"Apollo DSKY",mission:"NASA Mission Control",radar:"Radar scope",
+    minitel:"Minitel",nokia:"Nokia LCD",pager:"Pager LCD",pipboy:"Pip-Boy",
+    nixie:"Nixie tube",vfd:"VFD display",led_red:"LED rouge",led_blue:"LED bleue",bsod:"Blue screen",telegraph:"Télégraphe / ruban",
+    eink:"E-ink",oled:"OLED",vaporwave:"Vaporwave",cyberpunk:"Cyberpunk",thermal:"Ticket thermique"};
   function applyTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
     const k=["--bg","--green","--dim","--glow","--amber","--cyan"];for(let i=0;i<6;i++)r.setProperty(k[i],t[i]);
     document.body.classList.toggle("flat",!!t[6]);if($("themeSel"))$("themeSel").value=name;
