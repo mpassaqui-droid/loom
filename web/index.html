@@ -1074,7 +1074,21 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
-    "Match the requested mood/genre. Output ONLY the LOOM program, no prose, no backticks."].join("\n");
+    "Match the requested mood/genre. Avoid always defaulting to C major / 4-step loops — pick a key and scale that fit (minor, dorian, phrygian, hijaz, etc.) and write 16-step patterns.",
+    "EXAMPLE of the richness to aim for when asked for a full/long track (imitate the STRUCTURE — change key, genre, sounds and notes to fit the request):",
+    "seed: 5",
+    "duck: 65",
+    "key: f minor",
+    "song: intro*4 build*8 drop*8 break*4 drop*8 outro*4",
+    "kick: x . . . x . . . x . . . x . . . | sample bd",
+    "kick@intro: x . . . . . . . x . . . . . . . | sample bd",
+    "clap: . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | in drop outro",
+    "hat: e(11,16) | sample hh | gain 0.18 | in build drop break outro",
+    "bass: . 1 . 1 . 1 5, . . 1 . 1 . 7, 1 . | saw | unison 3 | detune 16 | lp 520 q 6 | drive 0.3 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22 | in build drop outro",
+    "acid@build: 1 1 1' 1 5 1 1' 5 | saw | unison 3 | lp 300..5000 | over 8 | q 8 | drive 0.4 | gain 0.13",
+    "stab@drop: . . Am . . . Fm . . . Cm . . . G . | saw | unison 3 | lp 1800 q 6 | env 0.01 0.1 0.2 0.2 | reverb 0.3 | gain 0.12",
+    "pad: Fm7 . . . . . . . | saw | unison 4 | lp 820 | env 0.7 0.5 0.7 1.6 | reverb 0.5 | gain 0.13 | in intro break outro",
+    "END EXAMPLE. Now write the program for the user's request, with the same level of detail. Output ONLY the LOOM program, no prose, no backticks."].join("\n");
 
   function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);}
   async function callFree(prompt){
