@@ -204,16 +204,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   <div id="grid" class="wide"></div>
   <div id="console" class="wide">[ idle ] press RUN to begin</div>
 
-  <details class="card cyan" id="courseCard">
-    <summary style="font-size:22px;color:var(--cyan)">&#9656; COURS &mdash; apprends LOOM pas à pas</summary>
-    <div class="opt" style="margin:8px 0 4px">Clique <b>essayer</b> sur une leçon : le code se charge et se joue. Modifie-le, appuie sur RUN.</div>
-    <div id="course"></div>
-  </details>
-
-  <details class="card wide" id="docCard">
-    <summary style="font-size:22px">&#9656; RÉFÉRENCE &mdash; toute la syntaxe (cherchable)</summary>
-    <input type="text" id="docSearch" placeholder="filtrer… (ex: accord, reverb, song, sample)" style="width:100%;margin:8px 0;border-color:var(--dim);color:var(--green)">
-    <div id="docBody"></div>
+  <details class="card cyan wide" id="learnCard">
+    <summary style="font-size:22px;color:var(--cyan)">&#9656; APPRENDRE &mdash; leçons + référence</summary>
+    <div style="display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap">
+      <button class="tiny go" id="tabLessons">&#128218; LEÇONS</button>
+      <button class="tiny" id="tabRef">&#9000; RÉFÉRENCE</button>
+      <input type="text" id="learnSearch" placeholder="chercher… (accord, reverb, song)" style="flex:1;min-width:140px;border-color:var(--dim);color:var(--green)">
+    </div>
+    <div id="learnBody"></div>
   </details>
   </div><!-- /#ws -->
 
@@ -821,12 +819,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     {t:"15 · Sidechain (pump)",d:"duck: N (0-100) : tout le mix « pompe » à chaque kick. Le groove techno/house.",c:"duck: 70\nkey: a minor\nkick: x . . . x . . . x . . . x . . .\npad:  Am7 . . . . . . . F . . . . . . . | saw | lp 1100 | gain 0.18"},
     {t:"16 · Structure de morceau",d:"song: liste les sections (nom*barres). Tague les voix avec | in <sections>. Regarde la console.",c:"song: intro*2 verse*4 chorus*4 outro*2\nkey:  a minor\nkick: x . . . x . . .\nhat:  x x x x x x x x | gain 0.14 | in verse chorus\narp:  Am . F . C . G . | arp up | saw | gain 0.18 | in chorus\npad:  Am . . . | sine | gain 0.2"}
   ];
-  function renderCourse(){const el=$("course");if(!el)return;
-    el.innerHTML=LESSONS.map((l,i)=>'<div class="lesson"><h4>'+l.t+'</h4><p>'+l.d+'</p><pre>'+
-      l.c.replace(/&/g,"&amp;").replace(/</g,"&lt;")+'</pre><button class="tiny go" data-lesson="'+i+'">&#9658; essayer</button></div>').join("");}
-  $("course").addEventListener("click",e=>{const b=e.target.closest("[data-lesson]");if(!b)return;
-    editor.value=LESSONS[+b.dataset.lesson].c;run();window.scrollTo({top:0,behavior:"smooth"});});
-  renderCourse();
+  // course lessons are wired below, in the unified APPRENDRE panel
 
   // --- searchable reference (full syntax) ---
   const REF=[
@@ -886,13 +879,28 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Apparence","look ▸   /   🎲","31 thèmes de terminal, mémorisés"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
-  function renderDoc(f){f=(f||"").toLowerCase().trim();const el=$("docBody");if(!el)return;let cat="",html="";
-    for(const r of REF){if(f&&!(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(f))continue;
-      if(r[0]!==cat){cat=r[0];html+='<div class="cat">'+cat+'</div>';}
-      html+='<div class="de"><code>'+r[1].replace(/</g,"&lt;")+'</code><span>'+r[2].replace(/</g,"&lt;")+'</span></div>';}
-    el.innerHTML=html||'<div class="opt">rien ne correspond.</div>';}
-  renderDoc("");
-  $("docSearch").addEventListener("input",e=>renderDoc(e.target.value));
+  // --- unified APPRENDRE panel: lessons + reference, one search box ---
+  let learnTab="lessons";
+  function renderLearn(f){f=(f||"").toLowerCase().trim();const el=$("learnBody");if(!el)return;
+    if(learnTab==="lessons"){
+      const items=LESSONS.map((l,i)=>[l,i]).filter(([l])=>!f||(l.t+" "+l.d+" "+l.c).toLowerCase().includes(f));
+      el.innerHTML='<div class="opt" style="margin-bottom:6px">Clique <b>essayer</b> : le code se charge et se joue.</div>'+
+        (items.map(([l,i])=>'<div class="lesson"><h4>'+l.t+'</h4><p>'+l.d+'</p><pre>'+
+          l.c.replace(/&/g,"&amp;").replace(/</g,"&lt;")+'</pre><button class="tiny go" data-lesson="'+i+'">&#9658; essayer</button></div>').join("")
+          ||'<div class="opt">aucune leçon ne correspond.</div>');
+    }else{let cat="",html="";
+      for(const r of REF){if(f&&!(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(f))continue;
+        if(r[0]!==cat){cat=r[0];html+='<div class="cat">'+cat+'</div>';}
+        html+='<div class="de"><code>'+r[1].replace(/</g,"&lt;")+'</code><span>'+r[2].replace(/</g,"&lt;")+'</span></div>';}
+      el.innerHTML=html||'<div class="opt">rien ne correspond.</div>';}}
+  function setLearnTab(t){learnTab=t;$("tabLessons").classList.toggle("go",t==="lessons");$("tabRef").classList.toggle("go",t==="ref");
+    renderLearn($("learnSearch").value);}
+  $("learnBody").addEventListener("click",e=>{const b=e.target.closest("[data-lesson]");if(!b)return;
+    editor.value=LESSONS[+b.dataset.lesson].c;run();window.scrollTo({top:0,behavior:"smooth"});});
+  $("tabLessons").addEventListener("click",()=>setLearnTab("lessons"));
+  $("tabRef").addEventListener("click",()=>setLearnTab("ref"));
+  $("learnSearch").addEventListener("input",e=>renderLearn(e.target.value));
+  setLearnTab("lessons");
 
   // --- terminal theme gallery (cosmetic; swaps CSS vars, persists) ---
   // [bg, fg(text), dim, glow, amber, cyan, flat?]  — fidèles aux vraies machines
