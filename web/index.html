@@ -609,7 +609,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     if(c==="rot"){if(!tokens.length)return tokens;const n=parseInt(p[1]);const k=(((isNaN(n)?1:n)%tokens.length)+tokens.length)%tokens.length;return tokens.slice(k).concat(tokens.slice(0,k));}
     if(c==="iter"){if(!tokens.length)return tokens;const n=Math.max(1,parseInt(p[1])||4);const k=(((bar%n)+n)%n)%tokens.length;return tokens.slice(k).concat(tokens.slice(0,k));}
     return tokens;}
-  function effective(v,bar){let t=v.tokens.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);return t;}
+  // cellular automaton: ca(rule,n) evolves one Wolfram generation per bar
+  function caRow(rule,n,gen){let row=new Array(n).fill(false);row[n>>1]=true;
+    const steps=((gen%1048576)+1048576)%1048576;
+    for(let s=0;s<steps;s++){const p=row.slice();
+      for(let i=0;i<n;i++){const l=p[(i+n-1)%n]?1:0,c=p[i]?1:0,r=p[(i+1)%n]?1:0;row[i]=((rule>>((l<<2)|(c<<1)|r))&1)===1;}}
+    return row;}
+  function expandCa(tok,bar){const m=/^ca\((\d+)(?:,(\d+))?\)$/.exec(tok);if(!m)return null;
+    const rule=Math.min(255,+m[1]),n=Math.max(1,m[2]?+m[2]:16);return caRow(rule,n,bar).map(b=>b?"x":".");}
+  function effective(v,bar){let t=v.tokens.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
+    let out=[];for(const tok of t){const c=expandCa(tok,bar);if(c)out.push(...c);else out.push(tok);}return out;}
 
   function buildGrid(){grid.innerHTML="";for(const v of voices){if(v.section)continue;const row=document.createElement("div");row.className="row";
     const nm=document.createElement("div");nm.className="vname";nm.textContent=v.name;
@@ -712,6 +721,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     amen:"# le fameux Amen break + sub bass : jungle/DnB.\nduck:   40\nkey:    c minor\nbreak:  x . . . . . . . x . . . . . . . | sample amen | gain 0.5\nsub:    1 . . . . . 1 . . . 7, . . 5, . . | sample voodoo | oct 2 | gain 0.6\nstab:   . . . . 1' . . . . . . . 5 . . . | sample sid | gain 0.4 | pan 0.3\nvox:    . . . . . . . . . . . . . . x . | sample yeah | gain 0.4 | pan -0.3",
     band:"# 'live band' : guitare + sax + vraie batterie.\nduck:   30\nkey:    a minor\nkick:   x . . . x . . . x . . . x . . . | sample kick2\nsnare:  . . . . x . . . . . . . x . . x | sample sd | gain 0.4\nhat:    x x x x x x x x | sample oh | gain 0.2 | pan 0.3\nride:   . . x . . . x . | sample ride | gain 0.18 | pan -0.3\ngtr:    i . . . iv . . . VI . . . v . . . | sample gtr | arp up | gain 0.5\nsax:    . . . . 5 . 4 . . . 3 . . . 1 . | sample sax | gain 0.5 | pan 0.2\nbass:   1 . 1 . 5, . 1 . | sample bass | oct 2 | gain 0.6",
     poly:"# polyrhythm: voices with different step counts (3 vs 4 vs 5) over one bar.\nkey:   a minpent\nkick:  x x x x\nclav:  1 1 1 | tri | gain 0.18\nbell:  1 3 5 4 6 | sine | oct 4 | gain 0.13\nhat:   x x x x x x x x | gain 0.12",
+    automata:"# automates cellulaires : ca(rule,n) evolue chaque mesure (maths -> musique).\nseed:  1\nkey:   a minpent\nkick:  x . . . x . . . x . . . x . . .\nca1:   ca(90,16) | sample hh | gain 0.16\nca2:   ca(30,16) | sample perc | gain 0.2 | pan 0.3\nca3:   ca(150,8) | sample rim | gain 0.18 | pan -0.3\nbass:  1 . . . 5, . . . | sample bass | oct 2 | gain 0.5\nlead:  ca(110,8) | tri | lp 1600 | gain 0.12",
     euclid:"# euclidean rhythms: e(hits,steps[,rotate]) spreads hits evenly.\nkey:   a minpent\nkick:  e(4,16)\nsnare: e(2,16,4)\nhat:   e(7,16) | gain 0.18\nbass:  e(5,8) | saw | oct 2\nlead:  1 3 5 3 4 1 5 3 | pulse | gain 0.18",
     chords:"# UPPERCASE = chord (plays several notes). lowercase = single note.\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.15\nkeys:  Am7 . . . Dm7 . . . G7 . . . Cmaj7 . . . | sine | gain 0.3\nbass:  a2 . . . d2 . . . g2 . . . c2 . . . | saw\nlead:  . . e4 . . . a4 . . . g4 . . . e4 . | tri | gain 0.2",
     chance:"# x?70 = 70% chance. seed makes the randomness repeat. change seed for variations.\nseed:  7\nkey:   a minpent\nkick:  x . . . x . . . x . . . x?60 . . .\nsnare: . . . . x . . . . . . . x . . .\nhat:   x?80 x?40 x x?60 x?80 x?40 x x?50 | gain 0.16\nbass:  1 . 1?50 . 3?70 . 1 . 5?60 . . . 4?50 . . . | saw | oct 2\nlead:  5?40 . 3?60 . 1?80 . 4?50 . | pulse | gain 0.18",
@@ -726,7 +736,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   const PRESET_GROUPS=[
     ["Genres & samples",["set","techno","house","dnb","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","raga","harmonic","prog","jazz","chords","arp"]],
-    ["Génératif & rythme",["euclid","chance","rolls","vary","shift","poly","song","long","auto"]],
+    ["Génératif & rythme",["euclid","automata","chance","rolls","vary","shift","poly","song","long","auto"]],
     ["Sound design",["pad","supersaw","pump"]]
   ];
   function buildPresetMenu(){const el=$("presetSel");if(!el)return;
@@ -787,6 +797,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
     ["Verbes","| rot N    | iter N","rotation fixe / décalage d'un pas par mesure"],
     ["Génératif","e(k,n)   e(k,n,rot)","rythme euclidien (k frappes sur n pas)"],
+    ["Génératif (maths)","ca(rule,n)","automate cellulaire (Wolfram) qui évolue chaque mesure — rules 90 30 110 18 150"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","seed: 42","rend l'aléatoire reproductible"],
     ["Génératif","x*3","ratchet / roll (N frappes dans un pas)"],
@@ -914,6 +925,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
+    "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",

@@ -240,11 +240,49 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64) -> Vec<String> {
     }
 }
 
-/// Resolve a voice's effective tokens for a given bar (all verbs applied).
+/// One generation of an elementary cellular automaton (Wolfram `rule`, `n`
+/// cells, toroidal), evolved `gen` steps from a single centre seed. Each bar
+/// advances the generation, so a `ca(rule,n)` pattern evolves over time.
+fn ca_row(rule: u8, n: usize, gen: i64) -> Vec<bool> {
+    let mut row = vec![false; n];
+    row[n / 2] = true;
+    let steps = gen.rem_euclid(1 << 20) as usize; // safety bound
+    for _ in 0..steps {
+        let prev = row.clone();
+        for i in 0..n {
+            let l = prev[(i + n - 1) % n] as u8;
+            let c = prev[i] as u8;
+            let r = prev[(i + 1) % n] as u8;
+            let idx = (l << 2) | (c << 1) | r;
+            row[i] = ((rule >> idx) & 1) == 1;
+        }
+    }
+    row
+}
+
+/// Expand a bar-aware generative token `ca(rule,n)` into its `x`/`.` row.
+fn expand_generative_token(tok: &str, bar: i64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("ca(")?.strip_suffix(')')?;
+    let parts: Vec<&str> = inner.split(',').collect();
+    if parts.is_empty() || parts.len() > 2 { return None; }
+    let rule: u8 = parts[0].trim().parse().ok()?;
+    let n: usize = parts.get(1).and_then(|s| s.trim().parse().ok()).unwrap_or(16).max(1);
+    Some(ca_row(rule, n, bar).into_iter().map(|b| if b { "x".into() } else { ".".into() }).collect())
+}
+
+/// Resolve a voice's effective tokens for a given bar (all verbs + bar-aware
+/// generative expansions applied).
 pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
     let mut t = voice.tokens.clone();
     for v in &voice.verbs { t = apply_verb(&t, v, bar); }
-    t
+    let mut out = Vec::with_capacity(t.len());
+    for tok in t {
+        match expand_generative_token(&tok, bar) {
+            Some(seq) => out.extend(seq),
+            None => out.push(tok),
+        }
+    }
+    out
 }
 
 /// Produce every sound event for a given bar across all voices, with no key
@@ -965,6 +1003,18 @@ mod tests {
         // 3rd of C minor is eb, 7th is bb — straight from the scale, no b syntax
         assert!(close(token_to_freq("3", Some(&k)), note_to_freq("eb3")));
         assert!(close(token_to_freq("7", Some(&k)), note_to_freq("bb3")));
+    }
+
+    #[test]
+    fn cellular_automaton_evolves_per_bar() {
+        let v = parse("ca1: ca(90,8)");
+        // bar 0 = single centre seed -> exactly one hit
+        let b0 = effective(&v[0], 0);
+        assert_eq!(b0.len(), 8);
+        assert_eq!(b0.iter().filter(|t| *t == "x").count(), 1);
+        // it evolves: a later generation differs from the seed row
+        let b1 = effective(&v[0], 1);
+        assert_ne!(b0, b1);
     }
 
     #[test]
