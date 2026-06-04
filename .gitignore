@@ -5,3 +5,4 @@ Cargo.lock
 
 .claude/scheduled_tasks.lock
 .claude/*.lock
+*.loom

@@ -40,7 +40,7 @@ cliquable, oscillo/spectre, SCÈNE plein écran, 48 thèmes, COURS+RÉFÉRENCE) 
 ## 🛣️ PHASES
 
 ### PHASE 0 — Qualité audio (LE plus gros levier)  ⭐ commencer ici
-- [ ] 0.1 **Moteur synthé AudioWorklet** : FM (2-4 opérateurs), wavetable, sub osc, meilleures
+- [~] 0.1 \*\*Moteur synthé AudioWorklet** : FM (2-4 opérateurs), wavetable, sub osc, meilleures
       enveloppes, anti-alias. Remplace/augmente `tone()`. → des sons riches/pro.  **XL**
 - [ ] 0.2 **Drums synthétisés pro** : kick pitch-drop + clic + corps, snare layered (corps+bruit),
       hats métalliques (FM), clap multi-tap. → ne plus dépendre des samples lo-fi.  **L**
