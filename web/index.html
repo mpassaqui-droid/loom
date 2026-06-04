@@ -474,7 +474,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     phrygian_dominant:[0,1,4,5,7,8,10],spanish:[0,1,4,5,7,8,10],hungarian_minor:[0,2,3,6,7,8,11],gypsy:[0,2,3,6,7,8,11],
     hungarian_major:[0,3,4,6,7,9,10],neapolitan_minor:[0,1,3,5,7,8,11],neapolitan_major:[0,1,3,5,7,9,11],
     enigmatic:[0,1,4,6,8,10,11],persian:[0,1,4,5,6,8,11],prometheus:[0,2,4,6,9,10],marwa:[0,1,4,6,7,9,11],purvi:[0,1,4,6,7,8,11],
-    kumoi:[0,2,3,7,9],yo:[0,2,5,7,9],blues_major:[0,2,3,4,7,9],majblues:[0,2,3,4,7,9]};
+    kumoi:[0,2,3,7,9],yo:[0,2,5,7,9],blues_major:[0,2,3,4,7,9],majblues:[0,2,3,4,7,9],
+    // maqam with true quarter tones (0.5 = a quarter tone) — rendered microtonally
+    bayati:[0,1.5,3,5,7,8,10],rast:[0,2,3.5,5,7,9,10.5],saba:[0,1.5,3,4,7,8,10],
+    sikah:[0,1.5,3.5,5.5,7,8.5,10.5],huzam:[0,1.5,3.5,5,6.5,8.5,10],jiharkah:[0,2,4,5,7,9,10.5]};
   const DEFAULT_OCTAVE=3;
   function tonicPc(w){const m=/^([a-gA-G])([#b]?)/.exec(w);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
@@ -634,6 +637,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     el.innerHTML=song.map((s,i)=>'<div class="seg" data-i="'+i+'" style="flex-grow:'+s[1]+'">'+s[0]+'</div>').join("")
       +'<div class="ph" id="tph" style="left:0"></div>';}
 
+  // microtonal bend: trailing +N / -N = cents (e.g. 3+50, c3-30, 1'-20)
+  function splitCents(tok){const m=/([+-]\d{1,4})$/.exec(tok);if(!m||/^[A-G]/.test(tok))return[tok,0];
+    return[tok.slice(0,m.index),parseInt(m[1],10)];}
   // resolve a melodic token to the frequency(ies) it sounds (1 note, or N for a chord)
   function melFreqs(tok,v,k,baseOct){
     if(tok==="x")return [noteToFreq("c3")];
@@ -650,7 +656,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);}
     else{let k=key;if(k&&v.oct!=null)k={tonic:key.tonic,scale:key.scale,octave:v.oct};
       const dur=cycleLen/v.tokens.length,baseOct=v.oct!=null?v.oct:(k?k.octave:3);
-      const fr=melFreqs(tok,v,k,baseOct);if(!fr.length)return;
+      const sc=splitCents(tok),fr0=melFreqs(sc[0],v,k,baseOct);if(!fr0.length)return;
+      const fr=sc[1]?fr0.map(f=>f*Math.pow(2,sc[1]/1200)):fr0;
       if(v.midi&&midiOut){for(const f of fr)sendMidi(v.midi,freqToMidi(f),96,t,dur);return;}
       if(v.sample){const bc=noteToFreq(v.root||"c3")||noteToFreq("c3"),gm=Math.min(1,(v.gain||0.22)*3);
         for(const f of fr)playSample(v.sample,t,gm,f/bc,v);return;}
@@ -724,6 +731,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     jazz:"# accords etendus + renversements (slash) : couleur jazz.\nkey:   c major\nkick:  x . . . . . . . x . . . . . . . | sample kick2 | gain 0.6\nride:  . . x . . . x . . . x . . . x . | sample ride | gain 0.13 | pan 0.3\nkeys:  Cmaj9 . . . Am11 . . . Dm9 . . . G13 . . . | sine | env 0.05 0.4 0.7 0.6 | reverb 0.4 | gain 0.13\nbass:  c2 . . . a1 . . . d2 . . . g1 . . . | sample bass | gain 0.6\nlead:  . . 7 . . 9 . . 6 . . 5 . . 3 . | sample sax | gain 0.4 | delay 0.25 | reverb 0.3",
     prog:"# roman-numeral chords build on the key: I ii iii IV V vi vii (+7).\n# the famous I-V-vi-IV progression, plus an arpeggio of the same.\nkey:   c major\nkick:  x . . . x . . .\nhat:   . . x . . . x . | gain 0.13\nkeys:  I . . . V . . . vi . . . IV . . . | sine | env 0.05 0.2 0.7 0.4 | gain 0.16\narp:   I . . . V . . . vi . . . IV . . . | arp up | saw | lp 1600 q 4 | gain 0.13\nbass:  1 . . . 5 . . . 6 . . . 4 . . . | saw | lp 500 | oct 2",
     harmonic:"# c harmonic minor: raise the 7th (7#) for the leading tone.\nkey:   c minor\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   . . x . . . x .\nbass:  1, . . . 5, . . . | saw\nlead:  1 2 3 5 7# 1' 7# 5 | pulse | gain 0.2",
+    maqam:"# maqam bayati : VRAIS quarts de ton (la 2e neutre). Microtonal.\nkey:    d bayati\nhand:   x . . x . . x . | sample tabla | gain 0.4\ndoumbek:x . x . x . x x | sample perc | gain 0.3 | pan 0.3\noud:    1 2 3 2 1 7, 1 . 3 4 5 4 3 2 1 . | sample sitar | gain 0.5 | reverb 0.3\ndrone:  1 . . . . . . . | sine | oct 2 | gain 0.3\nney:    . . 5 . 4 . 3 . . . 2 . 1 . . . | sample sax | lp 1800 | gain 0.35 | reverb 0.4",
     hijaz:"# hijaz maqam: the b2 -> major-3rd leap is the exotic flavour.\nkey:   d hijaz\nkick:  x . . . x . . .\nclap:  . . . . x . . .\nhat:   x . x x . x . x\nbass:  1 . . 1 . . 5, . | saw | oct 2\nlead:  1 2 3 2 1 7, 1 . | pulse | gain 0.2",
     raga:"# bhairav-ish raga, slow & meditative.\nkey:   c bhairav\nhat:   x . . x . . x . | gain 0.15\ndrone: 1 . . . . . . . | sine | oct 2 | gain 0.3\nlead:  1 2 3 4 5 6 7 1' | tri | slow 2 | gain 0.2",
     auto:"# AUTOMATION : un param ecrit A..B evolue dans le temps (filtre qui s'ouvre, riser).\nseed:  3\nduck:  60\nkey:   a minor\nsong:  build*8 drop*8\nkick:  x . . . x . . . | sample bd | in drop\nclap:  . . . . x . . . | sample cp | gain 0.4 | in drop\nhat:   e(11,16) | sample hh | gain 0.18\nriser: 1 . . . . . . . | saw | unison 5 | lp 200..7000 | over 8 | env 0.3 0.3 0.9 0.5 | gain 0.12 | in build\nlead:  1 5 1' 5 3 5 1' 5 | saw | unison 4 | detune 16 | lp 600..4000 | over 8 | drive 0..0.5 | gain 0.14 | in drop\nbass:  . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | saw | unison 3 | lp 500 q 6 | drive 0.3 | oct 2 | gain 0.22 | in drop",
@@ -749,7 +757,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     set:"# SET techno — morceau long qui evolue. Charge, RUN, ou RENDER pour le WAV.\nseed:  7\nduck:  65\nkey:   a minor\nsong:  intro*8 build*8 main*16 break*8 main*16 peak*16 outro*8\nkick:  x . . . x . . . x . . . x . . . | sample bd\nkick@intro: x . . . . . . . x . . . . . . . | sample bd\nkick@break: . . . . . . . . . . . . . . . .\nclap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | in build main peak outro\nclap@peak: . . . . x . . x . . . . x . . x | sample cp | gain 0.4\nhat:   e(9,16) | sample hh | gain 0.2 | pan 0.2 | in build main break peak outro\nhat@peak: e(13,16) | sample hh | gain 0.2 | pan 0.2\noh:    . . x . . . x . . . x . . . x . | sample oh | gain 0.15 | in main peak\nbass:  . 1 . 1 . 1 . 1 . 1 . 1 . 1 . 1 | saw | unison 3 | detune 16 | lp 520 q 6 | drive 0.3 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22 | in build main peak outro\nbass@peak: . 1 . 1 . 1 5, . . 1 . 1 . 7, 1 . | saw | unison 3 | detune 18 | lp 760 q 7 | drive 0.4 | env 0.005 0.06 0.35 0.08 | oct 2 | gain 0.22\nstab@main: . . . . . . Am . . . . . . . . . | saw | unison 3 | lp 1500 q 6 | env 0.01 0.1 0.2 0.2 | gain 0.12 | reverb 0.3\nstab@peak: . . Am . . . F . . . Am . . . G . | saw | unison 3 | lp 2000 q 6 | env 0.01 0.1 0.2 0.2 | gain 0.13 | reverb 0.3\narp@peak: 1 5 1' 5 3 5 1' 5 1 5 1' 5 4 5 1' 5 | sample arpy | gain 0.28 | delay 0.3 | pan -0.2\npad:   Am7 . . . . . . . | saw | unison 4 | lp 820 | env 0.8 0.5 0.7 2 | reverb 0.5 | gain 0.13 | in intro break outro"};
   const PRESET_GROUPS=[
     ["Genres & samples",["set","techno","house","dnb","ambient","synthwave","chip","samples","world","band","amen","dub"]],
-    ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","raga","harmonic","prog","jazz","chords","arp"]],
+    ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","chance","rolls","vary","shift","poly","song","long","auto"]],
     ["Sound design",["pad","supersaw","pump"]]
   ];
@@ -800,7 +808,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Notes & degrés","1'   5,","octave : ' monte, , descend"],
     ["Notes & degrés","7#  3b  5b","altération chromatique (en suffixe)"],
     ["Gammes","scale: dorian","major minor dorian phrygian lydian mixolydian locrian · pentatonic minpent · harmonic_minor melodic_minor whole_tone blues chromatic"],
-    ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi slendro pelog hirajoshi insen iwato egyptian"],
+    ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian"],
+    ["Microtonal","key: d bayati","maqâm à vrais quarts de ton : bayati rast saba sikah huzam jiharkah"],
+    ["Microtonal","3+50   c3-30","bend une note de N cents (+ aigu / - grave)"],
     ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : 5 maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13"],
     ["Accords","Cm7/G   C/E","renversement / slash : la note après / passe à la basse"],
     ["Accords","I ii iii IV V vi vii (+7)","chiffres romains = accords diatoniques de la key"],
@@ -936,7 +946,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- One voice per line: name: pattern | verb | verb",
     "- Drum voices use x (hit) and . (rest). Drum names: kick, snare, hat, clap.",
     "- Melodic voices use any other name (bass, lead, arp, pad). Tokens are note names like c2 eb2 g3 a4 (a-g, optional # or b, octave 1-5). . means rest.",
-    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
+    "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian; microtonal maqam with true quarter tones: bayati rast saba sikah huzam jiharkah). You can also bend any note by cents with +N or -N, e.g. 3+50 c3-30 (great for blue notes or maqam inflections). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
     "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",

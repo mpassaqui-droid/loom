@@ -478,6 +478,14 @@ pub fn scale_intervals(name: &str) -> Option<Vec<i32>> {
         "kumoi"                            => vec![0, 2, 3, 7, 9],
         "yo"                               => vec![0, 2, 5, 7, 9],
         "blues_major" | "majblues"         => vec![0, 2, 3, 4, 7, 9],
+        // maqam with neutral (quarter-tone) steps — these are 12-TET roundings;
+        // the web engine renders them with true microtones. See NIGHT_LOG.
+        "bayati"                           => vec![0, 2, 3, 5, 7, 8, 10],
+        "rast"                             => vec![0, 2, 4, 5, 7, 9, 11],
+        "saba"                             => vec![0, 2, 3, 4, 7, 8, 10],
+        "sikah"                            => vec![0, 2, 4, 6, 7, 9, 11],
+        "huzam"                            => vec![0, 2, 4, 5, 7, 9, 10],
+        "jiharkah"                         => vec![0, 2, 4, 5, 7, 9, 11],
         _ => return None,
     };
     Some(s)
