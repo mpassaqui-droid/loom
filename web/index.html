@@ -128,6 +128,7 @@
 <script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
+  <canvas id="stage" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg);cursor:pointer"></canvas>
   <h1>LOOM</h1>
   <div class="sub" style="color:var(--amber);font-size:22px;">&#9656; VERSION 6 &middot; IA GRATUITE <span class="blink">_</span></div>
 
@@ -165,6 +166,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     <button id="stop" class="stop">&#9632; STOP</button>
     <button id="rec" class="rec">&#9679; REC</button>
     <button id="renderBtn" class="go" title="exporter tout le morceau en WAV">&#11015; RENDER</button>
+    <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
   </div>
 
@@ -740,8 +742,46 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       if(v.row){const on=!song.length||!v.sections||(sec&&v.sections.includes(sec));v.row.style.opacity=on?"1":"0.25";}
       v.cells.forEach((c,i)=>{c.classList.toggle("play",i===cur);
         if(i===cur&&v.tokens[i]!=="."&&v.tokens[i]!=="~"){c.classList.add("hit");setTimeout(()=>c.classList.remove("hit"),90);}});}}
-    drawScope();
+    drawScope();if(stageOn)drawStage();
     requestAnimationFrame(animate);}
+  // --- SCÈNE : immersive fullscreen reactive visualizer ---
+  let stageOn=false;
+  function hexA(h,a){h=(h||"").replace("#","");if(h.length===3)h=h.split("").map(x=>x+x).join("");
+    const n=parseInt(h,16)||0;return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")";}
+  function toggleStage(){stageOn=!stageOn;const cv=$("stage");if(!cv)return;
+    if(stageOn){cv.style.display="block";initAudio();if(ctx.state==="suspended")ctx.resume();
+      try{(cv.requestFullscreen||cv.webkitRequestFullscreen||function(){}).call(cv);}catch(_){}}
+    else{cv.style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}}
+  function drawStage(){const cv=$("stage");if(!cv||!cv.getContext||!analyser)return;
+    const W=cv.width=window.innerWidth,H=cv.height=window.innerHeight,c=cv.getContext("2d"),cx=W/2,cy=H/2;
+    let bg="#0b0f0b",fg="#9dff8a",am="#ffc04a",cyn="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
+      bg=cs.getPropertyValue("--bg").trim()||bg;fg=cs.getPropertyValue("--glow").trim()||fg;am=cs.getPropertyValue("--amber").trim()||am;
+      cyn=cs.getPropertyValue("--cyan").trim()||cyn;dim=cs.getPropertyValue("--dim").trim()||dim;}catch(_){}
+    const n=analyser.frequencyBinCount,fb=new Uint8Array(n);analyser.getByteFrequencyData(fb);
+    const tb=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(tb);
+    let bass=0;for(let i=0;i<10;i++)bass+=fb[i];bass=Math.min(1,bass/2550*1.5);
+    // motion-blur trails
+    c.globalAlpha=0.2;c.fillStyle=bg;c.fillRect(0,0,W,H);c.globalAlpha=1;
+    const R=Math.min(W,H)*0.2;
+    // central bass bloom
+    const rg=c.createRadialGradient(cx,cy,0,cx,cy,R*(1.3+bass*1.8));
+    rg.addColorStop(0,hexA(fg,0.5));rg.addColorStop(0.4,hexA(fg,0.1));rg.addColorStop(1,hexA(bg,0));
+    c.fillStyle=rg;c.beginPath();c.arc(cx,cy,R*(1.3+bass*1.8),0,7);c.fill();
+    // radial spectrum
+    const bars=104;c.lineWidth=Math.max(2,W/700);c.shadowBlur=16;c.lineCap="round";
+    for(let i=0;i<bars;i++){const a=i/bars*Math.PI*2-Math.PI/2;const m=Math.pow(fb[Math.floor(i*n*0.5/bars)]/255,1.3);
+      const len=m*R*1.6,x1=cx+Math.cos(a)*R,y1=cy+Math.sin(a)*R,x2=cx+Math.cos(a)*(R+len),y2=cy+Math.sin(a)*(R+len);
+      c.strokeStyle=i%3===0?cyn:fg;c.shadowColor=c.strokeStyle;c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();}
+    c.shadowBlur=0;
+    // inner waveform ring
+    c.lineWidth=2;c.strokeStyle=am;c.shadowBlur=10;c.shadowColor=am;c.beginPath();
+    for(let i=0;i<tb.length;i+=2){const a=i/tb.length*Math.PI*2,rr=R*0.66+(tb[i]-128)/128*R*0.2;
+      const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?c.lineTo(x,y):c.moveTo(x,y);}c.closePath();c.stroke();c.shadowBlur=0;
+    // section + bar
+    c.textAlign="center";c.fillStyle=fg;c.shadowBlur=14;c.shadowColor=fg;
+    const sec=song.length?sectionAtBar(song,Math.max(0,barCount-1)):null;
+    c.font="bold "+Math.round(R*0.2)+"px 'Press Start 2P',monospace";c.fillText((sec||"LOOM").toUpperCase(),cx,cy+R*0.06);
+    c.shadowBlur=0;c.fillStyle=dim;c.font="20px 'VT323',monospace";c.fillText("bar "+barCount+"   ·   clique ou ÉCHAP pour sortir",cx,H-34);}
   function drawScope(){const cv=$("scope");if(!cv||!cv.getContext||!analyser||scopeMode==="off")return;
     const W=cv.width=cv.clientWidth||600,H=cv.height=150;const c2=cv.getContext("2d");
     let fg="#9dff8a",am="#ffc04a",cy="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
@@ -1159,6 +1199,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("stop").addEventListener("click",stop);
   $("rec").addEventListener("click",toggleRec);
   $("renderBtn").addEventListener("click",renderOffline);
+  $("stageBtn").addEventListener("click",toggleStage);
+  $("stage").addEventListener("click",()=>{if(stageOn)toggleStage();});
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stageOn){stageOn=false;$("stage").style.display="none";}});
+  document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stage").style.display="none";}});
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
     if(scopeMode==="off")$("scope").style.boxShadow="none";
     log("[ scope ] "+(scopeMode==="wave"?"oscilloscope (onde)":scopeMode==="spectrum"?"spectre (fréquences)":"éteint"),"ai");});
