@@ -452,6 +452,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const s=x.sig==="rand"?rng(seed,Math.floor(ph)+1,(v&&v.name)||"sig",7):sigShape(x.sig,ph);
       return x.a+(x.b-x.a)*s;}
     return x.a+(x.b-x.a)*autoProgress(v,t);}
+  // wavetable oscillators: richer harmonic content than the basic waveforms
+  function waveCoeffs(name){const N=32,im=new Float32Array(N),re=new Float32Array(N);
+    if(name==="organ"){[0,1,0.6,0,0.45,0,0.3,0,0.2,0,0.15].forEach((v,k)=>im[k]=v);}
+    else if(name==="warm"){[0,1,0.5,0.33,0.2,0.13,0.08].forEach((v,k)=>im[k]=v);}
+    else if(name==="rich"){for(let k=1;k<N;k++)im[k]=1/k;}
+    else if(name==="soft"){for(let k=1;k<N;k+=2)im[k]=1/(k*k);}
+    else for(let k=1;k<N;k++)im[k]=1/k;
+    return{re,im};}
+  function getWave(name){if(!ctx._wt)ctx._wt={};if(!ctx._wt[name]){const w=waveCoeffs(name);ctx._wt[name]=ctx.createPeriodicWave(w.re,w.im);}return ctx._wt[name];}
   function driveCurve(amount){const k=Math.max(0,amount)*120,n=1024,c=new Float32Array(n);
     for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=(1+k)*x/(1+k*Math.abs(x));}return c;}
   // tone(t,freq,dur,v[,opt]) — v carries the full per-voice synth:
@@ -472,7 +481,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       filter.frequency.setValueAtTime(Math.max(20,Math.min(20000,cutoff)),t);filter.Q.value=v.q||1;filter.connect(g);preG=filter;}
     const uniGain=ctx.createGain();uniGain.gain.value=1/Math.sqrt(uni);uniGain.connect(preG);
     const oscs=[];
-    for(let i=0;i<uni;i++){const o=ctx.createOscillator();o.type=v.wave||"square";o.frequency.setValueAtTime(freq,t);
+    for(let i=0;i<uni;i++){const o=ctx.createOscillator();
+      if(v.wt){try{o.setPeriodicWave(getWave(v.wt));}catch(_){o.type=v.wave||"square";}}else o.type=v.wave||"square";
+      o.frequency.setValueAtTime(freq,t);
       if(uni>1)o.detune.setValueAtTime(det*(i-(uni-1)/2),t);o.connect(uniGain);oscs.push(o);}
     // FM: a modulator drives the carriers' frequency; the index decays for a
     // bell/e-piano "ping" -> rich metallic / electric timbres (standard nodes).
@@ -642,7 +653,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandGen(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -669,8 +680,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="eq"){const cl=x=>Math.max(-18,Math.min(18,parseFloat(x)||0));eq={l:cl(p[1]),m:cl(p[2]),h:cl(p[3])};}
       else if(p[0]==="viz")viz=p[1]||"burst";
       else if(p[0]==="hue"){const h=parseFloat(p[1]);if(!isNaN(h))hue=((h%360)+360)%360;}
+      else if(p[0]==="wt")wt=p[1]||null;
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -803,7 +815,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
   let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[];
-  const SCENES=["radial","tunnel","bars","starfield"];
+  const SCENES=["radial","tunnel","bars","starfield","kaleido"];
   let bloomCv=null;  // offscreen canvas for the bloom/glow post-process
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
@@ -841,6 +853,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         c.fillStyle=grd;c.shadowColor=fg;c.fillRect(cx+i*bw+1,H-h,bw-2,h);c.fillRect(cx-(i+1)*bw+1,H-h,bw-2,h);}c.shadowBlur=0;
       c.strokeStyle=am;c.lineWidth=2;c.shadowBlur=8;c.shadowColor=am;c.beginPath();
       for(let i=0;i<tb.length;i+=4){const x=i/tb.length*W,y=cy+(tb[i]-128)/128*H*0.18;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.shadowBlur=0;}
+    else if(sceneMode==="kaleido"){sceneTime+=0.005;const seg=8,R2=Math.min(W,H)*0.5;c.shadowBlur=14;
+      for(let sgi=0;sgi<seg;sgi++){c.save();c.translate(cx,cy);c.rotate(sceneTime+sgi/seg*6.2831853);if(sgi%2)c.scale(1,-1);
+        for(let i=0;i<40;i++){const a=i/40*(6.2831853/seg),m=Math.pow(fb[Math.floor(i*n*0.4/40)]/255,1.3);
+          const r0=R2*0.12,len=m*R2*0.55;c.strokeStyle=i%2?fg:cyn;c.shadowColor=c.strokeStyle;c.lineWidth=3;
+          c.beginPath();c.moveTo(Math.cos(a)*r0,Math.sin(a)*r0);c.lineTo(Math.cos(a)*(r0+len),Math.sin(a)*(r0+len));c.stroke();}
+        c.restore();}c.shadowBlur=0;}
     else if(sceneMode==="starfield"){
       if(stars.length===0)for(let i=0;i<260;i++)stars.push({x:(Math.random()-0.5)*2,y:(Math.random()-0.5)*2,z:Math.random()*0.9+0.1});
       const sp=0.004+bass*0.035;c.shadowBlur=6;
@@ -1067,6 +1085,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Son","| env A D S R","enveloppe : attaque déclin sustain(0-1) release"],
     ["Son","| unison N   | detune C","super-saw (oscillateurs désaccordés)"],
     ["Son (FM)","| fm RATIO INDEX","synthèse FM : cloches, e-piano, basses grasses, métalliques (index 1-6)"],
+    ["Son (wavetable)","| wt organ|warm|rich|soft","oscillateur à table d'ondes (timbre plus riche)"],
     ["Son","| drive X","distorsion / chaleur (0-1)"],
     ["Son","| lfo cutoff|pitch|gain RATE DEPTH","modulation (mouvement, vibrato, tremolo)"],
     ["Automation","| lp 300..6000   (| over N)","rampe d'un paramètre dans le temps (filtre qui s'ouvre, riser)"],
@@ -1086,7 +1105,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
@@ -1259,6 +1278,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Determinism: add seed: N (e.g. seed: 42) so the random ? choices replay identically every time. Change the seed for a different variation.",
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
     "- Sound design (after | on melodic voices): lp N = low-pass filter at N Hz (darker), hp N = high-pass (thinner); add q R for resonance (e.g. lp 600 q 8). env A D S R = ADSR envelope in seconds (S is 0-1 sustain level), e.g. pad: ... | env 0.4 0.3 0.7 1.2 for slow swells, or bass: ... | env 0.005 0.08 0 0.05 for a tight pluck.",
+    "- Wavetable oscillators: wt NAME picks a richer waveform than saw/sine/etc: organ (drawbar), warm (mellow), rich (bright), soft (round). e.g. keys: ... | wt organ , pad: ... | wt warm. Combine with unison/fm/filter.",
     "- FM synthesis: fm RATIO INDEX gives rich metallic / bell / electric-piano / growling-bass timbres (a modulator at RATIO×pitch with strength INDEX, whose index pings down like a real FM synth). e.g. keys: ... | fm 1 2 (e-piano), bell: ... | fm 3.5 4 | sine (bell), bass: ... | fm 0.5 3 | saw (growl). Combine with env/filter. INDEX 1-6 typical.",
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
     "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Drums: bd sd hh cp kick2 kick909 clubkick clap2 oh(open hat) rim cow perc tom tom2 tom3 ride tabla. Melodic (repitched): bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo. Loops/breaks (one-shot a whole drum loop): amen break amencut. Vocal/texture: vox yeah breath wood metal glass bottle. e.g. kick: x . x . | sample kick909 , lead: 1 3 5 1' | sample sitar , break: x . . . | sample amen. A melodic sample is repitched assuming its natural pitch is c3; if it sounds off, tune it with | root NOTE (e.g. | sample gtr | root c4). Samples load on the first RUN (a moment of delay; until then it falls back to the synth).",
