@@ -23,6 +23,14 @@
   body.flat::after{display:none;}
   body.flat{text-shadow:none;}
   body.flat h1{text-shadow:none;}
+  /* desktop: spread panels across the width (mobile stays a single column) */
+  @media (min-width:980px){
+    body{max-width:1080px;}
+    #ws{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;grid-auto-flow:row dense;}
+    #ws>*{margin-bottom:0;}
+    #ws>.wide{grid-column:1 / -1;}
+    textarea{height:240px;}
+  }
   h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
     text-shadow:0 0 12px var(--green);letter-spacing:3px;margin-bottom:6px;}
   .sub{color:var(--dim);font-size:20px;margin-bottom:20px;}
@@ -120,6 +128,7 @@
     <button class="tiny" id="randTheme" title="thème au hasard">&#9860;</button>
   </div>
 
+  <div id="ws">
   <div class="card cyan">
     <div class="head">vibe &mdash; describe it, ai writes it (free)</div>
     <div class="vibe-row">
@@ -130,7 +139,7 @@
     <div class="opt">leave the key blank to use the free brain.</div>
   </div>
 
-  <div class="card">
+  <div class="card wide">
     <div class="head">pattern.loom</div>
     <textarea id="editor" spellcheck="false"># x = hit  . = rest  | = verbs/timbre  1-7 = scale degrees
 key:   c minor
@@ -141,7 +150,7 @@ lead:  1 3 5 1' 5 3 1 . | pulse
 bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   </div>
 
-  <div class="transport">
+  <div class="transport wide">
     <button id="run">&#9658; RUN</button>
     <button id="stop" class="stop">&#9632; STOP</button>
     <button id="rec" class="rec">&#9679; REC</button>
@@ -171,15 +180,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     </div>
   </div>
 
-  <div id="timeline" style="display:none"></div>
-  <div id="grid"></div>
-  <div id="console">[ idle ] press RUN to begin</div>
+  <div id="timeline" class="wide" style="display:none"></div>
+  <div id="grid" class="wide"></div>
+  <div id="console" class="wide">[ idle ] press RUN to begin</div>
 
   <details class="card cyan" id="courseCard">
     <summary style="font-size:22px;color:var(--cyan)">&#9656; COURS &mdash; apprends LOOM pas à pas</summary>
     <div class="opt" style="margin:8px 0 4px">Clique <b>essayer</b> sur une leçon : le code se charge et se joue. Modifie-le, appuie sur RUN.</div>
     <div id="course"></div>
   </details>
+  </div><!-- /#ws -->
 
   <details>
     <summary>syntax + share</summary>
