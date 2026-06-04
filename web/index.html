@@ -677,7 +677,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandGen(t);if(e)tokens.push(...e);else tokens.push(t);}
     if(!tokens.length)continue;
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -707,8 +707,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       else if(p[0]==="wt")wt=p[1]||null;
       else if(p[0]==="chorus")chorus=Math.max(0,Math.min(1,parseFloat(p[1])!=null&&!isNaN(parseFloat(p[1]))?parseFloat(p[1]):0.5));
       else if(p[0]==="crush")crush=Math.max(1,Math.min(8,parseInt(p[1],10)||4));
+      else if(p[0]==="jux")jux=p.slice(1).join(" ").trim()||"rev";
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -811,7 +812,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
           if(feelAmt){t0+=(rng(seed,bar,v.name,s*3+7)-0.5)*feelAmt*0.016;vel=1+(rng(seed,bar,v.name,s*3+11)-0.5)*feelAmt*0.5;}
           for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2],vel);}
         continue;}
-      const eff=effective(v,bar),n=eff.length;if(!n)continue;const step=cycleLen/n;
+      // jux <verb>: play the voice in stereo — original hard-left, the
+      // <verb>-transformed copy hard-right (Tidal's signature stereo trick).
+      const baseEff=effective(v,bar);
+      if(v.jux&&baseEff.length){const effR=applyOne(baseEff,v.jux,bar);
+        scheduleSeq({...v,pan:-0.82},baseEff,barT,bar);
+        scheduleSeq({...v,pan:0.82,hue:(v.hue!=null?(v.hue+30)%360:null)},effR,barT,bar);}
+      else scheduleSeq(v,baseEff,barT,bar);}}
+  // schedule one token sequence for a voice within a bar (shared by normal + jux)
+  function scheduleSeq(v,eff,barT,bar){const sw=+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n;
       for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar);if(tok==="."||tok==="~")continue;
         const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,i)>=tm[1])continue;
         const base=tm[0];if(base===""||base==="."||base==="~")continue;
@@ -824,7 +833,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
             for(let j=0;j<M;j++){const tt=t0+j*step/M;
               if(v.sample)playSample(v.sample,tt,Math.min(1,(v.gain||0.22)*3),midiToFreq(ord[j])/(noteToFreq(v.root||"c3")||noteToFreq("c3")),v);
               else tone(tt,midiToFreq(ord[j]),step/M,v);}continue;}}
-        for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel);}}}
+        for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel);}}
   function tick(){if(!playing)return;while(nextBarTime<ctx.currentTime+LOOKAHEAD){scheduleBar(nextBarTime,barCount);nextBarTime+=cycleLen;barCount++;}schedTimer=setTimeout(tick,TICK);}
   function animate(){if(playing&&ctx){const e=ctx.currentTime-transportStart;const phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;
     // section timeline + which voices sound right now
@@ -1113,6 +1122,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Verbes","| rev","inverse le motif"],
     ["Verbes","| fast N    | slow N","accélère N× / joue une mesure sur N"],
     ["Verbes","| every N <verbe>","applique un verbe une mesure sur N"],
+    ["Verbes","| jux <verbe>","stéréo : original à gauche, version transformée (ex. rev) à droite"],
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
     ["Verbes (proba)","| sometimes <verbe>","applique un verbe au hasard (often 75% · rarely 25% · someby P)"],
     ["Verbes","| rot N    | iter N","rotation fixe / décalage d'un pas par mesure"],
@@ -1318,7 +1328,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Melodic voices use any other name (bass, lead, arp, pad). Tokens are note names like c2 eb2 g3 a4 (a-g, optional # or b, octave 1-5). . means rest.",
     "- OPTIONAL key: declare a tonality once, e.g. 'key: c minor' or 'key: f# dorian' (scales: major minor dorian phrygian lydian mixolydian locrian pentatonic minpent harmonic_minor melodic_minor whole_tone blues blues_major chromatic octatonic augmented bebop bebop_major phrygian_dominant hungarian_minor hungarian_major neapolitan_minor neapolitan_major enigmatic persian prometheus kumoi yo, plus world: hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian; microtonal maqam with true quarter tones: bayati rast saba sikah huzam jiharkah). You can also bend any note by cents with +N or -N, e.g. 3+50 c3-30 (great for blue notes or maqam inflections). Then melodic tokens may be SCALE DEGREES 1-7 instead of note names: 1=tonic, and the scale supplies the right accidentals (in c minor, 3 is eb, 7 is bb). Octave marks: ' raises an octave, , lowers it (e.g. 1' 5,). Chromatic alteration goes AFTER the digit: 7# raises a semitone (leading tone in minor), 3b 5b lower one (blue notes), 4# (lydian). Never put #/b BEFORE the digit. Prefer degrees over note names when a key is set — it keeps everything in key.",
     "- Tokens separated by single spaces; they fill ONE bar evenly (4=quarters,8=eighths,16=sixteenths).",
-    "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars), sometimes <verb> / often <verb> / rarely <verb> / someby P <verb> (apply a verb on a random fraction of bars, seeded). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
+    "- Verbs after | : rev, fast N, slow N, every N <verb>, palindrome (forwards then backwards each bar), rot N (rotate the pattern by N steps), iter N (shift one step further each bar, looping after N bars), sometimes <verb> / often <verb> / rarely <verb> / someby P <verb> (apply a verb on a random fraction of bars, seeded), jux <verb> (Tidal-style stereo split: the original plays hard-left and a <verb>-transformed copy plays hard-right — e.g. | jux rev for a reversed echo in the other ear, | jux rot 3, | jux fast 2; great on leads/arps/hats for width). Timbre after | : saw, sine, tri, pulse, square. Also gain N (0-1), and oct N to set this voice's default octave for degrees (e.g. bass | oct 2, lead | oct 4) so you don't need , or ' marks.",
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
