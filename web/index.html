@@ -1023,6 +1023,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(n>1)n/=100;return Math.max(0,Math.min(1,n));}}return 0;}
   function parseScene(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="scene"){const s=line.slice(i+1).trim().toLowerCase();if(SCENES.includes(s))return s;}}return null;}
+  function parseFilm(text){for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="film"){const w=line.slice(i+1).trim().toLowerCase();
+      return(w.startsWith("vert")||w.startsWith("port")||w==="9:16")?"vertical":(w.startsWith("squ")||w==="1:1")?"square":"wide";}}return "wide";}
 
   // split a pattern on whitespace but keep groups [a b] and {a b} (nested, mixed) as one token
   function tokenizePat(str){const out=[];let depth=0,cur="";
@@ -1036,7 +1039,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const full=line.slice(0,i).trim().toLowerCase();
-    if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel"||full==="scene"||full==="prog"||full==="tune"||full==="bpm"||full==="tempo"||full==="warmth")continue;
+    if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel"||full==="scene"||full==="prog"||full==="tune"||full==="bpm"||full==="tempo"||full==="warmth"||full==="film")continue;
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
@@ -1327,7 +1330,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3;
-  let mediaRec=null,filmChunks=[],filming=false,filmCountdown=0;  // master worklet (saturator + limiter) refs
+  let mediaRec=null,filmChunks=[],filming=false,filmCountdown=0,filmFormat="wide",filmCv=null,filmCtx2=null;  // master worklet (saturator + limiter) refs
   let codeView=[],showCode=true;  // live "code playhead": boxes the active token in each voice line
   // tokenize a pattern string but record each token's absolute COLUMN in the source line
   // (so the box aligns with the real text in the <textarea>). Mirrors tokenizePat's rules.
@@ -1340,7 +1343,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else{if(start<0)start=i;cur+=ch;}}
     push();return out;}
   // snapshot the source into lines; voice lines carry their tokens (with columns) + hue.
-  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth"];
+  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth","film"];
     const lines=text.split("\n");
     for(let li=0;li<lines.length;li++){const raw=lines[li],t=raw.trim(),ci=raw.indexOf(":");
       let voice=false,name="",pat="",post="";
@@ -1908,7 +1911,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     c.shadowBlur=0;c.fillStyle=dim;c.font="20px 'VT323',monospace";
     c.fillText("scène: "+sceneMode+" (N)  ·  code (C)  ·  bar "+barCount+"  ·  ÉCHAP pour sortir",cx,H-34);
     if(filming&&showCode)drawSceneCode(c,W,H,fg,cyn,am,dim,bg);
-    if(filmCountdown>0){c.save();c.textAlign="center";c.textBaseline="middle";c.fillStyle=hexA(fg,0.9);c.shadowColor=fg;c.shadowBlur=24;c.font="bold "+Math.round(Math.min(W,H)*0.3)+"px 'Press Start 2P',monospace";c.fillText(String(filmCountdown),cx,cy);c.restore();}}  // code+countdown on canvas
+    if(filmCountdown>0){c.save();c.textAlign="center";c.textBaseline="middle";c.fillStyle=hexA(fg,0.9);c.shadowColor=fg;c.shadowBlur=24;c.font="bold "+Math.round(Math.min(W,H)*0.3)+"px 'Press Start 2P',monospace";c.fillText(String(filmCountdown),cx,cy);c.restore();}
+    // film format: crop-fill the stage into the vertical/square offscreen that's being captured
+    if(filming&&filmCv&&filmCtx2){const fW=filmCv.width,fH=filmCv.height,ar=fW/fH;let cw2,ch2;
+      if(W/H>ar){ch2=H;cw2=H*ar;}else{cw2=W;ch2=W/ar;}
+      filmCtx2.drawImage(cv,(W-cw2)/2,(H-ch2)/2,cw2,ch2,0,0,fW,fH);}}  // code+countdown+format on canvas
   // draw the code (shadowed text + active-token box) directly on the stage canvas (for FILM capture)
   function drawSceneCode(c,W,H,fg,cyn,am,dim,bg){
     if(!codeView.length)return;
@@ -1970,7 +1977,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);
     codeView=buildCodeView(editor.value);
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
@@ -2338,6 +2345,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Tempo","bpm: 128","fixe le tempo du morceau (BPM, dans le fichier) — sinon le bouton BPM"],
     ["Tempo","tempo: intro 120 drop 140","tempo PAR SECTION (paires nom/bpm) — accélère/ralentit selon le morceau"],
     ["Mix","warmth: 0.5","saturation chaleur du master (0-1, AudioWorklet sur-échantillonné) — repli auto si indispo"],
+    ["Vidéo","film: vertical|square|wide","format du bouton FILM : 9:16 (réseaux) / 1:1 / paysage (défaut)"],
     ["Théorie","prog: Am F C G","progression d'accords, un accord par mesure (cycle)"],
     ["Théorie","^  /  ^N","^ = l'accord courant de la prog ; ^N = sa Nième note (^1 = fondamentale, pour la basse)"],
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
@@ -2674,7 +2682,12 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     setTimeout(tick,1000);}
   function startRecording(){
     const cv=$("stage"),btn=$("filmBtn");
-    let vstream;try{vstream=cv.captureStream(30);}catch(_){log("[ film ] impossible de capter la scène","err");if(btn){btn.textContent="🎬 FILM";btn.style.background="";}return;}
+    // vertical (9:16) / square (1:1) for social: capture an offscreen we crop-fill each frame
+    let capCanvas=cv;
+    if(filmFormat!=="wide"){const fW=filmFormat==="vertical"?720:1080,fH=filmFormat==="vertical"?1280:1080;
+      filmCv=document.createElement("canvas");filmCv.width=fW;filmCv.height=fH;filmCtx2=filmCv.getContext("2d");capCanvas=filmCv;}
+    else{filmCv=null;filmCtx2=null;}
+    let vstream;try{vstream=capCanvas.captureStream(30);}catch(_){log("[ film ] impossible de capter la scène","err");if(btn){btn.textContent="🎬 FILM";btn.style.background="";}filmCv=null;return;}
     const tracks=[...vstream.getVideoTracks()];
     try{if(ctx.createMediaStreamDestination&&(masterOut||master)){const ad=ctx.createMediaStreamDestination();(masterOut||master).connect(ad);tracks.push(...ad.stream.getAudioTracks());}}catch(_){}
     const stream=new MediaStream(tracks);
@@ -2686,11 +2699,12 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     // the live code is a DOM textarea (not on the canvas) -> hide it while filming so the
     // canvas-drawn code (drawSceneCode) is what gets captured, no double image
     if(showCode){const se=$("stageEditor"),sg=$("stageGlow");if(se)se.style.display="none";if(sg)sg.style.display="none";}
-    mediaRec.onstop=()=>{filming=false;if(btn){btn.style.background="";btn.textContent="🎬 FILM";}
+    mediaRec.onstop=()=>{filming=false;filmCv=null;filmCtx2=null;if(btn){btn.style.background="";btn.textContent="🎬 FILM";}
       if(showCode&&stageOn){const se=$("stageEditor"),sg=$("stageGlow");if(se)se.style.display="block";if(sg)sg.style.display="block";}
       const blob=new Blob(filmChunks,{type:mime||"video/webm"}),url=URL.createObjectURL(blob),a=document.createElement("a");
-      a.href=url;a.download="loom-film.webm";document.body.appendChild(a);a.click();
-      setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1500);log("[ film ] loom-film.webm exporté","ai");};
+      const fn="loom-film"+(filmFormat==="vertical"?"-9x16":filmFormat==="square"?"-1x1":"")+".webm";
+      a.href=url;a.download=fn;document.body.appendChild(a);a.click();
+      setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1500);log("[ film ] "+fn+" exporté","ai");};
     mediaRec.start(100);filming=true;if(btn){btn.style.background="#ff4a4a";btn.textContent="⏹ STOP";}
     log("[ film ] enregistrement… (re-clique FILM pour arrêter)","ai");}
   $("filmBtn").addEventListener("click",recordVideo);
@@ -2705,7 +2719,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   // live coding: typing in either editor updates the boxes immediately and (while playing) recompiles the music after a short pause
   let recompTimer=null;
   function recompile(){const parsed=parse(editor.value);if(!parsed.length)return;
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();buildTimeline();}
   function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();});
