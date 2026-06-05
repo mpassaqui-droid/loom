@@ -170,12 +170,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut segs = rest.split('|').map(|s| s.trim());
 
         let pattern = segs.next().unwrap_or("");
-        let tokens: Vec<String> = pattern
-            .split_whitespace()
-            .filter(|t| !t.starts_with('@') && !t.starts_with('>'))
-            .map(|t| t.to_string())
-            .collect();
-        let tokens = expand_euclid(tokens);
+        let tokens = expand_euclid(tokenize_pat(pattern));
         if tokens.is_empty() { continue; }
 
         let is_drum = DRUMS.contains(&name.as_str());
@@ -405,48 +400,92 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
         });
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
         for (i, raw) in eff.iter().enumerate() {
-            let tok = pick_alt(raw, bar); // A/B variation: choose this bar's alt
-            if tok == "." || tok == "~" { continue; }
-            let (base, prob, ratchet, accent, ramp_dir) = token_mods(tok);
-            // Probabilistic token: deterministically skip when the roll fails.
-            if let Some(p) = prob {
-                if rand01(seed, bar, &v.name, i) >= p { continue; }
-            }
-            if base.is_empty() || base == "." || base == "~" { continue; }
-            // Degrees → one note; chords → several notes at the same phase.
-            let notes = resolve_token(base, v.is_drum, base_oct, voice_key.as_ref());
-            let push = |events: &mut Vec<Event>, phase: f32, note: &str, vel: f32| {
-                events.push(Event {
-                    phase,
-                    voice: v.name.clone(),
-                    token: note.to_string(),
-                    wave: v.wave,
-                    gain: v.gain,
-                    is_drum: v.is_drum,
-                    vel,
-                });
-            };
-            match v.arp {
-                // Arpeggio: spread a chord's notes one-by-one across the step.
-                Some(mode) if !v.is_drum && notes.len() > 1 => {
-                    let ord = arp_order(&notes, mode);
-                    let m = ord.len();
-                    for (j, note) in ord.iter().enumerate() {
-                        push(&mut events, (i as f32 + j as f32 / m as f32) / n as f32, note, accent);
-                    }
-                }
-                // Otherwise: ratchet subdivides the step into evenly-spaced hits.
-                _ => {
-                    for j in 0..ratchet {
-                        let phase = (i as f32 + j as f32 / ratchet as f32) / n as f32;
-                        let vel = accent * ramp_factor(j, ratchet, ramp_dir);
-                        for note in &notes { push(&mut events, phase, note, vel); }
-                    }
-                }
-            }
+            let p0 = i as f32 / n as f32;
+            let p1 = (i + 1) as f32 / n as f32;
+            emit_token(&mut events, raw, p0, p1, v, voice_key.as_ref(), base_oct, bar, seed, i);
         }
     }
     events
+}
+
+/// Split a pattern on whitespace but keep `[a b]` and `{a b}` groups (nested, mixed) as one token.
+pub fn tokenize_pat(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut depth = 0i32;
+    let mut cur = String::new();
+    for ch in s.chars() {
+        if ch == '[' || ch == '{' {
+            if depth == 0 && !cur.is_empty() { out.push(std::mem::take(&mut cur)); }
+            depth += 1; cur.push(ch);
+        } else if ch == ']' || ch == '}' {
+            if depth > 0 { depth -= 1; }
+            cur.push(ch);
+            if depth == 0 { out.push(std::mem::take(&mut cur)); }
+        } else if ch.is_whitespace() {
+            if depth == 0 { if !cur.is_empty() { out.push(std::mem::take(&mut cur)); } }
+            else { cur.push(ch); }
+        } else { cur.push(ch); }
+    }
+    if !cur.is_empty() { out.push(cur); }
+    out.into_iter().filter(|t| !t.starts_with('@') && !t.starts_with('>')).collect()
+}
+
+/// Recursively emit events for one token within the phase range `[p0, p1)`.
+/// Handles `{a b}` random choice (seeded), `<a/b>` alternation, `[a b]` sub-sequences
+/// (recursive subdivision), `?`/`*` mods, `!` accents and `*N>`/`*N<` rolls, and arps.
+#[allow(clippy::too_many_arguments)]
+fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
+              key: Option<&Key>, base_oct: i32, bar: i64, seed: u64, salt: usize) {
+    // {a b c}: pick ONE alternative at random (seeded -> reproducible)
+    let mut t = tok.to_string();
+    if t.len() >= 2 && t.starts_with('{') && t.ends_with('}') {
+        let inner = tokenize_pat(&t[1..t.len() - 1]);
+        if inner.is_empty() { return; }
+        let r = rand01(seed, bar, &v.name, salt.wrapping_add(7));
+        let idx = ((r * inner.len() as f32) as usize).min(inner.len() - 1);
+        t = inner[idx].clone();
+    }
+    // <a/b>: alternation by bar
+    t = pick_alt(&t, bar).to_string();
+    if t == "." || t == "~" { return; }
+    // [a b ...]: subdivide this range among the children (recursive)
+    if t.len() >= 2 && t.starts_with('[') && t.ends_with(']') {
+        let inner = tokenize_pat(&t[1..t.len() - 1]);
+        let m = inner.len();
+        if m == 0 { return; }
+        let span = (p1 - p0) / m as f32;
+        for (k, child) in inner.iter().enumerate() {
+            emit_token(events, child, p0 + k as f32 * span, p0 + (k + 1) as f32 * span,
+                       v, key, base_oct, bar, seed, salt.wrapping_mul(31).wrapping_add(k));
+        }
+        return;
+    }
+    let (base, prob, ratchet, accent, ramp_dir) = token_mods(&t);
+    if let Some(p) = prob {
+        if rand01(seed, bar, &v.name, salt) >= p { return; }
+    }
+    if base.is_empty() || base == "." || base == "~" { return; }
+    let notes = resolve_token(base, v.is_drum, base_oct, key);
+    let span = p1 - p0;
+    if let Some(mode) = v.arp {
+        if !v.is_drum && notes.len() > 1 {
+            let ord = arp_order(&notes, mode);
+            let m = ord.len();
+            for (j, note) in ord.iter().enumerate() {
+                events.push(Event { phase: p0 + (j as f32 / m as f32) * span, voice: v.name.clone(),
+                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent });
+            }
+            return;
+        }
+    }
+    for j in 0..ratchet {
+        let phase = p0 + (j as f32 / ratchet as f32) * span;
+        let vel = accent * ramp_factor(j, ratchet, ramp_dir);
+        for note in &notes {
+            events.push(Event { phase, voice: v.name.clone(), token: note.clone(),
+                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel });
+        }
+    }
 }
 
 /// Convert a note name like "c2", "eb3", "g#4" to a frequency in Hz.
@@ -1109,6 +1148,30 @@ mod tests {
         let v2 = parse("d: x*4<");
         let vels2: Vec<f32> = schedule_bar(&v2, 0).iter().map(|e| (e.vel * 100.0).round() / 100.0).collect();
         assert_eq!(vels2, vec![1.0, 0.8, 0.6, 0.4]);
+    }
+
+    #[test]
+    fn sub_sequences_subdivide_the_step() {
+        let v = parse("hat: x [x x] x x");
+        let ph: Vec<f32> = schedule_bar(&v, 0).iter().map(|e| (e.phase * 1000.0).round() / 1000.0).collect();
+        assert_eq!(ph, vec![0.0, 0.25, 0.375, 0.5, 0.75]);
+    }
+
+    #[test]
+    fn nested_sub_sequences() {
+        let v = parse("hat: [x [x x]] x");
+        let ph: Vec<f32> = schedule_bar(&v, 0).iter().map(|e| (e.phase * 1000.0).round() / 1000.0).collect();
+        assert_eq!(ph, vec![0.0, 0.25, 0.375, 0.5]);
+    }
+
+    #[test]
+    fn random_choice_is_deterministic_and_in_set() {
+        let v = parse("hat: {x .} {x .} {x .} {x .}");
+        let a: Vec<f32> = schedule_bar_seeded(&v, None, 0, 42).iter().map(|e| e.phase).collect();
+        let b: Vec<f32> = schedule_bar_seeded(&v, None, 0, 42).iter().map(|e| e.phase).collect();
+        assert_eq!(a, b, "same seed -> identical");
+        // every emitted event sits on one of the 4 step phases (chosen 'x', never '.')
+        for p in &a { assert!([0.0, 0.25, 0.5, 0.75].iter().any(|q| (q - p).abs() < 1e-4)); }
     }
 
     #[test]
