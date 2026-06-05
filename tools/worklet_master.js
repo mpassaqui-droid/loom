@@ -17,3 +17,11 @@ const tg=peak>ceil?ceil/peak:1;if(tg<this.g)this.g=tg;else this.g+=(1-this.g)*0.
 for(let c=0;c<ch;c++){const x=(ins[c]||ins[0])[i],dd=this.b[c][this.pos];this.b[c][this.pos]=x;outs[c][i]=dd*this.g;}
 this.pos=(this.pos+1)%this.la;}return true;}}
 registerProcessor('loom-lim',LoomLim);
+class LoomRedux extends AudioWorkletProcessor{
+static get parameterDescriptors(){return[{name:'reduce',defaultValue:0.5,minValue:0,maxValue:1,automationRate:'k-rate'}];}
+constructor(){super();this.h=[0,0];this.ph=0;}
+process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;
+const f=1+p.reduce[0]*30,n=outs[0].length,ch=outs.length;
+for(let i=0;i<n;i++){this.ph+=1;if(this.ph>=f){this.ph-=f;for(let c=0;c<ch;c++)this.h[c]=(ins[c]||ins[0])[i];}
+for(let c=0;c<ch;c++)outs[c][i]=this.h[c];}return true;}}
+registerProcessor('loom-redux',LoomRedux);

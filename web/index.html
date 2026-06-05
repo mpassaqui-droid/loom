@@ -370,7 +370,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
             "const tg=peak>ceil?ceil/peak:1;if(tg<this.g)this.g=tg;else this.g+=(1-this.g)*0.0009;"+
             "for(let c=0;c<ch;c++){const x=(ins[c]||ins[0])[i],dd=this.b[c][this.pos];this.b[c][this.pos]=x;outs[c][i]=dd*this.g;}"+
             "this.pos=(this.pos+1)%this.la;}return true;}}"+
-      "registerProcessor('loom-lim',LoomLim);";
+      "registerProcessor('loom-lim',LoomLim);"+
+      // sample-rate reduction (sample & hold) — true downsampling, impossible on the main thread
+      "class LoomRedux extends AudioWorkletProcessor{"+
+        "static get parameterDescriptors(){return[{name:'reduce',defaultValue:0.5,minValue:0,maxValue:1,automationRate:'k-rate'}];}"+
+        "constructor(){super();this.h=[0,0];this.ph=0;}"+
+        "process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;"+
+          "const f=1+p.reduce[0]*30,n=outs[0].length,ch=outs.length;"+
+          "for(let i=0;i<n;i++){this.ph+=1;if(this.ph>=f){this.ph-=f;for(let c=0;c<ch;c++)this.h[c]=(ins[c]||ins[0])[i];}"+
+            "for(let c=0;c<ch;c++)outs[c][i]=this.h[c];}return true;}}"+
+      "registerProcessor('loom-redux',LoomRedux);";
     try{_satURL=URL.createObjectURL(new Blob([src],{type:"application/javascript"}));}catch(_){_satURL="";}
     return _satURL;}
   function ensureWorklet(c){if(!c||!c.audioWorklet||c._satReady||!satWorkletURL())return Promise.resolve();
@@ -747,6 +756,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(v.crush){const bits=Math.max(1,Math.min(8,v.crush)),lv=Math.pow(2,bits-1),N=2048,cu=new Float32Array(N);
       for(let i=0;i<N;i++){const x=i/N*2-1;cu[i]=Math.round(x*lv)/lv;}
       const ws=ctx.createWaveShaper();ws.curve=cu;out.connect(ws);out=ws;}
+    // sample-rate reduction (AudioWorklet sample & hold) — true downsampling lo-fi; skipped if worklet unavailable
+    if(v.redux&&ctx._satReady&&ctx.audioWorklet){try{const rx=new AudioWorkletNode(ctx,"loom-redux",{parameterData:{reduce:v.redux}});out.connect(rx);out=rx;}catch(_){}}
     // ring modulation: multiply the signal by a sine -> clangy / metallic / robot timbres
     if(v.ring){const rf=Math.max(1,Math.min(8000,v.ring)),rm=ctx.createGain();rm.gain.value=0;
       const ro=ctx.createOscillator();ro.type="sine";ro.frequency.value=rf;ro.connect(rm.gain);
@@ -1003,7 +1014,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1066,13 +1077,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="reed"||p[0]==="wind")reed=true;
       else if(p[0]==="sync"){let nn=parseFloat(p[1]);sync=isNaN(nn)?3:Math.max(1.2,Math.min(8,nn));}
       else if(p[0]==="vocode"||p[0]==="vocoder")vocode=p[1]||"vox";
+      else if(p[0]==="redux"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.5;if(nn>1)nn/=100;redux=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="pwm"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.6;if(nn>1)nn/=100;pwm=Math.max(0.05,Math.min(1,nn));}
       else if(p[0]==="fenv"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.6;if(nn>1)nn/=100;fenv=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="semi"||p[0]==="transpose"){const nn=parseInt(p[1],10);if(!isNaN(nn))semi=Math.max(-36,Math.min(36,nn));}
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -2302,6 +2314,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Effets & mix","| eq L M H","EQ 3 bandes par voix en dB (grave/médium/aigu)"],
     ["Effets & mix","| chorus N","chorus stéréo (0-1) — élargit/épaissit (nappes, leads)"],
     ["Effets & mix","| crush BITS","bitcrush 1-8 : grain lo-fi / IDM (plus bas = plus sale)"],
+    ["Effets & mix","| redux N","réduction de fréquence d'échantillonnage (0-1, AudioWorklet) — lo-fi/digital crunch (≠ crush)"],
     ["Effets & mix","duck: N","sidechain : tout pompe sur le kick"],
     ["Groove","feel: N","humanise le timing/vélocité (0-100) — ça respire au lieu d'être mécanique"],
     ["Samples (drums)","| sample bd","bd sd hh cp kick2 kick909 clubkick clap2 oh rim cow perc tom tom2 tom3 ride tabla"],
