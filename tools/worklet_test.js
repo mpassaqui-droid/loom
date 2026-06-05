@@ -1,18 +1,32 @@
-// Numerically verifies the master worklet DSP (saturator bounds, limiter ceiling).
-let SatCls, LimCls, ReduxCls;
+// Numerically verifies the LOOM AudioWorklet DSP processors.
 globalThis.AudioWorkletProcessor = class {};
-globalThis.registerProcessor = (n, c) => { if (n === 'loom-sat') SatCls = c; else if (n === 'loom-lim') LimCls = c; else if (n === 'loom-redux') ReduxCls = c; };
-const s = require('fs').readFileSync(__dirname + '/worklet_master.js', 'utf8');
-new Function(s)();
+globalThis.sampleRate = 44100;
+const P = {};
+globalThis.registerProcessor = (n, c) => { P[n] = c; };
+new Function(require('fs').readFileSync(__dirname + '/worklet_master.js', 'utf8'))();
 let fail = 0;
-const sat = new SatCls(), x = new Float32Array(128).fill(2), y = new Float32Array(128);
-sat.process([[x]], [[y]], { drive: [0.5] });
-const sm = Math.max(...[...y].map(Math.abs));
-if (!(sm < 1)) { fail++; console.error('saturator not bounded:', sm); }
-const lim = new LimCls(), xi = new Float32Array(128).fill(1.5), yo = new Float32Array(128);
-for (let b = 0; b < 40; b++) lim.process([[xi]], [[yo]], { ceiling: [0.97] });
-const pk = Math.max(...[...yo].map(Math.abs));
-if (!(pk <= 0.98)) { fail++; console.error('limiter over ceiling:', pk); }
-const rx = new ReduxCls(), xr = new Float32Array(64); for (let i=0;i<64;i++) xr[i]=i/64; const yr = new Float32Array(64); rx.process([[xr]],[[yr]],{reduce:[0.5]}); const lv = new Set([...yr].map(v=>v.toFixed(4))).size; if (!(lv < 20)) { fail++; console.error('redux not downsampling:', lv); }
-console.log((fail ? 'FAIL' : 'OK') + ': worklet DSP (saturator bound=' + sm.toFixed(3) + ', limiter peak=' + pk.toFixed(3) + ')');
+const chk = (cond, msg) => { if (!cond) { fail++; console.error('  ✗ ' + msg); } };
+
+// saturator bounds a loud signal
+{ const s = new P['loom-sat'](), x = new Float32Array(128).fill(2), y = new Float32Array(128);
+  s.process([[x]], [[y]], { drive: [0.5] }); chk(Math.max(...[...y].map(Math.abs)) < 1, 'saturator bounds output'); }
+// limiter holds the ceiling
+{ const l = new P['loom-lim'](), x = new Float32Array(128).fill(1.5), y = new Float32Array(128);
+  for (let b = 0; b < 40; b++) l.process([[x]], [[y]], { ceiling: [0.97] });
+  chk(Math.max(...[...y].map(Math.abs)) <= 0.98, 'limiter holds the ceiling'); }
+// redux downsamples (a ramp -> few held levels)
+{ const r = new P['loom-redux'](), x = new Float32Array(64), y = new Float32Array(64);
+  for (let i = 0; i < 64; i++) x[i] = i / 64; r.process([[x]], [[y]], { reduce: [0.5] });
+  chk(new Set([...y].map(v => v.toFixed(4))).size < 20, 'redux downsamples'); }
+// reson rings after an impulse
+{ const r = new P['loom-reson'](); let e = 0;
+  for (let b = 0; b < 8; b++) { const x = new Float32Array(128), y = new Float32Array(128); if (!b) x[0] = 1;
+    r.process([[x]], [[y]], { freq: [220], decay: [0.95] }); if (b >= 2) for (const v of y) e += v * v; }
+  chk(e > 0.001, 'reson rings'); }
+// flange modulates a DC input
+{ const f = new P['loom-flange'](), x = new Float32Array(128).fill(0.5); let mn = 9, mx = -9;
+  for (let b = 0; b < 20; b++) { const y = new Float32Array(128); f.process([[x]], [[y]], { rate: [5], depth: [0.8] });
+    for (const v of y) { mn = Math.min(mn, v); mx = Math.max(mx, v); } }
+  chk(mx - mn > 0.05, 'flange modulates'); }
+console.log((fail ? 'FAIL' : 'OK') + ': worklet DSP — 5 processors checked' + (fail ? ', ' + fail + ' failed' : ''));
 process.exit(fail ? 1 : 0);

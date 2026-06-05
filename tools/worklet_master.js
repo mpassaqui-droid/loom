@@ -25,3 +25,21 @@ const f=1+p.reduce[0]*30,n=outs[0].length,ch=outs.length;
 for(let i=0;i<n;i++){this.ph+=1;if(this.ph>=f){this.ph-=f;for(let c=0;c<ch;c++)this.h[c]=(ins[c]||ins[0])[i];}
 for(let c=0;c<ch;c++)outs[c][i]=this.h[c];}return true;}}
 registerProcessor('loom-redux',LoomRedux);
+class LoomReson extends AudioWorkletProcessor{
+static get parameterDescriptors(){return[{name:'freq',defaultValue:220,minValue:20,maxValue:8000,automationRate:'k-rate'},{name:'decay',defaultValue:0.92,minValue:0,maxValue:0.995,automationRate:'k-rate'}];}
+constructor(){super();this.b=[new Float32Array(4096),new Float32Array(4096)];this.pos=0;this.lp=[0,0];}
+process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;
+const per=Math.max(2,Math.min(4095,Math.round(sampleRate/p.freq[0]))),dec=p.decay[0],n=outs[0].length,ch=outs.length;
+for(let i=0;i<n;i++){for(let c=0;c<ch;c++){const x=(ins[c]||ins[0])[i],rd=(this.pos-per+4096)%4096,fb=this.b[c][rd];
+this.lp[c]=this.lp[c]*0.5+fb*0.5;const y=x+this.lp[c]*dec;this.b[c][this.pos]=y;outs[c][i]=y*0.5;}this.pos=(this.pos+1)%4096;}return true;}}
+registerProcessor('loom-reson',LoomReson);
+class LoomFlange extends AudioWorkletProcessor{
+static get parameterDescriptors(){return[{name:'rate',defaultValue:0.3,minValue:0.01,maxValue:10,automationRate:'k-rate'},{name:'depth',defaultValue:0.6,minValue:0,maxValue:1,automationRate:'k-rate'}];}
+constructor(){super();this.b=[new Float32Array(2048),new Float32Array(2048)];this.pos=0;this.ph=0;}
+process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;
+const rate=p.rate[0],depth=p.depth[0],n=outs[0].length,ch=outs.length;
+for(let i=0;i<n;i++){this.ph+=rate*6.2831853/sampleRate;const lfo=Math.sin(this.ph)*0.5+0.5,ds=2+lfo*depth*60;
+for(let c=0;c<ch;c++){const x=(ins[c]||ins[0])[i],ri=this.pos-ds,r0=Math.floor(ri),fr=ri-r0,
+a=this.b[c][((r0%2048)+2048)%2048],bb=this.b[c][(((r0+1)%2048)+2048)%2048],dl=a+(bb-a)*fr;
+this.b[c][this.pos]=x+dl*0.5;outs[c][i]=(x+dl)*0.6;}this.pos=(this.pos+1)%2048;}return true;}}
+registerProcessor('loom-flange',LoomFlange);
