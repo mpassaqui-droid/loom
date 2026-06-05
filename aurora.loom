@@ -1,0 +1,85 @@
+# ================================================================
+#  LOOM — « AURORA »
+#  Set démo : (presque) TOUT ce qu'on a construit, en un morceau.
+#  Genre : techno mélodique / progressive — ~3 min, qui évolue.
+#
+#  > Clique RUN.  Puis SCÈNE (plein écran). Touche N = 22 visuels.
+#    RENDER = export WAV.   REC = enregistre le live.
+#  > ASTUCE : change la ligne `prog:` (ex. Dm Bb F C) et TOUT
+#    se ré-harmonise tout seul (basse, pads, arpège, cloches).
+# ================================================================
+
+# ---------- DIRECTIVES GLOBALES ----------
+seed:  24          # graine : tout l'aléatoire ({}, degrade) est REPRODUCTIBLE
+key:   a minor     # tonalité -> on écrit en degrés 1..7 (1 = la)
+prog:  Am F C G    # progression d'accords : 1 par mesure. Le token ^ la suit.
+duck:  58          # sidechain : tout "pompe" sur le kick (groove techno)
+feel:  22          # humanisation : micro-décalages timing/vélocité -> ça respire
+scene: aurora      # visuel de départ (touche N pour cycler les 22 scènes)
+song:  intro*8 build*8 drop*16 break*8 drop*16 outro*8   # arrangement long
+
+# ---------- NAPPES (présentes PARTOUT : la couleur du morceau) ----------
+# pad : joue l'ACCORD COURANT (^) -> il change avec la prog. Super-saw + chorus.
+pad:   ^ . . . . . . . . . . . . . . . | saw | unison 4 | detune 12 | lp 1100 | env 1.2 0.8 0.7 3 | chorus 0.4 | reverb 0.7 | gate 1.6 | gain 0.10 | hue 200
+# pad2 : double une octave au-dessus en sinus (épaisseur douce) + wavetable "rich"
+pad2:  ^ . . . . . . . . . . . . . . . | wt rich | oct 4 | lp 1400 | env 1.5 1 0.7 3 | reverb 0.7 | gate 1.6 | gain 0.05 | hue 260
+
+# ---------- CLOCHES FM (intro / break / drop) — génératif ----------
+# bells : SYNTHÈSE FM (cloche) + choix ALÉATOIRE {..} de notes de l'accord (^N)
+#         + degrade (raréfie) + delay/reverb. Jamais pareil, toujours juste.
+bells: {. ^1'} {. ^3'} {^2' .} {. ^1'} {^3' .} {. ^2'} {^1' .} {. ^3'} | sine | fm 3.5 4 | env 0.005 0.4 0 0.5 | delay 0.4 | reverb 0.6 | degrade 30 | gate 0.9 | gain 0.10 | pan -0.25 | hue 60 | in intro break drop outro
+
+# ---------- BAS DU SPECTRE (sub + kick) ----------
+# sub : sinus TRÈS grave qui suit la fondamentale de l'accord (^1), octave 1
+sub:        ^1 . . . ^1 . . . ^1 . . . ^1 . . . | sine | oct 1 | env 0.005 0.1 0.3 0.08 | gain 0.40 | in build drop outro
+# kick : 4-on-the-floor.  @drop = pattern plus syncopé pendant les drops.
+kick:       x . . . x . . . x . . . x . . . | sample bd | gain 0.6 | in build drop outro
+kick@drop:  x . . . x . . x x . . . x . . . | sample bd | gain 0.6
+
+# ---------- BASSE acid (suit la prog, glisse, filtre qui ondule) ----------
+# bass : ^1 = fondamentale de l'accord ; slide = portamento 303 ; filtre auto-balayé
+bass:  ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | saw | oct 2 | lp sine 0.2 400 1900 | q 7 | drive 0.35 | slide | gate 0.4 | env 0.005 0.08 0.3 0.1 | gain 0.13 | hue 30 | in build drop outro
+
+# ---------- BATTERIE (groove : swing/shift/accents/degrade) ----------
+# clap : sur le 2 et le 4, posé un poil EN RETARD (shift) pour le feel
+clap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.42 | shift 0.04 | in drop outro
+# hat : 16 doubles-croches, SWINGUÉES (par voix), raréfiées, + jux stéréo
+hat:   x x! x x x x! x x x x! x x x x! x x | sample hh | gain 0.11 | swing 58 | degrade 25 | jux rot 3 | in build drop outro
+# perc : rythme EUCLIDIEN e(7,16) + degrade + panoramique
+perc:  e(7,16) | sample perc | gain 0.13 | degrade 20 | pan 0.3 | in drop
+# ghost : choix ALÉATOIRE de petits coups fantômes (génératif)
+ghost: . {. x} . {x .} . {. x!} . {x .} | sample rim | gain 0.16 | swing 60 | pan -0.3 | in drop
+# lofi : AUTOMATE CELLULAIRE (Wolfram 90) + BITCRUSH -> texture lo-fi crunchy
+lofi:  ca(90,16) | sample perc | gain 0.10 | crush 4 | degrade 20 | pan 0.4 | hue 35 | in drop
+
+# ---------- MÉLODIE (degrés -> harmonisée en stéréo par jux add) ----------
+# lead : une mélodie en degrés. jux add 2 = la TIERCE au-dessus dans l'oreille droite.
+#        off 3 = un écho-canon décalé. -> arrangé tout seul.
+lead:  1 . 3 . 5 . 1' . 7 . 5 . 3 . 2 . | tri | lp 2200 | jux add 2 | off 3 | gate 0.5 | delay 0.3 | reverb 0.4 | gain 0.13 | hue 280 | in drop
+
+# ---------- ARPÈGE (suit les accords via ^N) ----------
+# arp : ^1 ^2 ^3 = fondamentale/tierce/quinte de l'accord courant -> arpège diatonique
+#       filtre qui s'ouvre par AUTOMATION (lp 800..3200 sur 16 mesures)
+arp:   ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 ^1 ^2 ^3 ^2 ^3 ^2 ^1 ^2 | tri | lp 800..3200 | over 16 | gate 0.45 | delay 0.35 | reverb 0.4 | gain 0.10 | hue 180 | in drop break outro
+# stab : un accord plaqué (wavetable "warm") sur le contretemps, lo-fi léger
+stab@drop: . . ^ . . . ^ . | wt warm | lp 1800 | env 0.01 0.15 0.4 0.2 | crush 6 | reverb 0.3 | gain 0.10 | hue 300
+
+# ---------- BUILD : montée (riser + roll en crescendo) ----------
+# riser : nappe dont le filtre s'OUVRE en 8 mesures (lp 200..6000) -> tension
+riser@build: ^1 . . . . . . . | saw | unison 5 | detune 16 | lp 200..6000 | over 8 | env 0.5 0.5 0.9 0.6 | reverb 0.5 | gate 1.8 | gain 0.09
+# snareroll : ROLL en CRESCENDO (*N>) de plus en plus dense -> annonce le drop
+snareroll@build: . . . . . . . . x*4> x*4> x*8> x*8> x*16> x*16> x*16> x*16> | sample sd | gain 0.30
+
+# ---------- BREAK : POLYMÉTRIE / PHASING façon Steve Reich ----------
+# deux voix IDENTIQUES à vitesses légèrement différentes (poly 16 vs 17) -> se déphasent
+ph1@break: 1 2 3 5 6 | poly 16 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.10 | pan -0.35 | hue 190
+ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.10 | pan 0.35 | hue 290
+
+# ================================================================
+#  Autres choses à essayer en éditant ce fichier :
+#   • prog: Dm Bb F C      -> ré-harmonise tout le morceau
+#   • key:  d bayati        -> maqam MICROTONAL (vrais quarts de ton)
+#   • mets `| midi 1` sur une voix -> pilote ton DAW
+#   • touche N en plein écran -> 22 scènes (julia, fire, helix, torus…)
+#   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
+# ================================================================
