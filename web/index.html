@@ -43,7 +43,16 @@
   .card.cyan .head{color:var(--cyan);}
 
   textarea{width:100%;height:210px;background:transparent;border:none;outline:none;resize:vertical;
-    color:var(--glow);font-family:'VT323',monospace;font-size:23px;line-height:1.5;caret-color:var(--amber);}
+    color:var(--glow);font-family:'VT323',monospace;font-size:23px;line-height:1.5;caret-color:var(--amber);
+    position:relative;z-index:1;padding:4px 6px;box-sizing:border-box;}
+  /* live "playhead" boxes drawn behind the editor text (transparent textarea on top) */
+  #editGlow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+  /* SCÈNE : an editable, transparent code surface over the visuals + its box layer */
+  #stageGlow{position:absolute;inset:0;z-index:301;pointer-events:none;}
+  #stageEditor{position:absolute;left:0;top:0;width:100%;height:100%;z-index:302;
+    background:transparent;border:none;outline:none;resize:none;box-sizing:border-box;padding:18px 20px;
+    color:#eaffe0;font-family:'VT323',monospace;font-size:21px;line-height:1.5;caret-color:var(--amber);
+    text-shadow:0 0 5px rgba(0,0,0,.95),0 1px 3px rgba(0,0,0,.95),0 0 14px rgba(0,0,0,.7);}
 
   /* transport */
   .transport{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
@@ -128,7 +137,11 @@
 <script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
-  <canvas id="stage" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg);cursor:pointer"></canvas>
+  <div id="stageWrap" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg)">
+    <canvas id="stage" style="position:absolute;inset:0;cursor:pointer"></canvas>
+    <canvas id="stageGlow"></canvas>
+    <textarea id="stageEditor" spellcheck="false"></textarea>
+  </div>
   <h1>LOOM</h1>
   <div class="sub" style="color:var(--amber);font-size:22px;">&#9656; VERSION 6 &middot; IA GRATUITE <span class="blink">_</span></div>
 
@@ -152,13 +165,14 @@
 
   <div class="card wide">
     <div class="head">pattern.loom</div>
+    <div id="editwrap" style="position:relative"><canvas id="editGlow"></canvas>
     <textarea id="editor" spellcheck="false"># x = hit  . = rest  | = verbs/timbre  1-7 = scale degrees
 key:   c minor
 kick:  x . . . x . . .
 snare: . . x . . . x .
 hat:   x x x x x x x x | every 4 fast 2
 lead:  1 3 5 1' 5 3 1 . | pulse
-bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
+bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   </div>
 
   <div class="transport wide">
@@ -936,6 +950,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       if(v.row){const on=!song.length||!v.sections||(sec&&v.sections.includes(sec));v.row.style.opacity=on?"1":"0.25";}
       v.cells.forEach((c,i)=>{c.classList.toggle("play",i===cur);
         if(i===cur&&v.tokens[i]!=="."&&v.tokens[i]!=="~"){c.classList.add("hit");setTimeout(()=>c.classList.remove("hit"),90);}});}}
+    // live code-playhead boxes (main editor + the scene's editable code surface)
+    const cph=(playing&&ctx)?(((ctx.currentTime-transportStart)%cycleLen+cycleLen)%cycleLen)/cycleLen:-1;
+    drawPlayBoxes($("editGlow"),$("editor"),cph);
+    if(stageOn)drawPlayBoxes($("stageGlow"),$("stageEditor"),cph);
     drawScope();if(stageOn)drawStage();
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
@@ -945,20 +963,31 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
   const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
-  let codeView=[],showCode=true;  // live "code playhead" overlay in the SCÈNE
-  // snapshot the source into displayable lines: voice lines get their pattern split
-  // into tokens (so we can box the active one), other lines are kept verbatim.
+  let codeView=[],showCode=true;  // live "code playhead": boxes the active token in each voice line
+  // tokenize a pattern string but record each token's absolute COLUMN in the source line
+  // (so the box aligns with the real text in the <textarea>). Mirrors tokenizePat's rules.
+  function tokenizeWithCols(str,base){const out=[];let depth=0,cur="",start=-1;
+    const push=()=>{if(cur&&cur!==";"&&!cur.startsWith("@")&&!cur.startsWith(">"))out.push({text:cur,col:base+start});cur="";start=-1;};
+    for(let i=0;i<str.length;i++){const ch=str[i];
+      if(ch==="["||ch==="{"){if(depth===0&&cur)push();if(start<0)start=i;depth++;cur+=ch;}
+      else if(ch==="]"||ch==="}"){if(depth>0)depth--;cur+=ch;if(depth===0)push();}
+      else if(/\s/.test(ch)){if(depth===0)push();else cur+=ch;}
+      else{if(start<0)start=i;cur+=ch;}}
+    push();return out;}
+  // snapshot the source into lines; voice lines carry their tokens (with columns) + hue.
   function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog"];
-    for(const raw of text.split("\n")){const line=raw.replace(/\s+$/,""),t=line.trim(),ci=t.indexOf(":");
+    const lines=text.split("\n");
+    for(let li=0;li<lines.length;li++){const raw=lines[li],t=raw.trim(),ci=raw.indexOf(":");
       let voice=false,name="",pat="",post="";
-      if(t&&!t.startsWith("#")&&ci>0){const head=t.slice(0,ci).trim().toLowerCase().split("@")[0];
-        if(!DIR.includes(head)){voice=true;const rest=t.slice(ci+1),b=rest.indexOf("|");
-          pat=(b<0?rest:rest.slice(0,b)).trim();post=b<0?"":rest.slice(b).trim();name=t.slice(0,ci+1);}}
+      if(t&&!t.startsWith("#")&&ci>0){const head=raw.slice(0,ci).trim().toLowerCase().split("@")[0];
+        if(!DIR.includes(head)){voice=true;const rest=raw.slice(ci+1),b=rest.indexOf("|");
+          const patEnd=b<0?raw.length:ci+1+b;pat=raw.slice(ci+1,patEnd);post=b<0?"":rest.slice(b);name=raw.slice(0,ci+1).trim();}}
       if(voice){const hm=/\|\s*hue\s+(\d+)/.exec(post),hue=hm?+hm[1]:voiceHue(name.slice(0,-1).split("@")[0].trim());
-        arr.push({type:"voice",name,tokens:tokenizePat(pat),post,hue});}
-      else arr.push({type:"other",raw:line});}
+        arr.push({type:"voice",line:li,tokens:tokenizeWithCols(pat,ci+1),hue});}
+      else arr.push({type:"other",line:li});}
     return arr;}
-  function hslCss(h){return "hsl("+(((h||0)%360)+360)%360+",88%,64%)";}
+  function hslCss(h){return "hsl("+((((h||0)%360)+360)%360)+",88%,64%)";}
+  function hslA(h,a){return "hsla("+((((h||0)%360)+360)%360)+",88%,62%,"+a+")";}
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
   // each VOICE has its own colour (from its name) and shoots particles in its
@@ -970,10 +999,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,col:col});}}
   function hexA(h,a){h=(h||"").replace("#","");if(h.length===3)h=h.split("").map(x=>x+x).join("");
     const n=parseInt(h,16)||0;return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+a+")";}
-  function toggleStage(){stageOn=!stageOn;const cv=$("stage");if(!cv)return;
-    if(stageOn){cv.style.display="block";initAudio();if(ctx.state==="suspended")ctx.resume();
-      try{(cv.requestFullscreen||cv.webkitRequestFullscreen||function(){}).call(cv);}catch(_){}}
-    else{cv.style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}}
+  function toggleStage(){stageOn=!stageOn;const wrap=$("stageWrap"),se=$("stageEditor");if(!wrap)return;
+    if(stageOn){wrap.style.display="block";initAudio();if(ctx.state==="suspended")ctx.resume();
+      if(se){se.value=$("editor").value;se.style.display=showCode?"block":"none";}
+      try{(wrap.requestFullscreen||wrap.webkitRequestFullscreen||function(){}).call(wrap);}catch(_){}}
+    else{wrap.style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}}
   function drawStage(){const cv=$("stage");if(!cv||!cv.getContext||!analyser)return;
     const W=cv.width=window.innerWidth,H=cv.height=window.innerHeight,c=cv.getContext("2d"),cx=W/2,cy=H/2;
     let bg="#0b0f0b",fg="#9dff8a",am="#ffc04a",cyn="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
@@ -1212,32 +1242,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const sec=song.length?sectionAtBar(song,Math.max(0,barCount-1)):null;
     c.font="bold "+Math.round(R*0.2)+"px 'Press Start 2P',monospace";c.fillText((sec||"LOOM").toUpperCase(),cx,cy+R*0.06);
     c.shadowBlur=0;c.fillStyle=dim;c.font="20px 'VT323',monospace";
-    c.fillText("scène: "+sceneMode+" (N)  ·  code (C)  ·  bar "+barCount+"  ·  clique/ÉCHAP pour sortir",cx,H-34);
-    drawCodeOverlay(c,W,H,fg,cyn,am,dim,bg);}
-  // live code playhead: draw the source, boxing the token each voice is currently on
-  function drawCodeOverlay(c,W,H,fg,cyn,am,dim,bg){
-    if(!showCode||!codeView.length)return;
-    let phase=0;if(playing&&ctx){const e=ctx.currentTime-transportStart;phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;}
-    const pad=16,L=codeView.length,lh=Math.min(19,Math.max(11,(H-2*pad)/L)),fs=Math.round(lh*0.82);
-    c.save();c.textAlign="left";c.textBaseline="middle";c.shadowBlur=0;
-    c.font=fs+"px ui-monospace,Menlo,Consolas,monospace";const cw=c.measureText("M").width;
-    let maxCh=0;for(const ln of codeView){const len=ln.type==="voice"?(ln.name.length+1+ln.tokens.join(" ").length+1+ln.post.length):ln.raw.length;if(len>maxCh)maxCh=len;}
-    const panelW=Math.min(W*0.66,pad*2+maxCh*cw+8);
-    c.fillStyle="rgba(0,0,0,0.58)";c.fillRect(0,0,panelW,H);
-    c.fillStyle=hexA(fg,0.18);c.fillRect(panelW-2,0,2,H);
-    let y=pad+lh/2;
-    for(const ln of codeView){
-      if(ln.type!=="voice"){c.fillStyle=ln.raw.trim().startsWith("#")?hexA(dim,0.85):hexA(cyn,0.7);c.fillText(ln.raw,pad,y);y+=lh;continue;}
-      let x=pad;c.fillStyle=hexA(am,0.92);c.fillText(ln.name,x,y);x+=(ln.name.length+1)*cw;
-      const N=ln.tokens.length,cur=N?Math.floor(phase*N)%N:-1;
-      for(let i=0;i<N;i++){const tk=ln.tokens[i],w=tk.length*cw,rest=tk==="."||tk==="~";
-        if(i===cur){const col=hslCss(ln.hue);c.fillStyle=hexA(col,rest?0.3:0.9);
-          c.fillRect(x-1,y-lh*0.5+1,w+2,lh-2);c.fillStyle=bg;c.fillText(tk,x,y);}
-        else{c.fillStyle=rest?hexA(fg,0.22):hexA(fg,0.82);c.fillText(tk,x,y);}
-        x+=w+cw;}
-      if(ln.post){c.fillStyle=hexA(cyn,0.5);c.fillText(ln.post,x,y);}
-      y+=lh;}
-    c.restore();}
+    c.fillText("scène: "+sceneMode+" (N)  ·  code (C)  ·  bar "+barCount+"  ·  ÉCHAP pour sortir",cx,H-34);}
+  // draw the moving "playhead" boxes on `canvas`, aligned to the text inside `ta`
+  // (a transparent <textarea> sits on top showing the actual code). One box per voice.
+  function drawPlayBoxes(canvas,ta,phase){
+    if(!canvas||!ta)return;const c=canvas.getContext&&canvas.getContext("2d");if(!c)return;
+    const W=canvas.width=ta.clientWidth||canvas.clientWidth,H=canvas.height=ta.clientHeight||canvas.clientHeight;
+    canvas.style.width=W+"px";canvas.style.height=H+"px";
+    c.clearRect(0,0,W,H);if(!showCode||!codeView.length||phase<0)return;
+    const cs=getComputedStyle(ta),lh=parseFloat(cs.lineHeight)||parseFloat(cs.fontSize)*1.5,
+      pl=parseFloat(cs.paddingLeft)||0,pt=parseFloat(cs.paddingTop)||0,st=ta.scrollTop||0;
+    c.font=cs.fontSize+" "+cs.fontFamily;const cw=c.measureText("0").width||9;
+    for(const ln of codeView){if(ln.type!=="voice"||!ln.tokens.length)continue;
+      const N=ln.tokens.length,tk=ln.tokens[Math.floor(phase*N)%N],y=pt+ln.line*lh-st;
+      if(y+lh<0||y>H)continue;const rest=tk.text==="."||tk.text==="~";
+      c.fillStyle=hslA(ln.hue,rest?0.20:0.78);
+      const x=pl+tk.col*cw,w=tk.text.length*cw;c.fillRect(x-1,y+lh*0.14,w+2,lh*0.74);}}
   function drawScope(){const cv=$("scope");if(!cv||!cv.getContext||!analyser||scopeMode==="off")return;
     const W=cv.width=cv.clientWidth||600,H=cv.height=150;const c2=cv.getContext("2d");
     let fg="#9dff8a",am="#ffc04a",cy="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
@@ -1702,11 +1722,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("rec").addEventListener("click",toggleRec);
   $("renderBtn").addEventListener("click",renderOffline);
   $("stageBtn").addEventListener("click",toggleStage);
-  $("stage").addEventListener("click",()=>{if(stageOn)toggleStage();});
-  document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stageOn){stageOn=false;$("stage").style.display="none";}
-    else if(stageOn&&(e.key==="n"||e.key==="N")){sceneMode=SCENES[(SCENES.indexOf(sceneMode)+1)%SCENES.length];}
-    else if(stageOn&&(e.key==="c"||e.key==="C")){showCode=!showCode;}});
-  document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stage").style.display="none";}});
+  $("stage").addEventListener("click",()=>{if(stageOn&&!showCode)toggleStage();});
+  document.addEventListener("keydown",e=>{
+    const typing=e.target&&(e.target.tagName==="TEXTAREA"||e.target.tagName==="INPUT");
+    if(e.key==="Escape"&&stageOn){stageOn=false;$("stageWrap").style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}
+    else if(stageOn&&!typing&&(e.key==="n"||e.key==="N")){sceneMode=SCENES[(SCENES.indexOf(sceneMode)+1)%SCENES.length];}
+    else if(stageOn&&!typing&&(e.key==="c"||e.key==="C")){showCode=!showCode;const se=$("stageEditor");if(se)se.style.display=showCode?"block":"none";}});
+  document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stageWrap").style.display="none";}});
+  // live coding: typing in either editor updates the boxes immediately and (while playing) recompiles the music after a short pause
+  let recompTimer=null;
+  function recompile(){const parsed=parse(editor.value);if(!parsed.length)return;
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();buildTimeline();}
+  function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
+  editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();});
+  $("stageEditor").addEventListener("input",()=>{editor.value=$("stageEditor").value;liveEdit();});
+  $("stageEditor").addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
     if(scopeMode==="off")$("scope").style.boxShadow="none";
     log("[ scope ] "+(scopeMode==="wave"?"oscilloscope (onde)":scopeMode==="spectrum"?"spectre (fréquences)":"éteint"),"ai");});
