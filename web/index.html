@@ -336,11 +336,36 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const shelf=ctx.createBiquadFilter();shelf.type="highshelf";shelf.frequency.value=8000;shelf.gain.value=2.5;
     const limiter=ctx.createDynamicsCompressor();
     limiter.threshold.value=-2;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=0.001;limiter.release.value=0.09;
-    master.connect(hpf);hpf.connect(comp);comp.connect(shelf);shelf.connect(limiter);limiter.connect(ctx.destination);
+    master.connect(hpf);hpf.connect(comp);comp.connect(shelf);
+    // master warmth: an oversampled tanh saturator (AudioWorklet) for analog glue/anti-aliased drive.
+    // Inserted only if the worklet is registered on this ctx; otherwise the dry chain is used (fallback).
+    masterShelf=shelf;masterLimiter=limiter;let preLim=shelf;
+    if(ctx._satReady&&ctx.audioWorklet){try{const sat=new AudioWorkletNode(ctx,"loom-sat",{parameterData:{drive:warmth}});shelf.connect(sat);preLim=sat;masterSat=sat;}catch(_){}}
+    preLim.connect(limiter);limiter.connect(ctx.destination);
     analyser=ctx.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=0.7;limiter.connect(analyser);
     const len=Math.floor(ctx.sampleRate*0.4);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
     const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
-  function initAudio(){if(ctx)return;ctx=new(window.AudioContext||window.webkitAudioContext)();buildGraph();}
+  // --- AudioWorklet: oversampled tanh saturator for master warmth (anti-aliased drive) ---
+  let _satURL=null;
+  function satWorkletURL(){if(_satURL)return _satURL;
+    const src="class LoomSat extends AudioWorkletProcessor{"+
+      "static get parameterDescriptors(){return[{name:'drive',defaultValue:0.3,minValue:0,maxValue:1,automationRate:'k-rate'}];}"+
+      "constructor(){super();this.z=[0,0];}"+
+      "process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;"+
+        "const d=p.drive[0],g=1+d*4,comp=1/(1+d*0.6);"+
+        "for(let ch=0;ch<outs.length;ch++){const x=ins[ch]||ins[0],y=outs[ch];let prev=this.z[ch]||0;"+
+          "for(let i=0;i<y.length;i++){const s0=(prev+x[i])*0.5;y[i]=(Math.tanh(s0*g)+Math.tanh(x[i]*g))*0.5*comp;prev=x[i];}"+
+          "this.z[ch]=prev;}return true;}}"+
+      "registerProcessor('loom-sat',LoomSat);";
+    try{_satURL=URL.createObjectURL(new Blob([src],{type:"application/javascript"}));}catch(_){_satURL="";}
+    return _satURL;}
+  function ensureWorklet(c){if(!c||!c.audioWorklet||c._satReady||!satWorkletURL())return Promise.resolve();
+    return c.audioWorklet.addModule(satWorkletURL()).then(()=>{c._satReady=true;}).catch(()=>{});}
+  function initAudio(){if(ctx)return;ctx=new(window.AudioContext||window.webkitAudioContext)();buildGraph();
+    // load the worklet async; once ready, hot-splice the saturator into the live master chain
+    ensureWorklet(ctx).then(()=>{if(!ctx._satReady||!masterShelf||masterSat||!ctx.audioWorklet)return;
+      try{const sat=new AudioWorkletNode(ctx,"loom-sat",{parameterData:{drive:warmth}});masterShelf.disconnect();masterShelf.connect(sat);sat.connect(masterLimiter);masterSat=sat;
+        log("[ audio ] saturateur master (worklet) activé","ai");}catch(_){}});}
   function noise(){const s=ctx.createBufferSource();s.buffer=noiseBuf;return s;}
 
   // --- record the output to a downloadable WAV file ---
@@ -376,7 +401,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   async function renderOffline(){
     initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ render ] rien à rendre - écris un morceau","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
     const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
@@ -388,7 +413,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const rate=ctx.sampleRate||44100,total=(Object.keys(tempoMap).length?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
     const off=new OAC(2,Math.ceil(total*rate),rate);
     const sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf,analyser,delayL,delayR},svMidi=midiOut,svTS=transportStart;
-    midiOut=null;ctx=off;transportStart=0;buildGraph();   // transportStart=0 so automation lines up
+    await ensureWorklet(off);midiOut=null;ctx=off;transportStart=0;buildGraph();   // transportStart=0 so automation lines up
     {let _bt=0;for(let b=0;b<nbars;b++){scheduleBar(_bt,b);_bt+=cycleLen;}}
     let buf=null;
     try{buf=await off.startRendering();}
@@ -404,7 +429,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // export STEMS: render each voice to its own WAV (one offline render per voice)
   async function renderStems(){initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ stems ] rien à rendre","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
     const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC){log("[ stems ] non supporté","err");return;}
     const btn=$("stemsBtn");if(btn)btn.disabled=true;
@@ -413,7 +438,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     log("[ stems ] rendu de "+names.length+" pistes…","ai");
     for(const nm of names){
       const off=new OAC(2,Math.ceil(total*rate),rate),sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf,analyser,delayL,delayR},svMidi=midiOut,svTS=transportStart;
-      midiOut=null;ctx=off;transportStart=0;stemSolo=nm;buildGraph();
+      await ensureWorklet(off);midiOut=null;ctx=off;transportStart=0;stemSolo=nm;buildGraph();
       {let _bt=0;for(let b=0;b<nbars;b++){scheduleBar(_bt,b);_bt+=cycleLen;}}
       let buf=null;try{buf=await off.startRendering();}catch(e){log("[ stems ] "+nm+": "+(e.message||e),"err");}
       finally{ctx=sv.ctx;master=sv.master;comp=sv.comp;bus=sv.bus;scGain=sv.scGain;delay=sv.delay;fb=sv.fb;echoSend=sv.echoSend;conv=sv.conv;spaceSend=sv.spaceSend;noiseBuf=sv.noiseBuf;analyser=sv.analyser;delayL=sv.delayL;delayR=sv.delayR;midiOut=svMidi;transportStart=svTS;stemSolo=null;}
@@ -931,6 +956,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parseDuck(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="duck"){let n=parseFloat(line.slice(i+1).trim());if(isNaN(n))return 0;
       if(n>1)n/=100;return Math.max(0,Math.min(0.95,n));}}return 0;}
+  function parseWarmth(text){for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="warmth"){let n=parseFloat(line.slice(i+1).trim());if(isNaN(n))return 0.3;if(n>1)n/=100;return Math.max(0,Math.min(1,n));}}return 0.3;}
+  function applyWarmth(){if(masterSat&&masterSat.parameters){try{masterSat.parameters.get("drive").value=warmth;}catch(_){}}}
   function parseFeel(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="feel"){let n=parseFloat(line.slice(i+1).trim());if(isNaN(n))return 0;
       if(n>1)n/=100;return Math.max(0,Math.min(1,n));}}return 0;}
@@ -949,7 +977,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const full=line.slice(0,i).trim().toLowerCase();
-    if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel"||full==="scene"||full==="prog"||full==="tune"||full==="bpm"||full==="tempo")continue;
+    if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel"||full==="scene"||full==="prog"||full==="tune"||full==="bpm"||full==="tempo"||full==="warmth")continue;
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
@@ -1235,6 +1263,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
   const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
+  let masterShelf=null,masterLimiter=null,masterSat=null,warmth=0.3;  // master saturator (AudioWorklet) refs
   let codeView=[],showCode=true;  // live "code playhead": boxes the active token in each voice line
   // tokenize a pattern string but record each token's absolute COLUMN in the source line
   // (so the box aligns with the real text in the <textarea>). Mirrors tokenizePat's rules.
@@ -1247,7 +1276,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else{if(start<0)start=i;cur+=ch;}}
     push();return out;}
   // snapshot the source into lines; voice lines carry their tokens (with columns) + hue.
-  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo"];
+  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth"];
     const lines=text.split("\n");
     for(let li=0;li<lines.length;li++){const raw=lines[li],t=raw.trim(),ci=raw.indexOf(":");
       let voice=false,name="",pat="",post="";
@@ -1857,7 +1886,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
 
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
     codeView=buildCodeView(editor.value);
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
@@ -2221,6 +2250,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Théorie","tune: just|pyth|Nedo|equal","accordage : juste intonation / Pythagore / N-EDO (ex. 19edo, 31edo) / tempérament égal"],
     ["Tempo","bpm: 128","fixe le tempo du morceau (BPM, dans le fichier) — sinon le bouton BPM"],
     ["Tempo","tempo: intro 120 drop 140","tempo PAR SECTION (paires nom/bpm) — accélère/ralentit selon le morceau"],
+    ["Mix","warmth: 0.5","saturation chaleur du master (0-1, AudioWorklet sur-échantillonné) — repli auto si indispo"],
     ["Théorie","prog: Am F C G","progression d'accords, un accord par mesure (cycle)"],
     ["Théorie","^  /  ^N","^ = l'accord courant de la prog ; ^N = sa Nième note (^1 = fondamentale, pour la basse)"],
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
@@ -2552,7 +2582,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   // live coding: typing in either editor updates the boxes immediately and (while playing) recompiles the music after a short pause
   let recompTimer=null;
   function recompile(){const parsed=parse(editor.value);if(!parsed.length)return;
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();buildTimeline();}
   function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();});
