@@ -1,0 +1,54 @@
+# ================================================================
+#  LOOM — « ATLAS »
+#  Vitrine de la synthèse niveau labo (Stanford/CCRMA · IRCAM).
+#  Techno mélodique / cinématique organique. ~3 min, évolutif.
+#
+#  > RUN. Puis SCÈNE (touche N = 36 visuels, beaucoup mathématiques).
+#    Tu peux ÉDITER ce code EN DIRECT dans la scène.
+#  > Change `prog:` ou `tune:` et tout se transforme.
+# ================================================================
+
+seed:  31
+key:   a minor
+tune:  just        # JUSTE INTONATION : degrés micro-accordés en ratios purs (plus consonant)
+prog:  Am F C G
+duck:  56
+feel:  20
+scene: cymatic     # figures de Chladni (ondes stationnaires)
+song:  intro*8 build*8 drop*16 break*8 drop*16 outro*8
+
+# ---------- BAS DU SPECTRE ----------
+sub:   ^1 . . . ^1 . . . ^1 . . . ^1 . . . | sine | oct 1 | sub 0.6 | env 0.005 0.1 0.3 0.08 | gain 0.4 | in build drop outro
+kick:  x . . . x . . . x . . . x . . . | sample bd | gain 0.6 | in build drop outro
+# basse : sub-oscillateur + wavefolding (West-coast) + slide acid
+bass:  ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | saw | oct 2 | sub 0.7 | fold 0.3 | lp sine 0.2 400 1700 | q 6 | slide | gate 0.4 | gain 0.13 | hue 30 | in build drop outro
+
+# ---------- BATTERIE ----------
+clap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.42 | shift 0.04 | noise 0.2 | in drop outro
+hat:   x x! x x x x! x x x x! x x x x! x x | sample hh | gain 0.11 | swing 58 | degrade 25 | noise 0.08 | jux rot 3 | in build drop outro
+perc:  e(7,16) | sample perc | gain 0.12 | degrade 20 | chunk 4 fast 2 | pan 0.3 | in drop
+
+# ---------- CORDES PINCÉES (Karplus-Strong — modélisation physique) ----------
+harp:  ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 ^1 ^2 ^3 ^2 ^3 ^2 ^1 ^2 | pluck 0.75 | lp 3000 | delay 0.3 | reverb 0.6 | gate 0.6 | gain 0.13 | hue 40 | in drop break outro
+
+# ---------- CLOCHES (synthèse modale — partiels inharmoniques) ----------
+bells: {. ^1'} {. ^3'} {^2' .} {. ^1'} {^3' .} {. ^2'} {^1' .} {. ^3'} | bell | reverb 0.6 | delay 0.4 | degrade 30 | gain 0.12 | pan -0.25 | hue 60 | in intro break drop outro
+
+# ---------- CHŒUR (filtre de formants — voix/IRCAM CHANT) + phaser ----------
+choir: ^ . . . . . . . . . . . . . . . | saw | unison 4 | vowel a | phaser 0.4 | lp 2200 | reverb 0.7 | gate 1.7 | gain 0.10 | hue 280
+
+# ---------- NUAGE GRANULAIRE (Roads/IRCAM) ----------
+cloud@drop: ^1 . . . . . . . | sine | grain 0.6 | reverb 0.7 | gate 2 | gain 0.09 | pan 0.3 | hue 200
+
+# ---------- MÉLODIE harmonisée (harmoniseur + transposition stéréo) ----------
+lead@drop: 1 . 3 . 5 . 1' . 7 . 5 . 3 . 2 . | tri | chord min7 | jux add 2 | lp 2400 | delay 0.3 | reverb 0.4 | gate 0.5 | gain 0.09 | hue 300
+
+# ---------- BUILD : drone wavefolding qui s'ouvre + roll crescendo ----------
+drone@build: ^1 . . . . . . . | saw | unison 5 | spread 0.8 | fold 0..0.9 | over 8 | lp 400..5000 | reverb 0.5 | gate 1.8 | gain 0.09
+roll@build:  . . . . . . . . x*4> x*4> x*8> x*8> x*16> x*16> x*16> x*16> | sample sd | gain 0.30
+
+# ---------- BREAK : phasing Reich (polymétrie) ----------
+ph1@break: 1 2 3 5 6 | poly 16 | pluck 0.6 | reverb 0.6 | gain 0.10 | pan -0.35 | hue 190
+ph2@break: 1 2 3 5 6 | poly 17 | pluck 0.6 | reverb 0.6 | gain 0.10 | pan 0.35 | hue 290
+
+# Essaie aussi :  tune: pyth  ·  prog: Dm Bb F C  ·  scene: harmono / lorenz / superf
