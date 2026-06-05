@@ -534,7 +534,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(cutoff){filter=ctx.createBiquadFilter();filter.type=v.filterType||"lowpass";
       filter.frequency.setValueAtTime(Math.max(20,Math.min(20000,cutoff)),t);filter.Q.value=v.q||1;filter.connect(g);preG=filter;}
     const uniGain=ctx.createGain();uniGain.gain.value=1/Math.sqrt(uni);uniGain.connect(preG);
-    const oscs=[];
+    const oscs=[],mods=[];
     // portamento/glide: ramp from the voice's previous note up/down to this one (303-style)
     const slideT=v.slide?Math.max(0.005,Math.min(0.5,v.slide)):0,fromF=(slideT&&v._prevFreq)?v._prevFreq:0;
     // pitch bend: start this note N semitones off and glide to pitch (kick drops, 808 slides, tape stops)
@@ -581,7 +581,6 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const dg2=ctx.createGain();dg2.gain.value=Math.max(0,Math.min(1,v.double))*0.5;o2.connect(dg2);dg2.connect(preG);oscs.push(o2);}
     // FM: a modulator drives the carriers' frequency; the index decays for a
     // bell/e-piano "ping" -> rich metallic / electric timbres (standard nodes).
-    const mods=[];
     if(v.fm&&v.fm.index>0&&!v.pluck&&!v.bell&&!v.grain&&!v.bow&&!v.pwm){const fm=v.fm,mod=ctx.createOscillator();mod.type="sine";mod.frequency.setValueAtTime(freq*fm.ratio,t);
       const mg=ctx.createGain(),depth=Math.max(0.001,freq*fm.ratio*fm.index),dt=v.env?Math.max(0.02,v.env.d):0.18;
       mg.gain.setValueAtTime(depth,t);mg.gain.exponentialRampToValueAtTime(Math.max(0.001,depth*0.35),t+dt);
