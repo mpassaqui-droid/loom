@@ -278,7 +278,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,analyser=null,scopeMode="wave";
-  let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
+  let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
   const WAVES={sine:"sine",square:"square",saw:"sawtooth",sawtooth:"sawtooth",tri:"triangle",triangle:"triangle",pulse:"square"};
@@ -376,7 +376,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ render ] rien à rendre - écris un morceau","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
     if(!OAC){log("[ render ] non supporté par ce navigateur","err");return;}
@@ -384,11 +384,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     log("[ render ] chargement des samples…","ai");
     try{await Promise.all(voices.filter(v=>v.sample).map(v=>loadSample(v.sample)));}catch(_){}
     log("[ render ] rendu de "+nbars+" mesures…","ai");
-    const rate=ctx.sampleRate||44100,total=cycleLen*nbars+1.5;
+    const rate=ctx.sampleRate||44100,total=(Object.keys(tempoMap).length?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
     const off=new OAC(2,Math.ceil(total*rate),rate);
     const sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf,analyser,delayL,delayR},svMidi=midiOut,svTS=transportStart;
     midiOut=null;ctx=off;transportStart=0;buildGraph();   // transportStart=0 so automation lines up
-    for(let b=0;b<nbars;b++)scheduleBar(b*cycleLen,b);
+    {let _bt=0;for(let b=0;b<nbars;b++){scheduleBar(_bt,b);_bt+=cycleLen;}}
     let buf=null;
     try{buf=await off.startRendering();}
     catch(e){log("[ render ] erreur: "+(e.message||e),"err");}
@@ -404,16 +404,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   async function renderStems(){initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ stems ] rien à rendre","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC){log("[ stems ] non supporté","err");return;}
     const btn=$("stemsBtn");if(btn)btn.disabled=true;
     try{await Promise.all(voices.filter(v=>v.sample).map(v=>loadSample(v.sample)));}catch(_){}
-    const names=[...new Set(voices.map(v=>v.name))],rate=ctx.sampleRate||44100,total=cycleLen*nbars+1.5;
+    const names=[...new Set(voices.map(v=>v.name))],rate=ctx.sampleRate||44100,total=(Object.keys(tempoMap).length?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
     log("[ stems ] rendu de "+names.length+" pistes…","ai");
     for(const nm of names){
       const off=new OAC(2,Math.ceil(total*rate),rate),sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf,analyser,delayL,delayR},svMidi=midiOut,svTS=transportStart;
       midiOut=null;ctx=off;transportStart=0;stemSolo=nm;buildGraph();
-      for(let b=0;b<nbars;b++)scheduleBar(b*cycleLen,b);
+      {let _bt=0;for(let b=0;b<nbars;b++){scheduleBar(_bt,b);_bt+=cycleLen;}}
       let buf=null;try{buf=await off.startRendering();}catch(e){log("[ stems ] "+nm+": "+(e.message||e),"err");}
       finally{ctx=sv.ctx;master=sv.master;comp=sv.comp;bus=sv.bus;scGain=sv.scGain;delay=sv.delay;fb=sv.fb;echoSend=sv.echoSend;conv=sv.conv;spaceSend=sv.spaceSend;noiseBuf=sv.noiseBuf;analyser=sv.analyser;delayL=sv.delayL;delayR=sv.delayR;midiOut=svMidi;transportStart=svTS;stemSolo=null;}
       if(!buf)continue;const L=buf.getChannelData(0),R=buf.numberOfChannels>1?buf.getChannelData(1):L;
@@ -887,6 +887,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // chord progression: one chord per bar (cycles). Keeps original case (chords are case-sensitive).
   function parseBpm(text){for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     const h=line.slice(0,i).trim().toLowerCase();if(h==="bpm"||h==="tempo"){const n=parseFloat(line.slice(i+1));if(!isNaN(n))return Math.max(40,Math.min(300,n));}}return null;}
+  // per-section tempo map: tempo: intro 120 drop 140  (name/bpm pairs) -> {section: bpm}
+  function parseTempoMap(text){const m={};for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="tempo"){const t=line.slice(i+1).trim().split(/\s+/);
+      for(let k=0;k+1<t.length;k+=2){const n=parseFloat(t[k+1]);if(!isNaN(n)&&isNaN(parseFloat(t[k])))m[t[k].toLowerCase()]=Math.max(40,Math.min(300,n));}return m;}}return m;}
+  function cycleLenForBar(bar){const s=song.length?sectionAtBar(song,bar):null,bp=(s&&tempoMap[s])?tempoMap[s]:baseBpm;return (60/bp)*4;}
   function parseProg(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="prog"){const out=[];  // chords cycle one per bar; Am*4 = hold 4 bars
       for(const t of line.slice(i+1).trim().split(/\s+/).filter(Boolean)){const m=t.split("*"),nn=m[1]?parseInt(m[1],10):1;for(let k=0;k<(isNaN(nn)?1:Math.max(1,Math.min(64,nn)));k++)out.push(m[0]);}
@@ -1118,6 +1123,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(songOn&&playing)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
+    if(tempoMap&&Object.keys(tempoMap).length)cycleLen=cycleLenForBar(bar);  // per-section tempo (guarded: no map = unchanged)
     const anySolo=voices.some(v=>v.solo);  // live mixing: mute / solo per voice
     for(const v of activeVoices(bar)){
       if(v.mute||(anySolo&&!v.solo))continue;
@@ -1820,7 +1826,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
     codeView=buildCodeView(editor.value);
-    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
@@ -2181,6 +2187,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Théorie","| chord NAME","harmoniseur : chaque note devient un accord (maj min sus dim aug fifth oct maj7 min7 dom7 add9)"],
     ["Théorie","tune: just|pyth|Nedo|equal","accordage : juste intonation / Pythagore / N-EDO (ex. 19edo, 31edo) / tempérament égal"],
     ["Tempo","bpm: 128","fixe le tempo du morceau (BPM, dans le fichier) — sinon le bouton BPM"],
+    ["Tempo","tempo: intro 120 drop 140","tempo PAR SECTION (paires nom/bpm) — accélère/ralentit selon le morceau"],
     ["Théorie","prog: Am F C G","progression d'accords, un accord par mesure (cycle)"],
     ["Théorie","^  /  ^N","^ = l'accord courant de la prog ; ^N = sa Nième note (^1 = fondamentale, pour la basse)"],
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
