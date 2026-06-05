@@ -28,5 +28,7 @@ const chk = (cond, msg) => { if (!cond) { fail++; console.error('  ✗ ' + msg);
   for (let b = 0; b < 20; b++) { const y = new Float32Array(128); f.process([[x]], [[y]], { rate: [5], depth: [0.8] });
     for (const v of y) { mn = Math.min(mn, v); mx = Math.max(mx, v); } }
   chk(mx - mn > 0.05, 'flange modulates'); }
-console.log((fail ? 'FAIL' : 'OK') + ': worklet DSP — 5 processors checked' + (fail ? ', ' + fail + ' failed' : ''));
+{ const w = new P['loom-width'](), L = new Float32Array(4).fill(1), R = new Float32Array(4).fill(-1), oL = new Float32Array(4), oR = new Float32Array(4);
+  w.process([[L,R]],[[oL,oR]],{width:[1.8]}); chk(Math.abs(oL[0]-oR[0]) > 2, 'width widens the side'); }
+console.log((fail ? 'FAIL' : 'OK') + ': worklet DSP — 6 processors checked' + (fail ? ', ' + fail + ' failed' : ''));
 process.exit(fail ? 1 : 0);

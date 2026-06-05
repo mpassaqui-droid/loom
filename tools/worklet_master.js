@@ -43,3 +43,9 @@ for(let c=0;c<ch;c++){const x=(ins[c]||ins[0])[i],ri=this.pos-ds,r0=Math.floor(r
 a=this.b[c][((r0%2048)+2048)%2048],bb=this.b[c][(((r0+1)%2048)+2048)%2048],dl=a+(bb-a)*fr;
 this.b[c][this.pos]=x+dl*0.5;outs[c][i]=(x+dl)*0.6;}this.pos=(this.pos+1)%2048;}return true;}}
 registerProcessor('loom-flange',LoomFlange);
+class LoomWidth extends AudioWorkletProcessor{
+static get parameterDescriptors(){return[{name:'width',defaultValue:1.4,minValue:0,maxValue:2,automationRate:'k-rate'}];}
+process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;const w=p.width[0],n=outs[0].length;
+if(outs.length<2||ins.length<2){for(let c=0;c<outs.length;c++){const x=ins[c]||ins[0];for(let i=0;i<n;i++)outs[c][i]=x[i];}return true;}
+const l=ins[0],r=ins[1];for(let i=0;i<n;i++){const m=(l[i]+r[i])*0.5,s=(l[i]-r[i])*0.5*w;outs[0][i]=m+s;outs[1][i]=m-s;}return true;}}
+registerProcessor('loom-width',LoomWidth);

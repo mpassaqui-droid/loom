@@ -397,7 +397,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
             "for(let c=0;c<ch;c++){const x=(ins[c]||ins[0])[i],ri=this.pos-ds,r0=Math.floor(ri),fr=ri-r0,"+
               "a=this.b[c][((r0%2048)+2048)%2048],bb=this.b[c][(((r0+1)%2048)+2048)%2048],dl=a+(bb-a)*fr;"+
               "this.b[c][this.pos]=x+dl*0.5;outs[c][i]=(x+dl)*0.6;}this.pos=(this.pos+1)%2048;}return true;}}"+
-      "registerProcessor('loom-flange',LoomFlange);";
+      "registerProcessor('loom-flange',LoomFlange);"+
+      "class LoomWidth extends AudioWorkletProcessor{"+
+        "static get parameterDescriptors(){return[{name:'width',defaultValue:1.4,minValue:0,maxValue:2,automationRate:'k-rate'}];}"+
+        "process(inputs,outputs,p){const ins=inputs[0],outs=outputs[0];if(!ins||!ins.length)return true;const w=p.width[0],n=outs[0].length;"+
+          "if(outs.length<2||ins.length<2){for(let c=0;c<outs.length;c++){const x=ins[c]||ins[0];for(let i=0;i<n;i++)outs[c][i]=x[i];}return true;}"+
+          "const l=ins[0],r=ins[1];for(let i=0;i<n;i++){const m=(l[i]+r[i])*0.5,s=(l[i]-r[i])*0.5*w;outs[0][i]=m+s;outs[1][i]=m-s;}return true;}}"+
+      "registerProcessor('loom-width',LoomWidth);";
     try{_satURL=URL.createObjectURL(new Blob([src],{type:"application/javascript"}));}catch(_){_satURL="";}
     return _satURL;}
   function ensureWorklet(c){if(!c||!c.audioWorklet||c._satReady||!satWorkletURL())return Promise.resolve();
@@ -780,6 +786,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(v.reson&&ctx._satReady&&ctx.audioWorklet){try{const rn=new AudioWorkletNode(ctx,"loom-reson",{parameterData:{freq:v.reson.freq,decay:v.reson.decay}});out.connect(rn);out=rn;}catch(_){}}
     // flanger (worklet swept delay + feedback)
     if(v.flange&&ctx._satReady&&ctx.audioWorklet){try{const fl=new AudioWorkletNode(ctx,"loom-flange",{parameterData:{rate:v.flange.rate,depth:v.flange.depth}});out.connect(fl);out=fl;}catch(_){}}
+    // stereo widener (worklet mid/side)
+    if(v.width&&ctx._satReady&&ctx.audioWorklet){try{const wd=new AudioWorkletNode(ctx,"loom-width",{parameterData:{width:v.width}});out.connect(wd);out=wd;}catch(_){}}
     // ring modulation: multiply the signal by a sine -> clangy / metallic / robot timbres
     if(v.ring){const rf=Math.max(1,Math.min(8000,v.ring)),rm=ctx.createGain();rm.gain.value=0;
       const ro=ctx.createOscillator();ro.type="sine";ro.frequency.value=rf;ro.connect(rm.gain);
@@ -1036,7 +1044,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1101,14 +1109,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="vocode"||p[0]==="vocoder")vocode=p[1]||"vox";
       else if(p[0]==="redux"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.5;if(nn>1)nn/=100;redux=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="reson"){const ff=parseFloat(p[1]),dd=parseFloat(p[2]);if(!isNaN(ff))reson={freq:Math.max(20,Math.min(8000,ff)),decay:isNaN(dd)?0.92:Math.max(0,Math.min(0.995,dd))};}
-      else if(p[0]==="flange"){const ra=parseFloat(p[1]),de=parseFloat(p[2]);flange={rate:isNaN(ra)?0.3:Math.max(0.01,Math.min(10,ra)),depth:isNaN(de)?0.6:Math.max(0,Math.min(1,de))};}
+      else if(p[0]==="flange"){const ra=parseFloat(p[1]),de=parseFloat(p[2]);flange={rate:isNaN(ra)?0.3:Math.max(0.01,Math.min(10,ra)),depth:isNaN(de)?0.6:Math.max(0,Math.min(1,de))}
+      else if(p[0]==="width"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=1.4;width=Math.max(0,Math.min(2,nn));};}
       else if(p[0]==="pwm"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.6;if(nn>1)nn/=100;pwm=Math.max(0.05,Math.min(1,nn));}
       else if(p[0]==="fenv"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.6;if(nn>1)nn/=100;fenv=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="semi"||p[0]==="transpose"){const nn=parseInt(p[1],10);if(!isNaN(nn))semi=Math.max(-36,Math.min(36,nn));}
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -2281,6 +2290,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Son","| ring FREQ","modulation en anneau (Hz) : timbres métalliques/robotiques/cloches inharmoniques"],
     ["Worklet","| reson FREQ [DECAY]","résonateur en peigne accordé (Hz) — anneau métallique/Karplus (AudioWorklet)"],
     ["Worklet","| flange RATE [DEPTH]","flanger (LFO sur délai court + feedback) — swoosh d'avion (AudioWorklet)"],
+    ["Worklet","| width N","widener stéréo M/S (0-2) — élargit l'image (mono passe tel quel) (AudioWorklet)"],
     ["Son","| am FREQ","modulation d'amplitude (Hz) : trémolo audio / bandes latérales — plus doux que ring"],
     ["Son & filtre","| bp/notch N","filtre passe-bande / réjecteur (Hz, + q) — en plus de lp/hp ; voix nasales, wah"],
     ["Son & filtre","| fenv N","enveloppe de filtre (0-1) : la coupure suit une ADSR — sons acid/plucky/wow"],
