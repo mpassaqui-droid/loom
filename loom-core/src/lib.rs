@@ -87,6 +87,8 @@ pub struct Event {
     pub wave: Wave,
     pub gain: f32,
     pub is_drum: bool,
+    /// Velocity multiplier from accents (`!`) and crescendo/decrescendo rolls (`*N>`/`*N<`).
+    pub vel: f32,
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
@@ -405,7 +407,7 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
         for (i, raw) in eff.iter().enumerate() {
             let tok = pick_alt(raw, bar); // A/B variation: choose this bar's alt
             if tok == "." || tok == "~" { continue; }
-            let (base, prob, ratchet) = token_mods(tok);
+            let (base, prob, ratchet, accent, ramp_dir) = token_mods(tok);
             // Probabilistic token: deterministically skip when the roll fails.
             if let Some(p) = prob {
                 if rand01(seed, bar, &v.name, i) >= p { continue; }
@@ -413,7 +415,7 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
             if base.is_empty() || base == "." || base == "~" { continue; }
             // Degrees → one note; chords → several notes at the same phase.
             let notes = resolve_token(base, v.is_drum, base_oct, voice_key.as_ref());
-            let push = |events: &mut Vec<Event>, phase: f32, note: &str| {
+            let push = |events: &mut Vec<Event>, phase: f32, note: &str, vel: f32| {
                 events.push(Event {
                     phase,
                     voice: v.name.clone(),
@@ -421,6 +423,7 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
                     wave: v.wave,
                     gain: v.gain,
                     is_drum: v.is_drum,
+                    vel,
                 });
             };
             match v.arp {
@@ -429,14 +432,15 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
                     let ord = arp_order(&notes, mode);
                     let m = ord.len();
                     for (j, note) in ord.iter().enumerate() {
-                        push(&mut events, (i as f32 + j as f32 / m as f32) / n as f32, note);
+                        push(&mut events, (i as f32 + j as f32 / m as f32) / n as f32, note, accent);
                     }
                 }
                 // Otherwise: ratchet subdivides the step into evenly-spaced hits.
                 _ => {
                     for j in 0..ratchet {
                         let phase = (i as f32 + j as f32 / ratchet as f32) / n as f32;
-                        for note in &notes { push(&mut events, phase, note); }
+                        let vel = accent * ramp_factor(j, ratchet, ramp_dir);
+                        for note in &notes { push(&mut events, phase, note, vel); }
                     }
                 }
             }
@@ -838,14 +842,20 @@ fn digits_after(tok: &str, at: usize) -> &str {
 /// Parse a token's modifiers, in any order: probability `?P` (`x?` ~50%,
 /// `x?70` = 70%) and ratchet `*N` (`x*3` = 3 sub-hits). Returns the bare base
 /// token, an optional fire probability in 0..1, and a ratchet count ≥ 1.
-fn token_mods(tok: &str) -> (&str, Option<f32>, usize) {
+fn token_mods(tok: &str) -> (&str, Option<f32>, usize, f32, i8) {
+    // a group/alt token (`<` `{` `[`) carries its own `>`/`<` brackets — don't read those as a roll ramp
+    let grp = tok.starts_with('<') || tok.starts_with('{') || tok.starts_with('[');
     let q = tok.find('?');
     let r = tok.find('*');
-    let cut = match (q, r) {
-        (Some(a), Some(b)) => a.min(b),
-        (Some(a), None) => a,
-        (None, Some(b)) => b,
-        (None, None) => return (tok, None, 1),
+    let e = tok.find('!');
+    let gt = if grp { None } else { tok.find('>').filter(|&i| i > 0) };
+    let lt = if grp { None } else { tok.find('<').filter(|&i| i > 0) };
+    let ramp_dir: i8 = if gt.is_some() { 1 } else if lt.is_some() { -1 } else { 0 };
+    let cands = [q, r, e, gt, lt];
+    let cut = cands.iter().filter_map(|&x| x).min();
+    let cut = match cut {
+        Some(c) => c,
+        None => return (tok, None, 1, 1.0, 0), // no modifiers at all
     };
     let prob = q.map(|p| {
         let d = digits_after(tok, p);
@@ -854,7 +864,19 @@ fn token_mods(tok: &str) -> (&str, Option<f32>, usize) {
     let ratchet = r
         .map(|p| digits_after(tok, p).parse::<usize>().unwrap_or(2).max(1))
         .unwrap_or(1);
-    (&tok[..cut], prob, ratchet)
+    // accent: each trailing `!` multiplies velocity (`!`=x1.4, `!!`=x1.8…)
+    let accent = e.map(|p| {
+        let cnt = tok[p..].bytes().take_while(|&b| b == b'!').count();
+        1.0 + 0.4 * cnt as f32
+    }).unwrap_or(1.0);
+    (&tok[..cut], prob, ratchet, accent, ramp_dir)
+}
+
+/// Velocity ramp across a ratchet's N sub-hits (crescendo +1 / decrescendo -1).
+fn ramp_factor(j: usize, n: usize, dir: i8) -> f32 {
+    if dir == 0 || n < 2 { return 1.0; }
+    let t = j as f32 / (n - 1) as f32;
+    if dir > 0 { 0.4 + 0.6 * t } else { 1.0 - 0.6 * t }
 }
 
 /// A/B variation: an alternation group `<a/b/c>` picks one alternative per bar,
@@ -1068,6 +1090,33 @@ mod tests {
         // chunk 2 rev: reverse the active half (whole half reversed), rotating each bar
         assert_eq!(apply_verb(&t, "chunk 2 rev", 0, 0), vec!["b","a","c","d"]); // first half
         assert_eq!(apply_verb(&t, "chunk 2 rev", 1, 0), vec!["a","b","d","c"]); // second half
+    }
+
+    #[test]
+    fn accents_set_velocity() {
+        let v = parse("d: x x! x!! x");
+        let ev = schedule_bar(&v, 0);
+        let vels: Vec<f32> = ev.iter().map(|e| e.vel).collect();
+        assert_eq!(vels, vec![1.0, 1.4, 1.8, 1.0]);
+    }
+
+    #[test]
+    fn crescendo_roll_ramps_velocity() {
+        let v = parse("d: x*4>");
+        let ev = schedule_bar(&v, 0);
+        let vels: Vec<f32> = ev.iter().map(|e| (e.vel * 100.0).round() / 100.0).collect();
+        assert_eq!(vels, vec![0.4, 0.6, 0.8, 1.0]);
+        let v2 = parse("d: x*4<");
+        let vels2: Vec<f32> = schedule_bar(&v2, 0).iter().map(|e| (e.vel * 100.0).round() / 100.0).collect();
+        assert_eq!(vels2, vec![1.0, 0.8, 0.6, 0.4]);
+    }
+
+    #[test]
+    fn alternation_not_misread_as_roll() {
+        // `<1/3>` must keep its closing `>` — not parsed as a crescendo
+        let (base, _, _, _, dir) = token_mods("<1/3>");
+        assert_eq!(base, "<1/3>");
+        assert_eq!(dir, 0);
     }
 
     #[test]
