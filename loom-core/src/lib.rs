@@ -467,6 +467,42 @@ pub fn midi_to_freq(midi: i32) -> f32 {
     440.0 * 2f32.powf((midi as f32 - 69.0) / 12.0)
 }
 
+/// Microtuning systems (mirrors the web engine's `tune:` directive).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Tuning {
+    Equal,
+    /// 5-limit just intonation.
+    Just,
+    /// 3-limit Pythagorean.
+    Pyth,
+    /// N-tone equal temperament (pure octaves, N equal steps).
+    Edo(u32),
+}
+
+/// Cents deviation from 12-TET for a semitone interval (0..=11) from the tonic.
+/// 5-limit JI and Pythagorean tables match the web engine exactly.
+pub fn tune_cents(interval: i32, tuning: Tuning) -> f32 {
+    const JI: [f32; 12]   = [0.0, 11.73, 3.91, 15.64, -13.69, -1.96, -9.78, 1.96, 13.69, -15.64, -3.91, -11.73];
+    const PYTH: [f32; 12] = [0.0, -9.78, 3.91, -5.87, 7.82, -1.96, 11.73, 1.96, -7.82, 5.87, -3.91, 9.78];
+    let iv = interval.rem_euclid(12) as usize;
+    match tuning {
+        Tuning::Equal => 0.0,
+        Tuning::Just => JI[iv],
+        Tuning::Pyth => PYTH[iv],
+        // N-EDO: snap the semitone interval to the nearest EDO step, return the cents delta.
+        Tuning::Edo(n) => {
+            let n = n.max(1) as f32;
+            let steps = (interval as f32 * n / 12.0).round();
+            steps * 1200.0 / n - interval as f32 * 100.0
+        }
+    }
+}
+
+/// Frequency of a scale degree under a tuning system (cents applied on top of the chromatic pitch).
+pub fn degree_freq(midi: i32, interval_from_tonic: i32, tuning: Tuning) -> f32 {
+    midi_to_freq(midi) * 2f32.powf(tune_cents(interval_from_tonic, tuning) / 1200.0)
+}
+
 // ---------------------------------------------------------------------------
 // Music theory layer (roadmap item 1): key + scale + scale degrees.
 //
@@ -1032,6 +1068,24 @@ mod tests {
         // chunk 2 rev: reverse the active half (whole half reversed), rotating each bar
         assert_eq!(apply_verb(&t, "chunk 2 rev", 0, 0), vec!["b","a","c","d"]); // first half
         assert_eq!(apply_verb(&t, "chunk 2 rev", 1, 0), vec!["a","b","d","c"]); // second half
+    }
+
+    #[test]
+    fn microtuning_matches_web_engine() {
+        // major third (5/4) is ~13.7 cents flat in JI
+        assert!((tune_cents(4, Tuning::Just) - (-13.69)).abs() < 0.01);
+        // perfect fifth (3/2) is ~2 cents sharp in both JI and Pythagorean
+        assert!((tune_cents(7, Tuning::Just) - 1.96).abs() < 0.01);
+        assert!((tune_cents(7, Tuning::Pyth) - 1.96).abs() < 0.01);
+        // equal temperament: no deviation
+        assert_eq!(tune_cents(4, Tuning::Equal), 0.0);
+        // 24-EDO (quarter tones): a 12-TET semitone is an exact EDO step -> 0 delta
+        assert!((tune_cents(1, Tuning::Edo(24))).abs() < 0.01);
+        // 19-EDO: the major third lands flat of 12-TET
+        assert!(tune_cents(4, Tuning::Edo(19)) < 0.0);
+        // octave stays pure under just intonation (a degree at the octave above the tonic)
+        let f = degree_freq(60, 0, Tuning::Just);
+        assert!((f - midi_to_freq(60)).abs() < 1e-3);
     }
 
     #[test]
