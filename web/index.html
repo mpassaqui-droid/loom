@@ -451,7 +451,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function connectFx(outNode,v){if(!v)return;
     if(v.reverb&&conv){const s=ctx.createGain();s.gain.value=Math.min(1,v.reverb);outNode.connect(s);s.connect(conv);}
     if(v.dly&&delay){const s=ctx.createGain();s.gain.value=Math.min(1,v.dly);outNode.connect(s);s.connect(delay);}}
+  // granular sample player: spray the buffer as a cloud of short randomized grains (timestretch/texture)
+  function grainSample(name,t,gain,rate,v){const b=sbuf[name];if(!b)return false;
+    const G=Math.min(40,Math.max(6,Math.round(6+v.grain*40))),glen=Math.min(0.12,0.04+v.grain*0.06),spread=0.45,dur=b.duration||0.4;
+    for(let k=0;k<G;k++){const gt=t+(k/G)*spread+Math.random()*0.01,off=Math.random()*Math.max(0.001,dur-glen);
+      const s=ctx.createBufferSource();s.buffer=b;s.playbackRate.value=(rate||1)*(1+(Math.random()-0.5)*v.grain*0.25);
+      const gg=ctx.createGain();gg.gain.setValueAtTime(0.0001,gt);gg.gain.exponentialRampToValueAtTime(Math.max(0.001,(gain||0.5)/Math.sqrt(G)*2),gt+glen*0.4);gg.gain.exponentialRampToValueAtTime(0.0001,gt+glen);
+      let node=gg;if(ctx.createStereoPanner){const pp=ctx.createStereoPanner();pp.pan.value=(Math.random()*2-1)*0.8;gg.connect(pp);node=pp;}
+      s.connect(gg);node.connect(bus);connectFx(node,v);s.start(gt,off,glen+0.02);}return true;}
   function playSample(name,t,gain,rate,v){const b=sbuf[name];if(!b)return false;
+    if(v&&v.grain)return grainSample(name,t,gain,rate,v);
     const s=ctx.createBufferSource();s.buffer=b;s.playbackRate.value=rate||1;
     const g=ctx.createGain();g.gain.value=gain!=null?gain:0.9;s.connect(g).connect(bus);connectFx(g,v);
     if(v&&v.chop){const N=v.chop,idx=(v._chopN=((v._chopN||0)+1))%N,sl=b.duration/N;s.start(t,idx*sl,sl);}  // beat-slice: play the next 1/N slice
