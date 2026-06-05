@@ -88,5 +88,12 @@ const etThird = L.degreeToMidi('3', cmaj);
 eq(jiThird < etThird, true, 'just intonation major 3rd is flatter than equal');
 L.setTuning('equal');
 
+// midiToToken (hum-to-melody pitch snapping) against C major
+L.setKey(L.parseKey('key: c major'));
+eq(L.midiToToken(60), '1', 'midiToToken C -> degree 1');
+eq(L.midiToToken(64), '3', 'midiToToken E -> degree 3');
+eq(L.midiToToken(67), '5', 'midiToToken G -> degree 5');
+eq(L.midiToToken(72), "1'", 'midiToToken C5 -> 1 up octave');
+
 console.log((fail===0 ? 'OK' : 'FAIL') + ': ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -179,6 +179,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="run">&#9658; RUN</button>
     <button id="stop" class="stop">&#9632; STOP</button>
     <button id="rec" class="rec">&#9679; REC</button>
+    <button id="humBtn" class="go" title="chante/siffle → LOOM écrit la mélodie">&#127908; HUM</button>
     <button id="renderBtn" class="go" title="exporter tout le morceau en WAV">&#11015; RENDER</button>
     <button id="stemsBtn" class="go" title="exporter chaque voix en WAV séparé (stems)">&#11015; STEMS</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
@@ -754,6 +755,31 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     for(const m of mods){m.start(t);m.stop(stop);}
     if(lfoOsc){lfoOsc.start(t);lfoOsc.stop(stop);}}
   function midiToFreq(midi){return 440*Math.pow(2,(midi-69)/12);}
+  // --- HUM TO MELODY: detect sung pitch (autocorrelation) and write a melody line ---
+  function autoCorrelate(buf,sr){let rms=0;for(let i=0;i<buf.length;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/buf.length);if(rms<0.01)return -1;
+    let r1=0,r2=buf.length-1,thr=0.2;for(let i=0;i<buf.length/2;i++)if(Math.abs(buf[i])<thr){r1=i;break;}
+    for(let i=1;i<buf.length/2;i++)if(Math.abs(buf[buf.length-i])<thr){r2=buf.length-i;break;}
+    const b=buf.slice(r1,r2),n=b.length,c=new Array(n).fill(0);
+    for(let lag=0;lag<n;lag++)for(let i=0;i<n-lag;i++)c[lag]+=b[i]*b[i+lag];
+    let d=0;while(d<n-1&&c[d]>c[d+1])d++;let maxv=-1,maxp=-1;for(let i=d;i<n;i++)if(c[i]>maxv){maxv=c[i];maxp=i;}
+    if(maxp<=0)return -1;let T=maxp;const x1=c[maxp-1]||0,x2=c[maxp],x3=c[maxp+1]||0,a=(x1+x3-2*x2)/2,bb=(x3-x1)/2;if(a)T=maxp-bb/(2*a);
+    return sr/T;}
+  // snap a midi note to the current key/scale (or note name if no key), as a LOOM token
+  function midiToToken(midi){if(!key)return midiToName(midi);
+    const sc=key.scale,tonic=key.tonic;let best=null,bestd=99,bestOct=0;
+    for(let oc=-2;oc<=3;oc++)for(let d=0;d<sc.length;d++){const m=12*(key.octave+oc+1)+tonic+sc[d];const dd=Math.abs(m-midi);if(dd<bestd){bestd=dd;best=d+1;bestOct=oc;}}
+    let tok=String(best);for(let i=0;i<Math.abs(bestOct);i++)tok+=bestOct>0?"'":",";return tok;}
+  async function humToMelody(){if(!(navigator&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){log("[ hum ] micro non disponible","err");return;}
+    initAudio();if(ctx.state==="suspended")await ctx.resume();let stream;
+    try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(_){log("[ hum ] micro refusé","err");return;}
+    const src=ctx.createMediaStreamSource(stream),an=ctx.createAnalyser();an.fftSize=2048;src.connect(an);
+    key=parseKey(editor.value);const bpm=parseBpm(editor.value)||+$("bpm").value||120,stepMs=(60/bpm)/2*1000,steps=16,buf=new Float32Array(an.fftSize),toks=[];
+    $("humBtn").disabled=true;log("[ hum ] chante "+steps+" temps… ("+(steps*stepMs/1000).toFixed(1)+"s)","ai");
+    for(let s=0;s<steps;s++){await new Promise(r=>setTimeout(r,stepMs));an.getFloatTimeDomainData(buf);
+      const f=autoCorrelate(buf,ctx.sampleRate);toks.push((f>50&&f<1200)?midiToToken(Math.round(69+12*Math.log2(f/440))):".");}
+    stream.getTracks().forEach(t=>t.stop());$("humBtn").disabled=false;
+    editor.value=editor.value.replace(/\s*$/,"")+"\nhum: "+toks.join(" ")+" | tri | lp 2500 | reverb 0.35 | gain 0.16";
+    log("[ hum ] mélodie ajoutée : "+toks.join(" "),"ai");run();}
   function midiToName(m){const N=["c","c#","d","d#","e","f","f#","g","g#","a","a#","b"];return N[((m%12)+12)%12]+(Math.floor(m/12)-1);}
   function noteToFreq(n){const m=/^([a-gA-G])([#b]?)(-?\d)$/.exec(n);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
@@ -2514,6 +2540,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   $("rec").addEventListener("click",toggleRec);
   $("renderBtn").addEventListener("click",renderOffline);
   $("stemsBtn").addEventListener("click",renderStems);
+  $("humBtn").addEventListener("click",humToMelody);
   $("stageBtn").addEventListener("click",toggleStage);
   $("stage").addEventListener("click",()=>{if(stageOn&&!showCode)toggleStage();});
   document.addEventListener("keydown",e=>{
@@ -2566,7 +2593,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   bind("vol","vVol",v=>{if(master)master.gain.value=v/100*0.8;});
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   // expose pure language functions for unit testing (harmless in the browser)
-  try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,degreeToMidi,parseChord,romanToChord,rampF,parseKey,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;}};}catch(_){}
   animate();
 })();
 </script>
