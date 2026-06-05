@@ -90,7 +90,7 @@ pub struct Event {
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 8] = ["key", "scale", "seed", "song", "arrange", "duck", "feel", "scene"];
+const DIRECTIVES: [&str; 12] = ["key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune", "bpm", "tempo"];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
 /// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.
@@ -270,8 +270,56 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
             r.rotate_left(k);
             r
         }
+        Some("chunk") => {
+            // split into N chunks, apply the inner verb to a DIFFERENT chunk each bar
+            if tokens.is_empty() { return tokens.to_vec(); }
+            let n = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(4).max(1) as usize;
+            let w = bar.rem_euclid(n as i64) as usize;
+            let part = (tokens.len() / n).max(1);
+            let s = (w * part).min(tokens.len());
+            let e = if w == n - 1 { tokens.len() } else { (s + part).min(tokens.len()) };
+            let inner = parts[2..].join(" ");
+            let mut r = tokens[..s].to_vec();
+            r.extend(apply_verb(&tokens[s..e], &inner, bar, seed));
+            r.extend_from_slice(&tokens[e..]);
+            r
+        }
+        Some("add" | "trans") => {
+            // diatonic transpose of every scale-degree token by N steps
+            let n = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0);
+            tokens.iter().map(|t| transpose_deg(t, n)).collect()
+        }
         _ => tokens.to_vec(),
     }
+}
+
+/// Diatonically transpose one degree token by `n` scale-steps (octave wrap, marks/mods kept).
+/// Leaves notes/chords/accidentals untouched (mirrors the web engine's transposeDeg).
+fn transpose_deg(tok: &str, n: i64) -> String {
+    if n == 0 { return tok.to_string(); }
+    let bytes = tok.as_bytes();
+    if bytes.is_empty() { return tok.to_string(); }
+    let d0 = (bytes[0] as char).to_digit(10);
+    let deg = match d0 { Some(d) if (1..=7).contains(&d) => d as i64, _ => return tok.to_string() };
+    // parse octave marks ' (up) , (down); collect any trailing mods (?* digits, !)
+    let mut octs: i64 = 0;
+    let mut mods = String::new();
+    for &c in &bytes[1..] {
+        match c {
+            b'\'' => octs += 1,
+            b',' => octs -= 1,
+            b'?' | b'*' | b'!' => { mods.push(c as char); }
+            b'0'..=b'9' if !mods.is_empty() => { mods.push(c as char); }
+            _ => return tok.to_string(), // accidental / unexpected -> leave as-is
+        }
+    }
+    let d = deg - 1 + n;
+    let nd = d.rem_euclid(7) + 1;
+    octs += d.div_euclid(7);
+    let mut out = nd.to_string();
+    for _ in 0..octs.abs() { out.push(if octs > 0 { '\'' } else { ',' }); }
+    out.push_str(&mods);
+    out
 }
 
 /// One generation of an elementary cellular automaton (Wolfram `rule`, `n`
@@ -525,6 +573,14 @@ pub fn scale_intervals(name: &str) -> Option<Vec<i32>> {
         "sikah"                            => vec![0, 2, 4, 6, 7, 9, 11],
         "huzam"                            => vec![0, 2, 4, 5, 7, 9, 10],
         "jiharkah"                         => vec![0, 2, 4, 5, 7, 9, 11],
+        // overtone / contemporary (added to match the web engine)
+        "overtone" | "acoustic" | "lydian_dominant" => vec![0, 2, 4, 6, 7, 9, 10],
+        "altered" | "super_locrian"        => vec![0, 1, 3, 4, 6, 8, 10],
+        "lydian_augmented"                 => vec![0, 2, 4, 6, 8, 9, 11],
+        "messiaen3"                        => vec![0, 2, 3, 4, 6, 7, 8, 10, 11],
+        "messiaen4"                        => vec![0, 1, 2, 5, 6, 7, 8, 11],
+        "ritusen"                          => vec![0, 2, 5, 7, 9],
+        "chinese"                          => vec![0, 4, 6, 7, 11],
         _ => return None,
     };
     Some(s)
@@ -954,6 +1010,38 @@ mod tests {
     fn rev_reverses() {
         let t = vec!["a".into(),"b".into(),"c".into()];
         assert_eq!(apply_verb(&t, "rev", 0, 0), vec!["c","b","a"]);
+    }
+
+    #[test]
+    fn transpose_add_is_diatonic() {
+        assert_eq!(transpose_deg("1", 2), "3");      // a third up
+        assert_eq!(transpose_deg("7", 2), "2'");     // wraps to next octave
+        assert_eq!(transpose_deg("1", 7), "1'");     // octave
+        assert_eq!(transpose_deg("1", -2), "6,");    // down to lower octave
+        assert_eq!(transpose_deg("1'", 2), "3'");    // keeps octave mark
+        assert_eq!(transpose_deg("3?40", 2), "5?40");// keeps probability mod
+        assert_eq!(transpose_deg("c3", 2), "c3");    // leaves notes alone
+        // as a verb across a pattern
+        let t: Vec<String> = ["1","3","5"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&t, "add 2", 0, 0), vec!["3","5","7"]);
+    }
+
+    #[test]
+    fn chunk_applies_to_rotating_slice() {
+        let t: Vec<String> = ["a","b","c","d"].iter().map(|s| s.to_string()).collect();
+        // chunk 2 rev: reverse the active half (whole half reversed), rotating each bar
+        assert_eq!(apply_verb(&t, "chunk 2 rev", 0, 0), vec!["b","a","c","d"]); // first half
+        assert_eq!(apply_verb(&t, "chunk 2 rev", 1, 0), vec!["a","b","d","c"]); // second half
+    }
+
+    #[test]
+    fn new_scales_resolve() {
+        assert_eq!(scale_intervals("overtone"), Some(vec![0,2,4,6,7,9,10]));
+        assert_eq!(scale_intervals("altered"), Some(vec![0,1,3,4,6,8,10]));
+        assert_eq!(scale_intervals("messiaen3"), Some(vec![0,2,3,4,6,7,8,10,11]));
+        assert_eq!(scale_intervals("ritusen"), Some(vec![0,2,5,7,9]));
+        assert_eq!(scale_intervals("chinese"), Some(vec![0,4,6,7,11]));
+        assert!(scale_intervals("not_a_scale").is_none());
     }
 
     #[test]
