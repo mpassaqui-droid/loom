@@ -1872,6 +1872,65 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   PRESETS.strings="# CORDES FROTTÉES (modèle physique bowed / Karplus-Strong soutenu).\nkey:  a minor\nprog: Am F C G\nscene: lissa3d\ncello: ^1 . . . | bow | oct 2 | lp 1400 | comp 0.4 | reverb 0.6 | gain 0.13\nviola: ^ . . . . . . . | bow | lp 1900 | reverb 0.7 | gate 1.6 | gain 0.08 | hue 200\nlead:  1 . 3 . 5 . 1' . 7 . 5 . 3 . 2 . | bow | lp 2200 | reverb 0.5 | gate 0.7 | gain 0.1 | hue 280";
   PRESETS.kalimba="# KALIMBA / HARPE (corde pincée Karplus-Strong).\nkey:  c major\nprog: C G Am F\nscene: phyllo\nkal:  ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 | pluck 0.7 | delay 0.3 | reverb 0.5 | gate 0.6 | gain 0.14 | hue 40\nbell: . . ^1' . . . ^3' . | bell | reverb 0.6 | delay 0.4 | gain 0.1 | hue 60\nbass: ^1 . . . ^1 . . . | pluck 0.4 | oct 2 | gain 0.16";
   PRESETS.westcoast="# WEST COAST (wavefolding Buchla + granulaire + PWM).\nkey:  c minor\nscene: reaction\ndrone: 1 . . . | saw | fold 0..0.9 | over 8 | lp 1200 | reverb 0.5 | gate 2 | gain 0.1\ncloud: 5 . . . 1' . . . | sine | grain 0.6 | reverb 0.7 | gate 1.5 | gain 0.08 | hue 180\nbleep: 1 5 1' 5 3 5 1' 5 | pwm 0.6 | lp 1800..3000 | over 8 | delay 0.3 | gain 0.12 | hue 300\nkick:  x . . . x . . . | sample bd";
+  PRESETS.nova=`# ================================================================
+#  LOOM — « NOVA »
+#  Vitrine TOTALE : modèles physiques, hard-sync, vocodeur,
+#  granulaire, modale, anche, PWM… le tout en juste intonation.
+#  > RUN. Puis SCÈNE (touche N = 71 visuels). Tu peux coder en live.
+#  > 1er RUN : les samples (vocodeur) se chargent — relance si besoin.
+# ================================================================
+
+bpm:   124
+seed:  21
+key:   a minor
+tune:  just            # juste intonation (ratios purs)
+prog:  Am*2 F*2 C*2 G*2 Am*2 F*2 Dm*2 E*2
+duck:  54
+feel:  18
+scene: harmono
+song:  intro*8 build*8 drop*16 break*8 drop*16 outro*8
+
+# ---------- BAS : kick + basse (sub + wavefolding + comp + slide) ----------
+kick:  x . . . x . . . x . . . x . . . | sample bd | gain 0.6 | comp 0.4 | in build drop outro
+sub:   ^1 . . . ^1 . . . ^1 . . . ^1 . . . | sine | oct 1 | sub 0.5 | gain 0.36 | in build drop outro
+bass:  ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | saw | oct 2 | sub 0.7 | fold 0.3 | lp 700 q 6 | fenv 0.5 | slide | comp 0.4 | gate 0.4 | gain 0.13 | hue 30 | in build drop outro
+
+# ---------- BATTERIE (synthé : tom/cowbell/rim + hats) ----------
+clap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.42 | shift 0.04 | noise 0.2 | in drop outro
+hat:   x x! x x x x! x x x x! x x x x! x x | sample hh | gain 0.11 | swing 58 | degrade 25 | jux rot 3 | in build drop outro
+tom:   . . . . . . x . . . . . . x . . | gain 0.4 | in drop
+cow:   . . . . . . . . x . . . . . . . | gain 0.22 | in drop
+rim:   . x . . . x . . . x . . . x . x | gain 0.2 | flam | in drop
+
+# ---------- CORDES FROTTÉES (bow) + ANCHE (reed) ----------
+strings: ^ . . . . . . . . . . . . . . . | bow | unison 2 | lp 2000 | reverb 0.7 | gate 1.7 | gain 0.09 | hue 200
+reedln@drop: . . 1' . 3 . . . 2' . . . 1' . 7 . | reed | lp 2400 | reverb 0.5 | delay 0.3 | gate 0.6 | gain 0.1 | hue 150
+
+# ---------- HARPE (Karplus-Strong) + CLOCHES (modale) ----------
+harp:  ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 ^1 ^2 ^3 ^2 ^3 ^2 ^1 ^2 | pluck 0.75 | lp 3200 | strum 0.01 | delay 0.3 | reverb 0.6 | gate 0.6 | gain 0.12 | hue 40 | in drop break outro
+bells: {. ^1'} {. ^3'} {^2' .} {. ^1'} {^3' .} {. ^2'} {^1' .} {. ^3'} | bell | reverb 0.6 | delay 0.4 | degrade 30 | gain 0.11 | pan -0.25 | hue 60 | in intro break drop
+
+# ---------- CHŒUR (formants + phaser) + NUAGE GRANULAIRE ----------
+choir: ^ . . . . . . . . . . . . . . . | saw | unison 4 | vowel a | phaser 0.4 | lp 2200 | reverb 0.7 | gate 1.7 | gain 0.09 | hue 280
+cloud@drop: ^1 . . . . . . . | sine | grain 0.6 | reverb 0.7 | gate 2 | gain 0.08 | pan 0.3 | hue 220
+
+# ---------- VOCODEUR (le synthé qui « parle ») ----------
+robot@drop: ^ . . . ^ . . . | saw | unison 3 | vocode vox | lp 3000 | reverb 0.3 | gate 0.8 | gain 0.13 | hue 300
+
+# ---------- LEAD hard-sync (le « screaming » du drop) ----------
+sync@drop: 1 . 1' . 5 . 1 . 4 . 1 . 5 . 1' . | sync 4 | lp 1500..4000 | over 16 | reverb 0.3 | gate 0.5 | gain 0.08 | hue 0
+# PWM dans le break (largeur d'impulsion modulée)
+pwmln@break: 1 5 1' 5 3 5 1' 5 | pwm 0.6 | lp 2000 | jux add 2 | delay 0.3 | gate 0.5 | gain 0.1 | hue 320
+
+# ---------- BUILD : drone wavefolding + roll crescendo ----------
+drone@build: ^1 . . . . . . . | saw | supersaw | fold 0..0.9 | over 8 | lp 400..5000 | reverb 0.5 | gate 1.8 | gain 0.08
+roll@build:  . . . . . . . . x*4> x*4> x*8> x*8> x*16> x*16> x*16> x*16> | sample sd | gain 0.3
+
+# ---------- BREAK : phasing Reich (cordes pincées) ----------
+ph1@break: 1 2 3 5 6 | poly 16 | pluck 0.6 | reverb 0.6 | gain 0.1 | pan -0.35 | hue 190
+ph2@break: 1 2 3 5 6 | poly 17 | pluck 0.6 | reverb 0.6 | gain 0.1 | pan 0.35 | hue 290
+
+# Essaie en live : scene: tracker · tune: 19edo · prog: Dm Bb F C · joue au clavier MIDI !`;
   PRESETS.atlas=`# ================================================================
 #  LOOM — « ATLAS »
 #  Vitrine de la synthèse niveau labo (Stanford/CCRMA · IRCAM).
@@ -2012,7 +2071,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["atlas","aurora"]],
+    ["★ Vitrines",["nova","atlas","aurora"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto","signals"]],
