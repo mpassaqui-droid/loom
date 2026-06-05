@@ -469,8 +469,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // --- MIDI out: send a voice's notes to a DAW / hardware synth ---
   function initMidi(){if(midiAsked||!(navigator&&navigator.requestMIDIAccess))return;midiAsked=true;
     navigator.requestMIDIAccess().then(a=>{const outs=[...a.outputs.values()];if(outs.length){midiOut=outs[0];
-      log("[ midi ] connecté: "+(midiOut.name||"sortie")+"","ai");}else log("[ midi ] aucune sortie MIDI trouvée","err");
+      log("[ midi ] sortie: "+(midiOut.name||"sortie")+"","ai");}
+      const ins=a.inputs?[...a.inputs.values()]:[];if(ins.length){for(const inp of ins)inp.onmidimessage=onMidiIn;log("[ midi ] clavier: "+(ins[0].name||"in")+" — joue !","ai");}
     }).catch(()=>log("[ midi ] accès refusé","err"));}
+  // MIDI IN: play the LOOM synth live from a keyboard (uses the 'lead' voice's timbre, or a default saw)
+  const liveVoices={};
+  function onMidiIn(e){const d=e.data,cmd=d[0]&0xf0;if(cmd===0x90&&d[2]>0)liveNoteOn(d[1],d[2]);else if(cmd===0x80||(cmd===0x90&&d[2]===0))liveNoteOff(d[1]);}
+  function liveNoteOn(note,vel){if(!ctx)return;if(ctx.state==="suspended")ctx.resume();liveNoteOff(note);
+    const v=voices.find(x=>x.name==="lead"&&x.type!=="drum")||voices.find(x=>x.type!=="drum")||{wave:"sawtooth",gain:0.22};
+    const now=ctx.currentTime,freq=440*Math.pow(2,(note-69)/12),g=ctx.createGain();
+    g.gain.setValueAtTime(0.0001,now);g.gain.exponentialRampToValueAtTime((vel/127)*0.32,now+0.008);
+    const f=ctx.createBiquadFilter();f.type=v.filterType||"lowpass";f.frequency.value=(v.cutoff&&typeof v.cutoff==="number")?v.cutoff:3200;f.Q.value=v.q||1;f.connect(g);g.connect(bus);connectFx(g,v);
+    const os=[];for(let i=0;i<2;i++){const o=ctx.createOscillator();o.type=v.wave||"sawtooth";o.frequency.value=freq;if(i)o.detune.value=8;o.connect(f);o.start(now);os.push(o);}
+    liveVoices[note]={g,os};}
+  function liveNoteOff(note){const lv=liveVoices[note];if(!lv||!ctx)return;const now=ctx.currentTime;
+    try{lv.g.gain.cancelScheduledValues(now);lv.g.gain.setValueAtTime(Math.max(0.0001,lv.g.gain.value||0.1),now);lv.g.gain.exponentialRampToValueAtTime(0.0001,now+0.18);}catch(_){}
+    for(const o of lv.os)try{o.stop(now+0.22);}catch(_){}delete liveVoices[note];}
   function freqToMidi(f){return Math.max(0,Math.min(127,Math.round(69+12*Math.log2(f/440))));}
   // send a note at audio-time t for dur seconds on 1-based channel ch
   function sendMidi(ch,note,vel,t,dur){if(!midiOut)return false;
@@ -1773,7 +1787,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
     codeView=buildCodeView(editor.value);
-    voices.forEach(v=>{if(v.sample)loadSample(v.sample);});if(voices.some(v=>v.midi))initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
