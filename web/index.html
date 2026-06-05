@@ -945,6 +945,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
   const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
+  let codeView=[],showCode=true;  // live "code playhead" overlay in the SCÈNE
+  // snapshot the source into displayable lines: voice lines get their pattern split
+  // into tokens (so we can box the active one), other lines are kept verbatim.
+  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog"];
+    for(const raw of text.split("\n")){const line=raw.replace(/\s+$/,""),t=line.trim(),ci=t.indexOf(":");
+      let voice=false,name="",pat="",post="";
+      if(t&&!t.startsWith("#")&&ci>0){const head=t.slice(0,ci).trim().toLowerCase().split("@")[0];
+        if(!DIR.includes(head)){voice=true;const rest=t.slice(ci+1),b=rest.indexOf("|");
+          pat=(b<0?rest:rest.slice(0,b)).trim();post=b<0?"":rest.slice(b).trim();name=t.slice(0,ci+1);}}
+      if(voice){const hm=/\|\s*hue\s+(\d+)/.exec(post),hue=hm?+hm[1]:voiceHue(name.slice(0,-1).split("@")[0].trim());
+        arr.push({type:"voice",name,tokens:tokenizePat(pat),post,hue});}
+      else arr.push({type:"other",raw:line});}
+    return arr;}
+  function hslCss(h){return "hsl("+(((h||0)%360)+360)%360+",88%,64%)";}
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
   // each VOICE has its own colour (from its name) and shoots particles in its
@@ -1198,7 +1212,32 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     const sec=song.length?sectionAtBar(song,Math.max(0,barCount-1)):null;
     c.font="bold "+Math.round(R*0.2)+"px 'Press Start 2P',monospace";c.fillText((sec||"LOOM").toUpperCase(),cx,cy+R*0.06);
     c.shadowBlur=0;c.fillStyle=dim;c.font="20px 'VT323',monospace";
-    c.fillText("scène: "+sceneMode+" (N = changer)   ·   bar "+barCount+"   ·   clique/ÉCHAP pour sortir",cx,H-34);}
+    c.fillText("scène: "+sceneMode+" (N)  ·  code (C)  ·  bar "+barCount+"  ·  clique/ÉCHAP pour sortir",cx,H-34);
+    drawCodeOverlay(c,W,H,fg,cyn,am,dim,bg);}
+  // live code playhead: draw the source, boxing the token each voice is currently on
+  function drawCodeOverlay(c,W,H,fg,cyn,am,dim,bg){
+    if(!showCode||!codeView.length)return;
+    let phase=0;if(playing&&ctx){const e=ctx.currentTime-transportStart;phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;}
+    const pad=16,L=codeView.length,lh=Math.min(19,Math.max(11,(H-2*pad)/L)),fs=Math.round(lh*0.82);
+    c.save();c.textAlign="left";c.textBaseline="middle";c.shadowBlur=0;
+    c.font=fs+"px ui-monospace,Menlo,Consolas,monospace";const cw=c.measureText("M").width;
+    let maxCh=0;for(const ln of codeView){const len=ln.type==="voice"?(ln.name.length+1+ln.tokens.join(" ").length+1+ln.post.length):ln.raw.length;if(len>maxCh)maxCh=len;}
+    const panelW=Math.min(W*0.66,pad*2+maxCh*cw+8);
+    c.fillStyle="rgba(0,0,0,0.58)";c.fillRect(0,0,panelW,H);
+    c.fillStyle=hexA(fg,0.18);c.fillRect(panelW-2,0,2,H);
+    let y=pad+lh/2;
+    for(const ln of codeView){
+      if(ln.type!=="voice"){c.fillStyle=ln.raw.trim().startsWith("#")?hexA(dim,0.85):hexA(cyn,0.7);c.fillText(ln.raw,pad,y);y+=lh;continue;}
+      let x=pad;c.fillStyle=hexA(am,0.92);c.fillText(ln.name,x,y);x+=(ln.name.length+1)*cw;
+      const N=ln.tokens.length,cur=N?Math.floor(phase*N)%N:-1;
+      for(let i=0;i<N;i++){const tk=ln.tokens[i],w=tk.length*cw,rest=tk==="."||tk==="~";
+        if(i===cur){const col=hslCss(ln.hue);c.fillStyle=hexA(col,rest?0.3:0.9);
+          c.fillRect(x-1,y-lh*0.5+1,w+2,lh-2);c.fillStyle=bg;c.fillText(tk,x,y);}
+        else{c.fillStyle=rest?hexA(fg,0.22):hexA(fg,0.82);c.fillText(tk,x,y);}
+        x+=w+cw;}
+      if(ln.post){c.fillStyle=hexA(cyn,0.5);c.fillText(ln.post,x,y);}
+      y+=lh;}
+    c.restore();}
   function drawScope(){const cv=$("scope");if(!cv||!cv.getContext||!analyser||scopeMode==="off")return;
     const W=cv.width=cv.clientWidth||600,H=cv.height=150;const c2=cv.getContext("2d");
     let fg="#9dff8a",am="#ffc04a",cy="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
@@ -1228,6 +1267,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}
+    codeView=buildCodeView(editor.value);
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});if(voices.some(v=>v.midi))initMidi();buildGrid();buildTimeline();const bpm=Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));cycleLen=(60/bpm)*4;
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
@@ -1664,7 +1704,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   $("stageBtn").addEventListener("click",toggleStage);
   $("stage").addEventListener("click",()=>{if(stageOn)toggleStage();});
   document.addEventListener("keydown",e=>{if(e.key==="Escape"&&stageOn){stageOn=false;$("stage").style.display="none";}
-    else if(stageOn&&(e.key==="n"||e.key==="N")){sceneMode=SCENES[(SCENES.indexOf(sceneMode)+1)%SCENES.length];}});
+    else if(stageOn&&(e.key==="n"||e.key==="N")){sceneMode=SCENES[(SCENES.indexOf(sceneMode)+1)%SCENES.length];}
+    else if(stageOn&&(e.key==="c"||e.key==="C")){showCode=!showCode;}});
   document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stage").style.display="none";}});
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
     if(scopeMode==="off")$("scope").style.boxShadow="none";
