@@ -9,6 +9,9 @@
 pub struct Voice {
     pub name: String,
     pub tokens: Vec<String>,
+    /// Stacked simultaneous lines (`a b ; c d`). `tokens` is `stacks[0]`; when there
+    /// is only one line `stacks` holds just it. Verbs apply to every line.
+    pub stacks: Vec<Vec<String>>,
     pub verbs: Vec<String>,
     pub wave: Wave,
     pub gain: f32,
@@ -170,8 +173,13 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut segs = rest.split('|').map(|s| s.trim());
 
         let pattern = segs.next().unwrap_or("");
-        let tokens = expand_euclid(tokenize_pat(pattern));
-        if tokens.is_empty() { continue; }
+        // stacks: `;` splits the pattern into simultaneous lines
+        let stacks: Vec<Vec<String>> = pattern.split(';')
+            .map(|p| expand_euclid(tokenize_pat(p)))
+            .filter(|t| !t.is_empty())
+            .collect();
+        if stacks.is_empty() { continue; }
+        let tokens = stacks[0].clone();
 
         let is_drum = DRUMS.contains(&name.as_str());
         let mut wave = if is_drum { Wave::Square } else { Wave::Square };
@@ -202,7 +210,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, verbs, wave, gain, is_drum, octave, arp, sections, section });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section });
     }
     out
 }
@@ -355,9 +363,9 @@ pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
     effective_seeded(voice, bar, 0)
 }
 
-/// Like [`effective`] but with an explicit `seed` for probabilistic verbs.
-pub fn effective_seeded(voice: &Voice, bar: i64, seed: u64) -> Vec<String> {
-    let mut t = voice.tokens.clone();
+/// Apply a voice's verbs + generative expansion to an explicit token list.
+fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<String> {
+    let mut t = toks.to_vec();
     for v in &voice.verbs { t = apply_verb(&t, v, bar, seed); }
     let mut out = Vec::with_capacity(t.len());
     for tok in t {
@@ -367,6 +375,11 @@ pub fn effective_seeded(voice: &Voice, bar: i64, seed: u64) -> Vec<String> {
         }
     }
     out
+}
+
+/// Like [`effective`] but with an explicit `seed` for probabilistic verbs.
+pub fn effective_seeded(voice: &Voice, bar: i64, seed: u64) -> Vec<String> {
+    effective_of(&voice.tokens, voice, bar, seed)
 }
 
 /// Produce every sound event for a given bar across all voices, with no key
@@ -400,19 +413,23 @@ pub fn schedule_bar_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], b
 fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
-        let eff = effective_seeded(v, bar, seed);
-        let n = eff.len();
-        if n == 0 { continue; }
         // Effective key for this voice: a `| oct N` overrides the key's octave.
         let voice_key: Option<Key> = key.map(|k| match v.octave {
             Some(o) => Key { tonic: k.tonic, scale: k.scale.clone(), octave: o },
             None => k.clone(),
         });
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
+        // stacks: each `;`-separated line plays simultaneously (a single line = one stack)
+        let lines: &[Vec<String>] = if v.stacks.len() > 1 { &v.stacks } else { std::slice::from_ref(&v.tokens) };
+        for line in lines {
+        let eff = effective_of(line, v, bar, seed);
+        let n = eff.len();
+        if n == 0 { continue; }
         for (i, raw) in eff.iter().enumerate() {
             let p0 = i as f32 / n as f32;
             let p1 = (i + 1) as f32 / n as f32;
             emit_token(&mut events, raw, p0, p1, v, voice_key.as_ref(), base_oct, bar, seed, i, prog);
+        }
         }
     }
     events
@@ -1203,6 +1220,18 @@ mod tests {
         let v2 = parse("d: x*4<");
         let vels2: Vec<f32> = schedule_bar(&v2, 0).iter().map(|e| (e.vel * 100.0).round() / 100.0).collect();
         assert_eq!(vels2, vec![1.0, 0.8, 0.6, 0.4]);
+    }
+
+    #[test]
+    fn stacks_play_simultaneous_lines() {
+        let k = parse_key("key: c major");
+        // two `;`-separated lines, each 2 notes -> 4 events; both lines fire at phase 0
+        let ev = schedule_bar_seeded(&parse("keys: 1 3 ; 5 7"), k.as_ref(), 0, 0);
+        assert_eq!(ev.len(), 4);
+        let at0: Vec<&String> = ev.iter().filter(|e| e.phase == 0.0).map(|e| &e.token).collect();
+        assert_eq!(at0.len(), 2, "both stacked lines start together");
+        // a single line (no ;) still works
+        assert_eq!(schedule_bar_seeded(&parse("k: 1 3"), k.as_ref(), 0, 0).len(), 2);
     }
 
     #[test]
