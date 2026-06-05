@@ -664,14 +664,21 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const a=tokenizePat(tok.slice(1,-1));if(a.length){const r=rng(seed,bar,salt||tok,7);return a[Math.min(a.length-1,Math.floor(r*a.length))];}}
     return tok;}
   function digitsAfter(tok,at){return (/^\d*/.exec(tok.slice(at+1)))[0];}
-  // modifiers in any order: probability ?P and ratchet *N -> [base, prob|null, ratchet]
+  // modifiers in any order: ?P prob, *N ratchet, ! accent, *N> crescendo / *N< decrescendo roll
+  // -> [base, prob|null, ratchet, accent, rampDir(0/+1/-1)]
   function tokenMods(tok){const q=tok.indexOf("?"),r=tok.indexOf("*"),e=tok.indexOf("!");
-    if(q<0&&r<0&&e<0)return[tok,null,1,1];
-    const cut=Math.min(q<0?Infinity:q,r<0?Infinity:r,e<0?Infinity:e);
+    // a group/alt/random token ([ < {) carries its own >/< brackets — never read those as a ramp
+    const grp=tok[0]==="<"||tok[0]==="{"||tok[0]==="[",gt=grp?-1:tok.indexOf(">"),lt=grp?-1:tok.indexOf("<");
+    const rdir=gt>0?1:(lt>0?-1:0);
+    if(q<0&&r<0&&e<0&&rdir===0)return[tok,null,1,1,0];
+    const cands=[q,r,e].filter(x=>x>=0);if(gt>0)cands.push(gt);if(lt>0)cands.push(lt);
+    const cut=cands.length?Math.min(...cands):tok.length;
     let prob=null;if(q>=0){const d=digitsAfter(tok,q);prob=d===""?0.5:Math.max(0,Math.min(1,parseFloat(d)/100));}
     let rat=1;if(r>=0){const d=digitsAfter(tok,r);rat=d===""?2:Math.max(1,parseInt(d,10));}
     let acc=1;if(e>=0){let cnt=0;for(let i=e;i<tok.length&&tok[i]==="!";i++)cnt++;acc=1+0.4*cnt;}  // ! accent (!=x1.4, !!=x1.8…)
-    return[tok.slice(0,cut),prob,rat,acc];}
+    return[tok.slice(0,cut),prob,rat,acc,rdir];}
+  // velocity ramp across a ratchet's N sub-hits (crescendo +1 / decrescendo -1)
+  function rampF(j,N,dir){if(!dir||N<2)return 1;const t=j/(N-1);return dir>0?0.4+0.6*t:1-0.6*t;}
   function parseSeed(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="seed"){const n=parseInt(line.slice(i+1).trim(),10);if(!isNaN(n))return n;}}return 0;}
   // song arrangement: song: intro*4 verse*8 chorus*8 ...
@@ -874,7 +881,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
           const base=tm[0];if(base===""||base==="."||base==="~")continue;
           let t0=barT+i*gstep,vel=1;if(i%2===1)t0+=sw*gstep;
           if(feelAmt){t0+=(rng(seed,bar,v.name,s*3+7)-0.5)*feelAmt*0.016;vel=1+(rng(seed,bar,v.name,s*3+11)-0.5)*feelAmt*0.5;}
-          for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2],vel*tm[3]);}
+          for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2],vel*tm[3]*rampF(j,tm[2],tm[4]));}
         continue;}
       // Pattern algebra — build the layers this voice plays this bar:
       //  jux <verb> : original hard-left + <verb>-copy hard-right (stereo split)
@@ -904,7 +911,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
             for(let j=0;j<M;j++){const tt=t0+j*step/M;
               if(v.sample)playSample(v.sample,tt,Math.min(1,(v.gain||0.22)*3),midiToFreq(ord[j])/(noteToFreq(v.root||"c3")||noteToFreq("c3")),v);
               else tone(tt,midiToFreq(ord[j]),step/M,v);}continue;}}
-        for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel*tm[3]);}}
+        for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel*tm[3]*rampF(j,tm[2],tm[4]));}}
   // recursively schedule a [a b ...] sub-sequence inside [t0, t0+dur)
   function scheduleGroup(v,tok,bar,t0,dur,vel){const inner=tokenizePat(tok.slice(1,-1)),m=inner.length;if(!m)return;const sub=dur/m;
     for(let i=0;i<m;i++){let ct=pickAlt(inner[i],bar,v.name+"g"+i);if(prog.length&&ct[0]==="^")ct=resolveProg(ct,v,bar);if(ct==="."||ct==="~")continue;const ct0=t0+i*sub;
@@ -912,7 +919,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
       const e=expandGen(ct);if(e){if(e.length)scheduleGroup(v,"[ "+e.join(" ")+" ]",bar,ct0,sub,vel);continue;}
       const tm=tokenMods(ct);if(tm[1]!==null&&rng(seed,bar,v.name,Math.floor(ct0*997)%9973)>=tm[1])continue;
       const base=tm[0];if(base===""||base==="."||base==="~")continue;
-      for(let j=0;j<tm[2];j++)trigger(v,base,ct0+j*sub/tm[2],sub/tm[2],vel*tm[3]);}}
+      for(let j=0;j<tm[2];j++)trigger(v,base,ct0+j*sub/tm[2],sub/tm[2],vel*tm[3]*rampF(j,tm[2],tm[4]));}}
   function tick(){if(!playing)return;while(nextBarTime<ctx.currentTime+LOOKAHEAD){scheduleBar(nextBarTime,barCount);nextBarTime+=cycleLen;barCount++;}schedTimer=setTimeout(tick,TICK);}
   function animate(){if(playing&&ctx){const e=ctx.currentTime-transportStart;const phase=(((e%cycleLen)+cycleLen)%cycleLen)/cycleLen;
     // section timeline + which voices sound right now
@@ -932,7 +939,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
   // HSV -> [r,g,b] 0-255 (for per-pixel scenes like the Julia fractal)
   function hsv2rgb(h,s,v){h=((h%360)+360)%360/60;const i=Math.floor(h),f=h-i,p=v*(1-s),q=v*(1-s*f),t=v*(1-s*(1-f));
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
-  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain"];
+  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   function emitParticles(cx,cy,count,speed){for(let k=0;k<count;k++){const a=Math.random()*Math.PI*2,s=speed*(0.4+Math.random());
     particles.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1});}}
@@ -1083,6 +1090,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
         const rgb=hsv2rgb(p.hue,0.7,p.life);c.fillStyle="rgba("+rgb[0]+","+rgb[1]+","+rgb[2]+","+(p.life*0.85)+")";
         c.beginPath();c.arc(p.x,p.y,2.4*p.life+0.5,0,7);c.fill();}
       c.globalCompositeOperation="source-over";}
+    else if(sceneMode==="helix"){sceneTime+=0.03+bass*0.06;const A=Math.min(W,H)*0.22;c.shadowBlur=8;
+      for(let y=0;y<=H;y+=11){const ph=y*0.02+sceneTime,x1=cx+Math.sin(ph)*A,x2=cx+Math.sin(ph+3.14159)*A,
+        d1=Math.cos(ph),d2=Math.cos(ph+3.14159),m=fb[Math.floor(y/H*n*0.5)%n]/255;
+        if(((y/11)|0)%2===0){c.strokeStyle=hexA(am,0.18+m*0.4);c.lineWidth=1;c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke();}
+        c.fillStyle=hexA(fg,0.45+m*0.5);c.shadowColor=fg;c.beginPath();c.arc(x1,y,2.4+d1*1.6+m*2,0,7);c.fill();
+        c.fillStyle=hexA(cyn,0.45+m*0.5);c.shadowColor=cyn;c.beginPath();c.arc(x2,y,2.4+d2*1.6+m*2,0,7);c.fill();}
+      c.shadowBlur=0;}
     else if(sceneMode==="kaleido"){sceneTime+=0.005;const seg=8,R2=Math.min(W,H)*0.5;c.shadowBlur=14;
       for(let sgi=0;sgi<seg;sgi++){c.save();c.translate(cx,cy);c.rotate(sceneTime+sgi/seg*6.2831853);if(sgi%2)c.scale(1,-1);
         for(let i=0;i<40;i++){const a=i/40*(6.2831853/seg),m=Math.pow(fb[Math.floor(i*n*0.4/40)]/255,1.3);
@@ -1309,6 +1323,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Motif","a b ; c d","stack : plusieurs lignes simultanées sur UNE voix (séparées par ;) — polyphonie/contrepoint"],
     ["Motif","x!  x!!","accent : ! augmente la vélocité de la note (!=fort, !!=plus fort) — groove/backbeat"],
     ["Motif","{a b c}","choix ALÉATOIRE : tire une alternative au hasard à chaque fois (déterministe via seed)"],
+    ["Motif","x*8>  x*8<","roll : *N> monte en intensité (crescendo), *N< descend (decrescendo) — montées/fills"],
     ["Théorie","prog: Am F C G","progression d'accords, un accord par mesure (cycle)"],
     ["Théorie","^  /  ^N","^ = l'accord courant de la prog ; ^N = sa Nième note (^1 = fondamentale, pour la basse)"],
     ["Verbes","| palindrome","endroit une mesure, envers la suivante"],
@@ -1356,7 +1371,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
     ["Son","| gate N","longueur des notes (0.05-4) : <1 staccato, >1 legato/tenu"],
     ["Son","| slide N","portamento : glisse depuis la note précédente (303). N = durée du glissé en s (déf. 0.06)"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
@@ -1526,6 +1541,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
     "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",
     "- Probability: add ? to a token to make it fire only sometimes. x? ~50%, x?70 = 70%, c3?25 = 25%. Works on any token (drums, notes, degrees, chords). Use it for humanized hats, ghost notes, evolving patterns.",
+    "- Rolls / build-ups: a ratchet *N can ramp in velocity — x*8> is a crescendo roll (8 hits getting LOUDER), x*8< is a decrescendo. Perfect for snare build-ups into a drop, or fills: build@build: . . . . . . . . . . . . x*16> , or snare: . . . . x . . . . . . . x*4> . . . . Combine with samples or synth drums. (Plain *N stays even.)",
     "- Accents (groove): append ! to any hit/note to play it louder (velocity accent); !! is stronger, !!! strongest. Use accents to bring out the backbeat or a syncopation, e.g. kick: x . x! . x . x! . , hat: x x! x x x x! x x , or on a melody note 1 3! 5 1. Combines with ?prob and *ratchet (e.g. x?60! , x!*2). This is the simplest way to stop a pattern sounding flat/robotic — accent 1-2 hits per bar.",
     "- Determinism: add seed: N (e.g. seed: 42) so the random ? choices replay identically every time. Change the seed for a different variation.",
     "- Ratchets/rolls: add *N to a token to repeat it N times within its own step, e.g. snare: . . x*4 . (a 4-hit roll), hat: x*2 x x*3 x . Combine freely: x*4?60 (a roll that fires 60% of the time). Great for build-ups and fills.",
@@ -1552,7 +1568,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea>
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
-    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
+    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; organic/biology/dna -> scene: helix; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
