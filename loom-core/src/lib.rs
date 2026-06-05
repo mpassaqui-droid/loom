@@ -388,6 +388,16 @@ pub fn schedule_bar_keyed(voices: &[Voice], key: Option<&Key>, bar: i64) -> Vec<
 /// Like [`schedule_bar_keyed`] but with an explicit RNG `seed` for probabilistic
 /// tokens (`x?`, `c3?70`). Same seed + bar ⇒ identical events every time.
 pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: u64) -> Vec<Event> {
+    sched_prog(voices, key, &[], bar, seed)
+}
+
+/// Like [`schedule_bar_seeded`] but with a chord progression so `^`/`^N` tokens
+/// follow the harmony (see [`parse_prog`]).
+pub fn schedule_bar_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64) -> Vec<Event> {
+    sched_prog(voices, key, prog, bar, seed)
+}
+
+fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
         let eff = effective_seeded(v, bar, seed);
@@ -402,7 +412,7 @@ pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: 
         for (i, raw) in eff.iter().enumerate() {
             let p0 = i as f32 / n as f32;
             let p1 = (i + 1) as f32 / n as f32;
-            emit_token(&mut events, raw, p0, p1, v, voice_key.as_ref(), base_oct, bar, seed, i);
+            emit_token(&mut events, raw, p0, p1, v, voice_key.as_ref(), base_oct, bar, seed, i, prog);
         }
     }
     events
@@ -435,7 +445,7 @@ pub fn tokenize_pat(s: &str) -> Vec<String> {
 /// (recursive subdivision), `?`/`*` mods, `!` accents and `*N>`/`*N<` rolls, and arps.
 #[allow(clippy::too_many_arguments)]
 fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
-              key: Option<&Key>, base_oct: i32, bar: i64, seed: u64, salt: usize) {
+              key: Option<&Key>, base_oct: i32, bar: i64, seed: u64, salt: usize, prog: &[String]) {
     // {a b c}: pick ONE alternative at random (seeded -> reproducible)
     let mut t = tok.to_string();
     if t.len() >= 2 && t.starts_with('{') && t.ends_with('}') {
@@ -447,6 +457,8 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
     }
     // <a/b>: alternation by bar
     t = pick_alt(&t, bar).to_string();
+    // ^ / ^N: follow the chord progression
+    if !prog.is_empty() && t.starts_with('^') { t = resolve_prog(&t, prog, bar, key, base_oct); }
     if t == "." || t == "~" { return; }
     // [a b ...]: subdivide this range among the children (recursive)
     if t.len() >= 2 && t.starts_with('[') && t.ends_with(']') {
@@ -456,7 +468,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
         let span = (p1 - p0) / m as f32;
         for (k, child) in inner.iter().enumerate() {
             emit_token(events, child, p0 + k as f32 * span, p0 + (k + 1) as f32 * span,
-                       v, key, base_oct, bar, seed, salt.wrapping_mul(31).wrapping_add(k));
+                       v, key, base_oct, bar, seed, salt.wrapping_mul(31).wrapping_add(k), prog);
         }
         return;
     }
@@ -1052,6 +1064,49 @@ fn parse_roman(tok: &str) -> Option<(i32, bool)> {
     Some((deg, seventh))
 }
 
+/// Parse a chord progression directive (`prog: Am*2 F C`) -> one chord per bar
+/// (cycling), expanding `*N` durations. Keeps original case (chords are case-sensitive).
+pub fn parse_prog(src: &str) -> Vec<String> {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        if line[..colon].trim().to_lowercase() == "prog" {
+            let mut out = Vec::new();
+            for t in line[colon + 1..].split_whitespace() {
+                let (name, n) = match t.split_once('*') {
+                    Some((a, b)) => (a, b.parse::<usize>().unwrap_or(1).clamp(1, 64)),
+                    None => (t, 1),
+                };
+                for _ in 0..n { out.push(name.to_string()); }
+            }
+            return out;
+        }
+    }
+    Vec::new()
+}
+
+/// Resolve a `^` / `^N` token against the current bar's progression chord.
+/// `^` -> the whole chord; `^N` -> the Nth chord-tone as a note (octave marks ok).
+fn resolve_prog(tok: &str, prog: &[String], bar: i64, key: Option<&Key>, octave: i32) -> String {
+    if prog.is_empty() || !tok.starts_with('^') { return tok.to_string(); }
+    let cs = &prog[bar.rem_euclid(prog.len() as i64) as usize];
+    let rest = &tok[1..];
+    if rest.is_empty() || rest == "^" { return cs.clone(); }
+    let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+    let marks = &rest[digits.len()..];
+    let Ok(nn) = digits.parse::<i32>() else { return cs.clone() };
+    let notes: Vec<i32> = key
+        .and_then(|k| parse_roman(cs).map(|(d, s)| diatonic_chord(k, d, s)))
+        .or_else(|| parse_chord(cs, octave))
+        .unwrap_or_default();
+    if notes.is_empty() { return ".".to_string(); }
+    let idx = nn - 1;
+    let len = notes.len() as i32;
+    let mut midi = notes[idx.rem_euclid(len) as usize] + 12 * idx.div_euclid(len);
+    for c in marks.chars() { if c == '\'' { midi += 12; } else if c == ',' { midi -= 12; } }
+    midi_to_name(midi)
+}
+
 /// MIDI note for a 0-based scale index, wrapping up an octave past the scale end.
 fn scale_note_midi(key: &Key, idx: i32) -> i32 {
     let len = key.scale.len() as i32;
@@ -1148,6 +1203,20 @@ mod tests {
         let v2 = parse("d: x*4<");
         let vels2: Vec<f32> = schedule_bar(&v2, 0).iter().map(|e| (e.vel * 100.0).round() / 100.0).collect();
         assert_eq!(vels2, vec![1.0, 0.8, 0.6, 0.4]);
+    }
+
+    #[test]
+    fn prog_durations_and_chord_follow() {
+        assert_eq!(parse_prog("prog: Am*2 F G"), vec!["Am", "Am", "F", "G"]);
+        let prog = vec!["Am".to_string()];
+        // ^ = the whole Am triad (3 notes at phase 0)
+        let ev = schedule_bar_prog(&parse("pad: ^ . . ."), None, &prog, 0, 0);
+        assert_eq!(ev.len(), 3);
+        assert!(ev.iter().all(|e| e.phase == 0.0));
+        // ^1 = the chord root -> a single A note
+        let eb = schedule_bar_prog(&parse("bass: ^1 . . ."), None, &prog, 0, 0);
+        assert_eq!(eb.len(), 1);
+        assert!(eb[0].token.starts_with('a'), "root of Am is A, got {}", eb[0].token);
     }
 
     #[test]
