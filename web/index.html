@@ -4702,14 +4702,15 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     const key=$("apiKey").value.trim();log("[ vibe ] reflexion... (jusqu'a 30s)","ai");
     const btn=$("vibeBtn");btn.disabled=true;const old=btn.textContent;btn.textContent="...";
     const userMsg="Current LOOM code:\n"+editor.value+"\n\nRequest: "+req+"\n\nReturn the full updated LOOM program. Code only.";
-    const prompt=SYS+"\n\nCURRENT CODE:\n"+editor.value+"\n\nREQUEST: "+req+"\n\nReturn ONLY the full updated LOOM program, code only:";
+    const SYStxt=Array.isArray(SYS)?SYS.join("\n"):SYS;
+    const prompt=SYStxt+"\n\nCURRENT CODE:\n"+editor.value+"\n\nREQUEST: "+req+"\n\nReturn ONLY the full updated LOOM program, code only:";
     let text="";
     try{
       if(key){
         const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),30000);
         const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctl.signal,
           headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-          body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,system:SYS,messages:[{role:"user",content:userMsg}]})});
+          body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
         clearTimeout(to);const data=await res.json();if(data.error)throw new Error(data.error.message||"api error");
         text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       }else{
