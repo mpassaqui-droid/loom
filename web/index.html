@@ -217,6 +217,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
+    <button id="demoBtn" class="go" title="visite guidée auto : enchaîne tous les morceaux + visuels">&#127916; DÉMO</button>
     <button id="langBtn" class="go" title="traduire l'interface (100+ langues, en ligne) — le code LOOM ne change pas">&#127760; LANG</button>
     <select id="uiLang" class="menu notranslate" translate="no" title="langue de l'interface (hors-ligne) — le code LOOM ne change pas" style="min-width:96px">
       <option value="fr">Français</option><option value="en">English</option><option value="es">Español</option>
@@ -5155,6 +5156,19 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     log("[ film ] enregistrement… (re-clique FILM pour arrêter)","ai");}
   $("filmBtn").addEventListener("click",recordVideo);
   $("stageBtn").addEventListener("click",toggleStage);
+  // 🎬 DÉMO : auto-tour through every showcase piece, cycling visuals (VJ). Saves/restores your code.
+  let demoOn=false,demoT=0,demoIdx=0,demoSaved="";
+  const DEMO=["afx","gu","mixtape","monologue","taqsim","gamelan","raga","claviers","basses","design","autechre","expose","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","concrete","cologne","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","trap","dubstep","gabber","afrobeat","electro","trance","hyperpop","gqom"].filter(p=>PRESETS[p]);
+  function demoStep(){if(!demoOn)return;const p=DEMO[demoIdx%DEMO.length];demoIdx++;
+    if(PRESETS[p]){editor.value=PRESETS[p];run();}
+    sceneMode=SCENES[Math.floor(Math.random()*SCENES.length)];
+    const now=(typeof performance!=="undefined"&&performance.now)?performance.now():0;
+    log("[ démo ] ▶ "+p.toUpperCase()+"  ("+(((demoIdx-1)%DEMO.length)+1)+"/"+DEMO.length+")  · V=varier les visuels · reclique DÉMO pour arrêter","ai");lintUntil=now+24000;
+    demoT=setTimeout(demoStep,22000);}
+  function toggleDemo(){demoOn=!demoOn;$("demoBtn").classList.toggle("on",demoOn);
+    if(demoOn){demoSaved=editor.value;if(!stageOn)toggleStage();vjOn=true;demoIdx=0;demoStep();}
+    else{if(demoT)clearTimeout(demoT);vjOn=false;if(demoSaved){editor.value=demoSaved;}log("[ démo ] arrêté — ton code est restauré","ai");}}
+  $("demoBtn").addEventListener("click",toggleDemo);
   $("stage").addEventListener("click",()=>{if(stageOn&&!showCode)toggleStage();});
   document.addEventListener("keydown",e=>{
     const typing=e.target&&(e.target.tagName==="TEXTAREA"||e.target.tagName==="INPUT");
