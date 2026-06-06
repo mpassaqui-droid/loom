@@ -166,7 +166,7 @@
   <div class="card wide">
     <div class="head">pattern.loom</div>
     <div id="editwrap" style="position:relative"><canvas id="editGlow"></canvas>
-    <textarea id="editor" spellcheck="false"># x = hit  . = rest  | = verbs/timbre  1-7 = scale degrees
+    <textarea id="editor" spellcheck="false" translate="no" class="notranslate"># x = hit  . = rest  | = verbs/timbre  1-7 = scale degrees
 key:   c minor
 kick:  x . . . x . . .
 snare: . . x . . . x .
@@ -186,6 +186,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="midiBtn" class="go" title="exporter en fichier MIDI (.mid) pour ton DAW">&#127926; MIDI</button>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
+    <button id="langBtn" class="go" title="traduire l'interface (100+ langues) — le code LOOM ne change pas">&#127760; LANG</button>
+    <span id="google_translate_element" class="notranslate" translate="no" style="display:none;vertical-align:middle"></span>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
   </div>
 
@@ -229,7 +231,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   <div id="timeline" class="wide" style="display:none"></div>
   <canvas id="scope" class="wide" title="clique : onde → spectre → off" style="width:100%;height:150px;display:block;border:1px solid var(--dim);border-radius:3px;margin:6px 0 12px;cursor:pointer;transition:box-shadow .05s"></canvas>
   <div id="grid" class="wide"></div>
-  <div id="console" class="wide">[ idle ] press RUN to begin</div>
+  <div id="console" class="wide notranslate" translate="no">[ idle ] press RUN to begin</div>
 
   <details class="card cyan wide" id="learnCard">
     <summary style="font-size:22px;color:var(--cyan)">&#9656; APPRENDRE &mdash; leçons + référence</summary>
@@ -1360,7 +1362,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
   function buildGrid(){grid.innerHTML="";for(const v of voices){if(v.section)continue;const row=document.createElement("div");row.className="row";
-    const nm=document.createElement("div");nm.className="vname";
+    const nm=document.createElement("div");nm.className="vname notranslate";
     // live mixer: per-voice Mute / Solo toggle buttons (appendChild only — stub-safe)
     const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.title=key==="mute"?"couper":"isoler";
       b.style.cssText="font:11px monospace;padding:1px 5px;margin-right:3px;border:1px solid var(--dim);border-radius:3px;background:transparent;color:var(--dim);cursor:pointer";
@@ -4233,13 +4235,13 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     if(learnTab==="lessons"){
       const items=LESSONS.map((l,i)=>[l,i]).filter(([l])=>!f||(l.t+" "+l.d+" "+l.c).toLowerCase().includes(f));
       el.innerHTML='<div class="opt" style="margin-bottom:6px">Clique <b>essayer</b> : le code se charge et se joue.</div>'+
-        (items.map(([l,i])=>'<div class="lesson"><h4>'+l.t+'</h4><p>'+l.d+'</p><pre>'+
+        (items.map(([l,i])=>'<div class="lesson"><h4>'+l.t+'</h4><p>'+l.d+'</p><pre class="notranslate" translate="no">'+
           l.c.replace(/&/g,"&amp;").replace(/</g,"&lt;")+'</pre><button class="tiny go" data-lesson="'+i+'">&#9658; essayer</button></div>').join("")
           ||'<div class="opt">aucune leçon ne correspond.</div>');
     }else{let cat="",html="";
       for(const r of REF){if(f&&!(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(f))continue;
         if(r[0]!==cat){cat=r[0];html+='<div class="cat">'+cat+'</div>';}
-        html+='<div class="de"><code>'+r[1].replace(/</g,"&lt;")+'</code><span>'+r[2].replace(/</g,"&lt;")+'</span></div>';}
+        html+='<div class="de"><code class="notranslate" translate="no">'+r[1].replace(/</g,"&lt;")+'</code><span>'+r[2].replace(/</g,"&lt;")+'</span></div>';}
       el.innerHTML=html||'<div class="opt">rien ne correspond.</div>';}}
   function setLearnTab(t){learnTab=t;$("tabLessons").classList.toggle("go",t==="lessons");$("tabRef").classList.toggle("go",t==="ref");
     renderLearn($("learnSearch").value);}
@@ -4517,6 +4519,15 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   $("stemsBtn").addEventListener("click",renderStems);
   $("midiBtn").addEventListener("click",exportMidi);
   $("linkBtn").addEventListener("click",shareLink);
+  // --- interface translation (Google widget, 100+ languages). The LOOM language/code is excluded (notranslate). ---
+  let gtLoaded=false;
+  window.googleTranslateElementInit=function(){try{new google.translate.TranslateElement({pageLanguage:"fr",autoDisplay:false},"google_translate_element");
+    log("[ lang ] choisis ta langue dans le menu 🌐 (le code LOOM reste identique)","ai");}catch(_){}};
+  function loadTranslate(){if(gtLoaded)return;gtLoaded=true;const s=document.createElement("script");
+    s.src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    s.onerror=()=>{gtLoaded=false;log("[ lang ] traducteur indisponible — il faut une connexion internet (ou ouvre la page via un petit serveur, pas en fichier local)","err");};
+    document.head.appendChild(s);}
+  $("langBtn").addEventListener("click",()=>{loadTranslate();const el=$("google_translate_element");if(el)el.style.display=(el.style.display==="none"?"inline-block":"none");});
   $("humBtn").addEventListener("click",humToMelody);
   // --- FILM: record the SCÈNE canvas + master audio to a .webm video ---
   function recordVideo(){
