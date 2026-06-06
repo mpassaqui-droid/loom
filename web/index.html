@@ -4833,8 +4833,27 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   // auto-save the editor to localStorage (debounced) so you never lose your work on reload/crash
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
+  // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
+  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","stutter","cresc","dim","arp",
+    "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
+    "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","begin","end","root","sample","midi","viz","hue","width",
+    "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
+    "major","minor","dorian","phrygian","lydian","mixolydian","locrian","pentatonic","harmonic_minor","melodic_minor","blues","chromatic","hijaz","bhairav","bhairavi","yaman","pelog","slendro","bayati","rast","saba","kurd","nahawand","malkauns","ryukyu",
+    "organ","warm","rich","soft","up","down","updown","downup","converge","diverge","thumb","pinky","open","drop2","wide","lead","just","pyth","werck","kirn","meantone","cutoff","pitch","reso","hall","room","plate","spring","cathedral","auto",
+    "bd","sd","hh","cp","oh","rim","cow","perc","tom","ride","tabla","amen","break","sitar","arpy","sax","juno","vox","yeah","breath","glass","metal","wood"];
+  let tabIdx=-1,tabBase="";
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}
-    else if((e.ctrlKey||e.metaKey)&&e.key==="."){e.preventDefault();stop();}});
+    else if((e.ctrlKey||e.metaKey)&&e.key==="."){e.preventDefault();stop();}
+    else if(e.key==="Tab"&&!e.shiftKey){const el=editor,pos=el.selectionStart,before=el.value.slice(0,pos);
+      const m=/([A-Za-z][A-Za-z0-9_#]*)$/.exec(before);
+      if(!m){e.preventDefault();el.value=el.value.slice(0,pos)+"  "+el.value.slice(pos);el.selectionStart=el.selectionEnd=pos+2;return;}
+      const w=m[1].toLowerCase();let pool;
+      if(tabIdx>=0&&tabBase&&w.indexOf(tabBase)===0)pool=KEYWORDS.filter(k=>k.startsWith(tabBase)&&k!==tabBase);
+      else{tabBase=w;pool=KEYWORDS.filter(k=>k.startsWith(w)&&k!==w);tabIdx=-1;}
+      if(!pool.length)return;e.preventDefault();tabIdx=(tabIdx+1)%pool.length;const comp=pool[tabIdx];
+      const start=pos-m[1].length;el.value=el.value.slice(0,start)+comp+el.value.slice(pos);
+      el.selectionStart=el.selectionEnd=start+comp.length;liveEdit();}
+    else tabIdx=-1;});
   $("stageEditor").addEventListener("input",()=>{editor.value=$("stageEditor").value;liveEdit();});
   $("stageEditor").addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
