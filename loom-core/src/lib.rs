@@ -1279,6 +1279,86 @@ fn section_at_bar(song: &[(String, u32)], bar: i64) -> Option<&str> {
     None
 }
 
+/// Tempo in BPM from `bpm:`/`tempo: <n>`, default 120 (clamped 40..=300, as JS).
+pub fn parse_bpm(src: &str) -> f64 {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        let h = line[..colon].trim().to_lowercase();
+        if h == "bpm" || h == "tempo" {
+            // first token must be a number (else it's a `tempo: name n …` map line)
+            if let Ok(n) = line[colon + 1..].trim().split_whitespace().next().unwrap_or("").parse::<f64>() {
+                return n.clamp(40.0, 300.0);
+            }
+        }
+    }
+    120.0
+}
+
+/// Beats per bar from `meter:`. `meter: 7/8` -> 7*4/8 = 3.5 quarter-beats;
+/// a bare `meter: 3` -> 3 beats. Default 4.
+pub fn parse_meter(src: &str) -> f64 {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        if line[..colon].trim().to_lowercase() != "meter" { continue; }
+        let v = line[colon + 1..].trim();
+        if let Some((n, d)) = v.split_once('/') {
+            if let (Ok(n), Ok(d)) = (n.trim().parse::<f64>(), d.trim().parse::<f64>()) {
+                if n > 0.0 && d > 0.0 { return n * 4.0 / d; }
+            }
+        } else if let Ok(n) = v.parse::<f64>() {
+            if n > 0.0 { return n; }
+        }
+    }
+    4.0
+}
+
+/// `accel: <from> <to> [bars]` — a linear tempo ramp. `bars` = 0 means "span the
+/// whole arrangement (or 8 bars if there is none)".
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Accel { pub a: f64, pub b: f64, pub bars: u32 }
+
+pub fn parse_accel(src: &str) -> Option<Accel> {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        if line[..colon].trim().to_lowercase() != "accel" { continue; }
+        let t: Vec<f64> = line[colon + 1..].split_whitespace().filter_map(|w| w.parse::<f64>().ok()).collect();
+        if t.len() >= 2 {
+            return Some(Accel {
+                a: t[0].clamp(40.0, 300.0),
+                b: t[1].clamp(40.0, 300.0),
+                bars: if t.len() >= 3 && t[2] > 1.0 { t[2].round() as u32 } else { 0 },
+            });
+        }
+    }
+    None
+}
+
+/// `tempo: <section> <bpm> …` — a per-section tempo map (name/bpm pairs).
+pub fn parse_tempo_map(src: &str) -> Vec<(String, f64)> {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        if line[..colon].trim().to_lowercase() != "tempo" { continue; }
+        let t: Vec<&str> = line[colon + 1..].split_whitespace().collect();
+        let mut out = Vec::new();
+        let mut k = 0;
+        while k + 1 < t.len() {
+            // name (non-numeric) followed by a number
+            if t[k].parse::<f64>().is_err() {
+                if let Ok(n) = t[k + 1].parse::<f64>() {
+                    out.push((t[k].to_lowercase(), n.clamp(40.0, 300.0)));
+                }
+            }
+            k += 2;
+        }
+        return out;
+    }
+    Vec::new()
+}
+
 /// A whole parsed LOOM program: voices plus the optional key/seed/arrangement.
 /// This is the convenient front door — `Program::parse` then `schedule_bar`.
 #[derive(Debug, Clone)]
@@ -1289,6 +1369,14 @@ pub struct Program {
     pub song: Vec<(String, u32)>,
     /// `key@section:` modulation map — a section plays in its own key.
     pub key_map: Vec<(String, Key)>,
+    /// Base tempo in BPM (`bpm:`/`tempo:`).
+    pub bpm: f64,
+    /// Beats per bar (`meter:`), e.g. 3.5 for 7/8.
+    pub meter_beats: f64,
+    /// Optional tempo ramp (`accel:`).
+    pub accel: Option<Accel>,
+    /// Per-section tempo overrides (`tempo: name bpm …`).
+    pub tempo_map: Vec<(String, f64)>,
 }
 
 impl Program {
@@ -1299,11 +1387,41 @@ impl Program {
             seed: parse_seed(src),
             song: parse_song(src),
             key_map: parse_key_map(src),
+            bpm: parse_bpm(src),
+            meter_beats: parse_meter(src),
+            accel: parse_accel(src),
+            tempo_map: parse_tempo_map(src),
         }
     }
 
     /// Total length of the arrangement in bars (0 if there is no `song:`).
     pub fn len_bars(&self) -> u32 { self.song.iter().map(|(_, n)| *n).sum() }
+
+    /// Tempo in BPM at a given bar — honours `accel:` (linear ramp) and, when
+    /// there is no ramp, per-section `tempo:` overrides. Mirrors the JS engine's
+    /// `cycleLenForBar` exactly so both engines share one timeline.
+    pub fn bar_bpm(&self, bar: i64) -> f64 {
+        if let Some(ac) = self.accel {
+            let tb = if ac.bars > 0 {
+                ac.bars
+            } else {
+                let s = self.len_bars();
+                if s > 0 { s } else { 8 }
+            };
+            let span = if tb > 1 { (tb - 1) as f64 } else { 1.0 };
+            let f = (bar as f64 / span).clamp(0.0, 1.0);
+            ac.a + (ac.b - ac.a) * f
+        } else {
+            section_at_bar(&self.song, bar)
+                .and_then(|s| self.tempo_map.iter().find(|(n, _)| n == s).map(|(_, b)| *b))
+                .unwrap_or(self.bpm)
+        }
+    }
+
+    /// Duration in seconds of a given bar = (60 / bpm) * beats_per_bar.
+    pub fn bar_seconds(&self, bar: i64) -> f64 {
+        (60.0 / self.bar_bpm(bar)) * self.meter_beats
+    }
 
     /// Section name playing at `bar` (None if no arrangement).
     pub fn section_at(&self, bar: i64) -> Option<&str> { section_at_bar(&self.song, bar) }
@@ -2111,6 +2229,40 @@ mod tests {
         let v1 = p.schedule_bar(1); // chorus -> C
         assert_eq!(v0[0].token, "a3");
         assert_eq!(v1[0].token, "c3");
+    }
+
+    #[test]
+    fn meter_parse() {
+        assert_eq!(parse_meter("meter: 7/8"), 3.5);   // 7 eighths = 3.5 quarters
+        assert_eq!(parse_meter("meter: 5/4"), 5.0);
+        assert_eq!(parse_meter("meter: 3"), 3.0);     // bare beat count
+        assert_eq!(parse_meter("bpm: 120"), 4.0);     // default
+    }
+
+    #[test]
+    fn tempo_bpm_and_per_section() {
+        // per-section tempo map, no ramp
+        let p = Program::parse("bpm: 120\ntempo: verse 90 chorus 160\nsong: verse*2 chorus*2\nx: x");
+        assert_eq!(p.bpm, 120.0);
+        assert_eq!(p.bar_bpm(0), 90.0);   // verse
+        assert_eq!(p.bar_bpm(2), 160.0);  // chorus
+        assert!((p.bar_seconds(0) - (60.0 / 90.0) * 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn accel_ramp_matches_js() {
+        // accel over an explicit 11-bar span: 100 -> 200 linearly, meter 7/8.
+        let p = Program::parse("bpm: 120\nmeter: 7/8\naccel: 100 200 11\nsong: a*11\nx: x");
+        assert_eq!(p.meter_beats, 3.5);
+        assert_eq!(p.bar_bpm(0), 100.0);                 // f=0
+        assert_eq!(p.bar_bpm(10), 200.0);                // f=1 (span=10)
+        assert!((p.bar_bpm(5) - 150.0).abs() < 1e-9);    // halfway
+        assert!((p.bar_seconds(0) - (60.0 / 100.0) * 3.5).abs() < 1e-9);
+        // bars=0 -> span the whole arrangement (here 11 bars too via len_bars fallback)
+        let p2 = Program::parse("accel: 132 150\nmeter: 7/8\nsong: emerge*4 drift*6 fracture*6 bloom*6 collapse*4 swarm*6 dissolve*6 ghost*4\nx: x");
+        assert_eq!(p2.len_bars(), 42);
+        assert_eq!(p2.bar_bpm(0), 132.0);
+        assert_eq!(p2.bar_bpm(41), 150.0);
     }
 
     #[test]
