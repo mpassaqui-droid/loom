@@ -2403,7 +2403,8 @@ void main(){
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");
-    const lw=lint();if(lw){log(lw,"err");lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+6000;}else lintUntil=0;}
+    const lw=lint();if(lw){log(lw,"err");lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+6000;}else lintUntil=0;
+    try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   function stop(){playing=false;if(schedTimer)clearTimeout(schedTimer);
     voices.forEach(v=>v.cells.forEach(c=>c.classList.remove("play","hit")));log("[ stopped ]");}
 
@@ -4163,8 +4164,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     const done=()=>log("[ lien ] copié ! colle-le n'importe où ("+url.length+" car.)","ai");
     if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done,()=>{prompt("Copie ce lien :",url);});
     else prompt("Copie ce lien :",url);}
-  (function loadFromHash(){if(typeof location==="undefined")return;const h=location.hash||"";if(h.indexOf("#s=")===0){const code=decShare(h.slice(3));
-    if(code){editor.value=code;log("[ lien ] morceau chargé depuis l'URL","ai");run();}}})();
+  (function restoreOnLoad(){if(typeof location==="undefined")return;const h=location.hash||"";
+    if(h.indexOf("#s=")===0){const code=decShare(h.slice(3));if(code){editor.value=code;log("[ lien ] morceau chargé depuis l'URL","ai");run();return;}}
+    try{const d=localStorage.getItem("loom_draft");if(d&&d.trim().length>4){editor.value=d;log("[ auto ] ton dernier travail a été restauré — charge un preset pour repartir de zéro","ai");}}catch(_){}})();
   $("presetSel").addEventListener("change",e=>{if(e.target.value)loadPreset(e.target.value);});
   $("presetNext").addEventListener("click",()=>{presetIdx=(presetIdx+1)%PRESET_ORDER.length;loadPreset(PRESET_ORDER[presetIdx]);});
   $("presetRand").addEventListener("click",()=>{loadPreset(PRESET_ORDER[Math.floor(Math.random()*PRESET_ORDER.length)]);});
@@ -4802,7 +4804,11 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();buildTimeline();}
   function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
-  editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();});
+  // auto-save the editor to localStorage (debounced) so you never lose your work on reload/crash
+  let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
+  editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
+  editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}
+    else if((e.ctrlKey||e.metaKey)&&e.key==="."){e.preventDefault();stop();}});
   $("stageEditor").addEventListener("input",()=>{editor.value=$("stageEditor").value;liveEdit();});
   $("stageEditor").addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   $("scope").addEventListener("click",()=>{scopeMode=scopeMode==="wave"?"spectrum":scopeMode==="spectrum"?"off":"wave";
