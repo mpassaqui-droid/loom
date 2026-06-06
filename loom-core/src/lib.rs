@@ -407,6 +407,35 @@ fn expand_generative_token(tok: &str, bar: i64) -> Option<Vec<String>> {
     Some(ca_row(rule, n, bar).into_iter().map(|b| if b { "x".into() } else { ".".into() }).collect())
 }
 
+/// `walk(n[,range])` — seeded random-walk melody (matches the JS engine bit-for-bit).
+fn expand_walk_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("walk(")?.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse().ok()?;
+    let range: i64 = it.next().and_then(|s| s.trim().parse().ok()).unwrap_or(7).max(2);
+    let steps = [-2i64, -1, -1, 1, 1, 2];
+    let mut d: i64 = 1;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        out.push(d.clamp(1, range).to_string());
+        let r = js_rng(seed as u32, bar, &format!("walk:{}", i), i as i64);
+        let st = steps[((r * 6.0).floor() as i64).rem_euclid(6) as usize];
+        d = (d + st).clamp(1, range);
+    }
+    Some(out)
+}
+/// `drunk(n)` — drifting-density rhythm (matches the JS engine bit-for-bit).
+fn expand_drunk_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("drunk(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let mut p = 0.5f64;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let r = js_rng(seed as u32, bar, "drunk", i as i64);
+        out.push(if r < p { "x".to_string() } else { ".".to_string() });
+        p = (p + (r - 0.5) * 0.45).clamp(0.15, 0.85);
+    }
+    Some(out)
+}
 /// Resolve a voice's effective tokens for a given bar (all verbs + bar-aware
 /// generative expansions applied).
 pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
@@ -419,10 +448,10 @@ fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<Stri
     for v in &voice.verbs { t = apply_verb(&t, v, bar, seed); }
     let mut out = Vec::with_capacity(t.len());
     for tok in t {
-        match expand_generative_token(&tok, bar) {
-            Some(seq) => out.extend(seq),
-            None => out.push(tok),
-        }
+        if let Some(seq) = expand_generative_token(&tok, bar) { out.extend(seq); }
+        else if let Some(seq) = expand_walk_token(&tok, bar, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_drunk_token(&tok, bar, seed) { out.extend(seq); }
+        else { out.push(tok); }
     }
     out
 }
@@ -941,13 +970,24 @@ fn fnv(s: &str) -> u64 {
 }
 
 /// Deterministic pseudo-random value in [0,1) from the performance coordinates.
+// 32-bit FNV-1a — identical to the JS engine's fnv() (ASCII voice names).
+fn js_fnv(s: &str) -> u32 {
+    let mut h: u32 = 2166136261;
+    for b in s.bytes() { h ^= b as u32; h = h.wrapping_mul(16777619); }
+    h
+}
+// Seeded RNG -> [0,1), BIT-IDENTICAL to the JS engine's rng() (Math.imul mixing).
+// This is what makes walk/drunk/probability produce the SAME result in both engines.
+fn js_rng(seed: u32, bar: i64, vname: &str, step: i64) -> f64 {
+    let mut h: u32 = (seed ^ 0x9e3779b1).wrapping_mul(2654435761);
+    h = (h ^ (bar as u32)).wrapping_mul(2246822519);
+    h = (h ^ js_fnv(vname)).wrapping_mul(3266489917);
+    h = (h ^ ((step + 1) as u32)).wrapping_mul(668265263);
+    h ^= h >> 15;
+    (h as f64) / 4294967296.0
+}
 fn rand01(seed: u64, bar: i64, voice: &str, step: usize) -> f32 {
-    let mut h = hash_u64(seed ^ 0xA5A5_5A5A_1234_5678);
-    h = hash_u64(h ^ (bar as u64));
-    h = hash_u64(h ^ fnv(voice));
-    h = hash_u64(h ^ step as u64);
-    // top 24 bits → [0,1)
-    ((h >> 40) as f32) / ((1u64 << 24) as f32)
+    js_rng(seed as u32, bar, voice, step as i64) as f32
 }
 
 /// Digits immediately following position `at` in `tok` (a `?`/`*` marker).
@@ -1829,6 +1869,13 @@ mod tests {
         assert_eq!(g("cantor(9)"), "x.x...x.x");     // Cantor set (no base-3 digit '1')
         assert_eq!(g("collatz(1)"), "x");
         assert_eq!(g("golden(8)").len(), 8);
+    }
+
+    #[test]
+    fn rng_walk_drunk_match_js_engine_bit_for_bit() {
+        // reference values produced by the actual JS engine (seed=5)
+        assert_eq!(expand_walk_token("walk(8)", 2, 5).unwrap().join(" "), "1 3 1 2 1 1 1 2");
+        assert_eq!(expand_drunk_token("drunk(16)", 0, 5).unwrap().join(""), "x...xxxxx.......");
     }
 
     #[test]
