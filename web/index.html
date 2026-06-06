@@ -222,6 +222,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       <option value="nl">Nederlands</option><option value="ar">العربية</option><option value="zh">中文</option>
       <option value="ja">日本語</option><option value="ru">Русский</option></select>
     <span id="google_translate_element" class="notranslate" translate="no" style="display:none;vertical-align:middle"></span>
+    <button class="tiny go" id="tapBtn" title="tape le rythme pour régler le tempo">&#9678; TAP</button>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
     <span id="vu" title="niveau master (vert→ambre→rouge=saturation)" style="display:inline-block;width:90px;height:13px;border:1px solid var(--dim);border-radius:3px;overflow:hidden;vertical-align:middle"><span id="vuBar" style="display:block;height:100%;width:0;background:var(--cyan);transition:width .06s"></span></span>
   </div>
@@ -1273,6 +1274,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(n>1)n/=100;return Math.max(0,Math.min(1,n));}}return 0;}
   function parseScene(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="scene"){const s=line.slice(i+1).trim().toLowerCase();if(SCENES.includes(s))return s;}}return null;}
+  // scene@SECTION: a different visual per song section (visual follows structure)
+  function parseSceneMap(text){const m={};for(const raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
+    const am=/^scene@(.+)$/.exec(line.slice(0,i).trim().toLowerCase());if(!am)continue;const s=line.slice(i+1).trim().toLowerCase();if(SCENES.includes(s))m[am[1].trim()]=s;}return m;}
   function parseTitle(text){for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;if(line.slice(0,i).trim().toLowerCase()==="title")return line.slice(i+1).trim().slice(0,40);}return "";}
   function parseFilm(text){for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="film"){const w=line.slice(i+1).trim().toLowerCase();
@@ -1493,8 +1497,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     let o=[];for(let i=0;i<n;i++)o.push(isP(i)?"x":".");return o;}
   function expandBin(tok){const m=/^bin\((\d+)\)$/.exec(tok);if(!m)return null;let n=+m[1];if(n<=0)return["."];
     return n.toString(2).split("").map(d=>d==="1"?"x":".");}
+  // pi(n): the digits of π as scale degrees (a melody) ; golden(n): a golden-ratio (Beatty) rhythm
+  const PI_DIGITS="3141592653589793238462643383279502884197169399375105820974944592";
+  function expandPi(tok){const m=/^pi\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];let o=[];
+    for(let i=0;i<n;i++){const d=+PI_DIGITS[i%PI_DIGITS.length];o.push(d===0?".":String(((d-1)%7)+1));}return o;}
+  function expandGolden(tok){const m=/^golden\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1],phi=1.6180339887;let o=[];
+    for(let i=0;i<n;i++)o.push(Math.floor((i+1)/phi)!==Math.floor(i/phi)?"x":".");return o;}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
-    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok);if(c)out.push(...c);else out.push(tok);}
+    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok)||expandPi(tok)||expandGolden(tok);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
@@ -1579,6 +1589,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     if(vjOn&&stageOn&&bar>0&&bar%4===0)sceneMode=SCENES[Math.floor(Math.random()*SCENES.length)];  // VJ mode: auto-cycle scenes
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
+    if(sec&&sceneMap[sec])sceneMode=sceneMap[sec];  // scene@section: visual follows the song structure
     if(songOn&&playing&&(!lintUntil||(((typeof performance!=="undefined"&&performance.now)?performance.now():9e15)>lintUntil)))log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
     if(accel||(tempoMap&&Object.keys(tempoMap).length))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (guarded: nothing set = unchanged)
     const _savedKey=key;if(sec&&keyMap[sec])key=keyMap[sec];  // modulation: this section resolves in its own key (restored at end)
@@ -1662,7 +1673,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const bar=$("vuBar");if(bar){bar.style.width=Math.min(100,peak*140)+"%";bar.style.background=peak>0.98?"#ff5a5a":peak>0.72?"var(--amber)":"var(--cyan)";}}
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
-  let vjOn=false;
+  let vjOn=false,sceneMap={};
   let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[],flowP=[],juliaCv=null,juliaCtx=null,netP=[],wfCv=null,wfCtx=null,fountP=[],fireP=[],mtxD=[],rdU=null,rdV=null,rdU2=null,rdV2=null,rdCv=null,rdCtx=null,warpP=[],epiTrail=[],vorS=[],dpA1=2.4,dpA2=2.4,dpV1=0,dpV2=0,dpTrail=[];
   // HSV -> [r,g,b] 0-255 (for per-pixel scenes like the Julia fractal)
   function hsv2rgb(h,s,v){h=((h%360)+360)%360/60;const i=Math.floor(h),f=h-i,p=v*(1-s),q=v*(1-s*f),t=v*(1-s*(1-f));
@@ -2534,7 +2545,7 @@ void main(){
     return "[ aide ] "+w.slice(0,4).join("  ·  ")+(w.length>4?"  …(+"+(w.length-4)+")":"");}
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     codeView=buildCodeView(editor.value);
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
@@ -4502,6 +4513,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Génératif (maths)","walk(n)","mélodie en MARCHE ALÉATOIRE sur les degrés (n notes, seedée) — évolue à chaque mesure"],
     ["Génératif (maths)","lsys(n)  drunk(n)","L-système (mélodie auto-similaire) · marche d'ivrogne (densité rythmique qui dérive)"],
     ["Génératif (maths)","prime(n)  bin(n)","frappes sur les positions premières · les chiffres binaires de n comme rythme (musique des nombres)"],
+    ["Génératif (maths)","pi(n)  golden(n)","les décimales de π comme mélodie · rythme du nombre d'or (Beatty, quasi-périodique)"],
+    ["Structure (long)","scene@section: julia","le VISUEL change avec la section du morceau (la scène suit la structure)"],
     ["Motif","def nom: …   $nom","MACRO : définis un fragment réutilisable, rappelle-le avec $nom n'importe où"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","| chance N","la VOIX entière ne joue que N% des mesures (0-1) — variation d'arrangement (seedé)"],
@@ -4861,6 +4874,12 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   // wiring
   $("run").addEventListener("click",run);
   $("stop").addEventListener("click",stop);
+  // tap-tempo: tap the button in rhythm to set the BPM (live)
+  {let tapT=[];$("tapBtn").addEventListener("click",()=>{const now=(typeof performance!=="undefined"&&performance.now)?performance.now():0;
+    tapT=tapT.filter(t=>now-t<2000);tapT.push(now);
+    if(tapT.length>=2){const iv=[];for(let i=1;i<tapT.length;i++)iv.push(tapT[i]-tapT[i-1]);
+      const avg=iv.reduce((a,b)=>a+b,0)/iv.length,bpm=Math.max(40,Math.min(240,Math.round(60000/avg)));
+      $("bpm").value=bpm;baseBpm=bpm;cycleLen=(60/bpm)*meterBeats;log("[ tap ] "+bpm+" bpm","ai");}});}
   $("rec").addEventListener("click",toggleRec);
   $("renderBtn").addEventListener("click",renderOffline);
   $("stemsBtn").addEventListener("click",renderStems);
@@ -4951,7 +4970,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   // live coding: typing in either editor updates the boxes immediately and (while playing) recompiles the music after a short pause
   let recompTimer=null;
   function recompile(){const parsed=parse(editor.value);if(!parsed.length)return;
-    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
+    voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();buildTimeline();}
   function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
   // auto-save the editor to localStorage (debounced) so you never lose your work on reload/crash
