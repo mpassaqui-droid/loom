@@ -1,0 +1,58 @@
+# ================================================================
+#  LOOM — « RAGA » : musique classique indienne (raag Bhairav).
+#  Bhairav = [0,1,4,5,7,8,11] : komal Re (2b) + komal Dha (6b) avec
+#  Ga et Ni naturels -> les deux secondes augmentées, ce parfum grave
+#  et solennel du raga du petit matin.
+#
+#  La forme classique, en sections :
+#   alap  -> exposition LIBRE, sans pulsation : sitar + tampura (bourdon)
+#   gat   -> la composition, le tabla entre (teental, 16 temps)
+#   jhala -> climax rapide (tremolos, cordes chikari)
+#   out   -> retour au Sa (la tonique)
+#
+#  Sa = degré 1 (tonique), Pa = degré 5 : le bourdon ne joue que ça.
+#  meend (glissés) = | slide ;  gamak (ornements) = ratchets *N.
+#
+#  > RUN. Change key: c yaman (raga du soir, lumineux) ou c todi.
+# ================================================================
+
+title:  Raga
+bpm:    72
+key:    c bhairav
+feel:   34
+duck:   0
+warmth: 0.45
+scene:  phyllo
+film:   square
+song:   alap*4 gat*8 jhala*6 out*2
+
+# ---------- TAMPURA : le bourdon (Pa - Sa - Sa - Sa), du début à la fin ----------
+tampura: 5, . 1 . 1 . 1 . 5, . 1 . 1 . 1 . | pluck 0.5 | detune 4 | reverb 0.6 | gate 1.2 | gain 0.09 | hue 40
+# bourdon tenu (sarangi/harmonium) sous le tout
+drone:   1 . . . . . . . . . . . . . . . ; 5, . . . . . . . . . . . . . . . | bow | unison 2 | lp 1300 | reverb 0.7 | gate 3 | gain 0.07 | hue 30
+
+# ---------- SITAR : la voix mélodique ----------
+# alap : phrases libres, lentes, qui explorent le raga (avec meend)
+sitar@alap:  1 . 2 1 . 7, 1 . 2 3 . 2 1 . . . | pluck 0.7 | slide | reverb 0.6 | delay 0.3 | gate 0.9 | humanize 50 | gain 0.13 | hue 200
+# gat : la composition, plus structurée, ornements (gamak = *2/*3)
+sitar@gat:   1 2 3 . 4 5 . 4 3*2 2 1 . 7, 1 . . | pluck 0.72 | slide | reverb 0.5 | delay 0.25 | gate 0.7 | humanize 40 | gain 0.14 | hue 200
+# jhala : trait rapide, tremolos
+sitar@jhala: 1*2 5 1' 5 3*2 5 1' 5 6 5 3 2 1 . . | pluck 0.78 | slide | reverb 0.5 | delay 0.2 | gate 0.5 | gain 0.14 | hue 210
+sitar@out:   3 . 2 . 1 . . . 7, . 1 . . . . . | pluck 0.7 | slide | reverb 0.7 | delay 0.3 | gate 1 | humanize 40 | gain 0.12 | hue 190
+
+# cordes chikari (bourdon rythmique du sitar) au jhala
+chikari@jhala: . 1' . 1' . 1' . 1' . 1' . 1' . 1' . 1' | pluck 0.8 | reverb 0.4 | gate 0.3 | degrade 20 | gain 0.06 | pan 0.3 | hue 60
+
+# ---------- TABLA : entre au gat (teental simplifié, 16 mâtras) ----------
+# Dha . . Dha . . Dha . Dha . . Tin . . Ta .  (graves Dha + aigus Tin/Ta)
+tabla:  x . . x . . x . x . . x? . . x . | sample tabla | gain 0.4 | in gat jhala
+baya:   x . . . . . . . x . . . . . . . | sample perc | oct 1 | gain 0.22 | in gat jhala
+# le tabla double de densité au jhala
+tabla2@jhala: x . x . x . x . x . x . x . x . | sample tabla | gain 0.22 | pan -0.2
+
+# ----------------------------------------------------------------
+#  À essayer (change juste la key) :
+#   • c yaman  -> raag du soir, lumineux (Lydien, tivra Ma)
+#   • c todi   -> très grave et tendu (komal Re Ga Dha, tivra Ma)
+#   • c bhairav + bpm: 60 -> un alap plus méditatif encore
+# ----------------------------------------------------------------
