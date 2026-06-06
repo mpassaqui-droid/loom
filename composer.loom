@@ -1,0 +1,43 @@
+# ================================================================
+#  LOOM — « COMPOSER » : compose à partir d'une progression toute prête.
+#   • prog: auto sad   -> LOOM écrit l'harmonie (essaie pop/jazz/epic…)
+#   • | voicing lead   -> les accords s'enchaînent en douceur
+#   • | haas           -> nappe ultra-large dans l'espace
+#   • scene: dna       -> double hélice réactive
+#
+#  > RUN. Change juste « auto sad » en « auto jazz » ou « auto epic » :
+#    toute la pièce se réharmonise. Change aussi la key.
+# ================================================================
+
+title:  Composer
+bpm:    104
+key:    a minor
+prog:   auto sad            # <- vi IV I V ; essaie: pop · jazz · epic · andalusian
+tune:   just
+duck:   28
+warmth: 0.45
+feel:   16
+scene:  dna
+song:   intro*2 main*8 lift*4 main*8 out*2
+
+# nappe chaude, voice-leading + élargissement Haas
+keys:   ^ . . . . . . . . . . . . . . . | voicing lead | saw | unison 4 | haas 0.6 | lp 1300 | env 0.4 0.3 0.7 1.5 | reverb 0.6 | gate 1.8 | gain 0.08 | hue 270
+
+# basse qui suit la fondamentale
+bass:   ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | sine | oct 2 | sub 0.5 | slide | gain 0.16 | hue 30 | in main lift out
+
+# arpège qui suit les accords, balayé dans l'espace
+arp:    ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 | pluck 0.7 | autopan 0.35 | delay 0.3 | reverb 0.4 | gate 0.6 | gain 0.09 | hue 200 | in main lift
+
+# mélodie pincée
+lead@lift: ^1' . ^5 . ^3 . ^2 . | bell | reverb 0.6 | delay 0.4 | gain 0.09 | hue 60
+
+# batterie douce
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.42 | comp 0.4 | in main lift out
+hat:    . . x . . . x . . . x . . . x . | sample hh | gain 0.1 | swing 56 | in main lift out
+
+# ----------------------------------------------------------------
+#  prog: auto <style> :
+#   pop · pop50s · doowop · jazz · jazz2 · sad · minor · epic ·
+#   andalusian · pachelbel · blues · folk · ballad · gospel
+# ----------------------------------------------------------------

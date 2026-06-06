@@ -131,5 +131,11 @@ eq(String.fromCharCode(mid[14],mid[15],mid[16],mid[17]), 'MTrk', 'MIDI has a tra
 let _non=0; for(let i=22;i<mid.length;i++) if((mid[i]&0xf0)===0x90 && mid[i+2]>0) _non++;
 eq(_non > 5, true, 'MIDI has note-on events');
 
+// prog: auto <style> generates a ready-made roman-numeral progression
+eq(L.parseProg('prog: auto sad'), ['vi','IV','I','V'], 'prog auto sad');
+eq(L.parseProg('prog: auto jazz'), ['ii','V','I','vi'], 'prog auto jazz');
+eq(L.parseProg('prog: auto'), ['I','V','vi','IV'], 'prog auto default = pop');
+eq(L.parseProg('prog: Am F C G'), ['Am','F','C','G'], 'manual prog still parses');
+
 console.log((fail===0 ? 'OK' : 'FAIL') + ': ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

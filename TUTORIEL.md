@@ -107,6 +107,8 @@ prog: Am F C G
 bass: ^1 . . . ^1 . 5, . | sine | oct 2 | gain 0.3
 pad:  ^ . . . | saw | unison 4 | lp 1200 | gain 0.15
 ```
+> **Pas d'idée d'accords ?** `prog: auto sad` écrit une progression toute prête
+> (styles : `pop jazz sad minor epic andalusian pachelbel blues folk ballad gospel`).
 
 ---
 
@@ -261,6 +263,7 @@ acid:  1 5, 1' 5 4 1 5 3 | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | gain 0.
 | `| eq L M H` | EQ 3 bandes en dB (grave/médium/aigu) |
 | `| chorus N` `| phaser N` | élargissement / balayage psyché |
 | `| autopan RATE` | panoramique automatique (LFO gauche↔droite) |
+| `| haas N` | élargisseur stéréo (effet Haas) — image très large |
 | `| comp N` | compression (punch & glue) |
 | `| drive X` | distorsion / chaleur |
 | `| crush BITS` | bitcrush 1–8 (lo-fi/IDM) |
