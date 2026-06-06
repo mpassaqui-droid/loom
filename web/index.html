@@ -186,7 +186,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="midiBtn" class="go" title="exporter en fichier MIDI (.mid) pour ton DAW">&#127926; MIDI</button>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
-    <button id="langBtn" class="go" title="traduire l'interface (100+ langues) — le code LOOM ne change pas">&#127760; LANG</button>
+    <button id="langBtn" class="go" title="traduire l'interface (100+ langues, en ligne) — le code LOOM ne change pas">&#127760; LANG</button>
+    <select id="uiLang" class="menu notranslate" translate="no" title="langue de l'interface (hors-ligne) — le code LOOM ne change pas" style="min-width:96px">
+      <option value="fr">Français</option><option value="en">English</option><option value="es">Español</option>
+      <option value="de">Deutsch</option><option value="it">Italiano</option><option value="pt">Português</option>
+      <option value="nl">Nederlands</option><option value="ar">العربية</option><option value="zh">中文</option>
+      <option value="ja">日本語</option><option value="ru">Русский</option></select>
     <span id="google_translate_element" class="notranslate" translate="no" style="display:none;vertical-align:middle"></span>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
   </div>
@@ -4528,6 +4533,28 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     s.onerror=()=>{gtLoaded=false;log("[ lang ] traducteur indisponible — il faut une connexion internet (ou ouvre la page via un petit serveur, pas en fichier local)","err");};
     document.head.appendChild(s);}
   $("langBtn").addEventListener("click",()=>{loadTranslate();const el=$("google_translate_element");if(el)el.style.display=(el.style.display==="none"?"inline-block":"none");});
+  // --- OFFLINE interface translation: a built-in dictionary for the main chrome (no internet). LOOM code untouched. ---
+  const I18N={
+    fr:{run:"RUN",stop:"STOP",rec:"REC",hum:"HUM",film:"FILM",render:"RENDER",stems:"STEMS",midi:"MIDI",link:"LIEN",scene:"SCÈNE",lang:"LANG",lessons:"LEÇONS",reference:"RÉFÉRENCE",search:"chercher… (accord, reverb, song)"},
+    en:{run:"RUN",stop:"STOP",rec:"REC",hum:"HUM",film:"FILM",render:"RENDER",stems:"STEMS",midi:"MIDI",link:"LINK",scene:"SCENE",lang:"LANG",lessons:"LESSONS",reference:"REFERENCE",search:"search… (chord, reverb, song)"},
+    es:{run:"TOCAR",stop:"PARAR",rec:"GRABAR",hum:"TARAREA",film:"FILMAR",render:"RENDER",stems:"PISTAS",midi:"MIDI",link:"ENLACE",scene:"ESCENA",lang:"IDIOMA",lessons:"LECCIONES",reference:"REFERENCIA",search:"buscar… (acorde, reverb)"},
+    de:{run:"START",stop:"STOPP",rec:"AUFN.",hum:"SUMMEN",film:"FILM",render:"RENDERN",stems:"SPUREN",midi:"MIDI",link:"LINK",scene:"SZENE",lang:"SPRACHE",lessons:"LEKTIONEN",reference:"REFERENZ",search:"suchen… (Akkord, Hall)"},
+    it:{run:"SUONA",stop:"STOP",rec:"REGISTRA",hum:"CANTICCHIA",film:"FILMA",render:"RENDER",stems:"TRACCE",midi:"MIDI",link:"LINK",scene:"SCENA",lang:"LINGUA",lessons:"LEZIONI",reference:"RIFERIMENTO",search:"cerca… (accordo, riverbero)"},
+    pt:{run:"TOCAR",stop:"PARAR",rec:"GRAVAR",hum:"CANTAROLA",film:"FILMAR",render:"RENDER",stems:"FAIXAS",midi:"MIDI",link:"LINK",scene:"CENA",lang:"IDIOMA",lessons:"LIÇÕES",reference:"REFERÊNCIA",search:"buscar… (acorde, reverb)"},
+    nl:{run:"SPEEL",stop:"STOP",rec:"OPNAME",hum:"NEURIE",film:"FILM",render:"RENDER",stems:"STEMS",midi:"MIDI",link:"LINK",scene:"SCÈNE",lang:"TAAL",lessons:"LESSEN",reference:"REFERENTIE",search:"zoeken… (akkoord, reverb)"},
+    ar:{run:"تشغيل",stop:"إيقاف",rec:"تسجيل",hum:"دندنة",film:"فيلم",render:"إخراج",stems:"مقاطع",midi:"MIDI",link:"رابط",scene:"مشهد",lang:"لغة",lessons:"دروس",reference:"مرجع",search:"…بحث"},
+    zh:{run:"播放",stop:"停止",rec:"录制",hum:"哼唱",film:"录像",render:"导出",stems:"分轨",midi:"MIDI",link:"链接",scene:"场景",lang:"语言",lessons:"课程",reference:"参考",search:"搜索…（和弦、混响）"},
+    ja:{run:"再生",stop:"停止",rec:"録音",hum:"ハミング",film:"録画",render:"書出",stems:"ステム",midi:"MIDI",link:"リンク",scene:"シーン",lang:"言語",lessons:"レッスン",reference:"リファレンス",search:"検索…（コード等）"},
+    ru:{run:"ИГРАТЬ",stop:"СТОП",rec:"ЗАПИСЬ",hum:"НАПЕТЬ",film:"ВИДЕО",render:"ЭКСПОРТ",stems:"ДОРОЖКИ",midi:"MIDI",link:"ССЫЛКА",scene:"СЦЕНА",lang:"ЯЗЫК",lessons:"УРОКИ",reference:"СПРАВКА",search:"поиск… (аккорд)"}};
+  const UI_BTN={run:"run",stop:"stop",rec:"rec",humBtn:"hum",filmBtn:"film",renderBtn:"render",stemsBtn:"stems",midiBtn:"midi",linkBtn:"link",stageBtn:"scene",langBtn:"lang",tabLessons:"lessons",tabRef:"reference"};
+  for(const id in UI_BTN){const el=$(id);if(el&&el._ic==null){const h=el.innerHTML||"",i=h.lastIndexOf(" ");el._ic=i>=0?h.slice(0,i+1):"";}}  // capture icon prefix once
+  function applyUILang(code){const t=I18N[code]||I18N.fr;
+    for(const id in UI_BTN){const el=$(id);if(el)el.innerHTML=(el._ic||"")+t[UI_BTN[id]];}
+    const s=$("learnSearch");if(s)s.placeholder=t.search;
+    try{document.documentElement.lang=code;document.body.dir=(code==="ar")?"rtl":"ltr";}catch(_){}
+    try{localStorage.setItem("loom_uiLang",code);}catch(_){}}
+  $("uiLang").addEventListener("change",e=>applyUILang(e.target.value));
+  (function(){let sv="fr";try{sv=localStorage.getItem("loom_uiLang")||"fr";}catch(_){}if(I18N[sv]){$("uiLang").value=sv;if(sv!=="fr")applyUILang(sv);}})();
   $("humBtn").addEventListener("click",humToMelody);
   // --- FILM: record the SCÈNE canvas + master audio to a .webm video ---
   function recordVideo(){
