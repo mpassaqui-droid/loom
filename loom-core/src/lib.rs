@@ -173,7 +173,64 @@ fn expand_cantor_token(tok: &str) -> Option<Vec<String>> {
     Some((0..n).map(|i| if in_c(i) { "x".into() } else { ".".into() }).collect())
 }
 
-/// Expand any generative pattern tokens (euclid / morse / fib / prime / golden / collatz / cantor) in place.
+/// `lsys(n)` — a Lindenmayer system -> self-similar melodic sequence (matches JS).
+fn expand_lsys_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("lsys(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let rule = |c: &str| -> Option<Vec<&'static str>> { match c {
+        "1" => Some(vec!["1","2"]), "2" => Some(vec!["3","1"]), "3" => Some(vec!["5","2"]),
+        "5" => Some(vec!["6","3"]), "6" => Some(vec!["1'","5"]), "1'" => Some(vec!["3'","1"]), _ => None } };
+    let mut s: Vec<String> = vec!["1".into()];
+    for _ in 0..8 {
+        if s.len() >= n { break; }
+        let mut nx: Vec<String> = Vec::new();
+        for c in &s { match rule(c) { Some(r) => nx.extend(r.iter().map(|x| x.to_string())), None => nx.push(c.clone()) } }
+        if nx.len() == s.len() { break; }
+        s = nx;
+    }
+    s.truncate(n); Some(s)
+}
+/// `pi(n)` — digits of π as scale degrees (matches JS).
+fn expand_pi_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("pi(")?.strip_suffix(')')?.trim().parse().ok()?;
+    const PI: &[u8] = b"3141592653589793238462643383279502884197169399375105820974944592";
+    Some((0..n).map(|i| { let d = (PI[i % PI.len()] - b'0') as i64;
+        if d == 0 { ".".into() } else { ((d - 1).rem_euclid(7) + 1).to_string() } }).collect())
+}
+/// `recaman(n)` — Recamán's sequence as a melody (matches JS).
+fn expand_recaman_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("recaman(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let mut seen = std::collections::HashSet::new();
+    let mut a: i64 = 0; let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        out.push((a.rem_euclid(7) + 1).to_string());
+        seen.insert(a);
+        let back = a - (i as i64 + 1);
+        a = if back > 0 && !seen.contains(&back) { back } else { a + (i as i64 + 1) };
+    }
+    Some(out)
+}
+/// `logistic(n)` — the logistic map (chaos) as a melody (matches JS; pure arithmetic = bit-exact).
+fn expand_logistic_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("logistic(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let mut x = 0.5f64; let mut out = Vec::with_capacity(n);
+    for _ in 0..n { x = 3.91 * x * (1.0 - x); out.push((((x * 7.0).floor() as i64) + 1).clamp(1, 7).to_string()); }
+    Some(out)
+}
+/// `trib(n)` — the Tribonacci word as a rhythm (matches JS).
+fn expand_trib_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("trib(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let mut s = String::from("0"); let mut g = 0;
+    while s.len() < n && g < 40 { let mut x = String::new();
+        for c in s.chars() { match c { '0' => x.push_str("01"), '1' => x.push_str("02"), _ => x.push('0') } } s = x; g += 1; }
+    Some(s.chars().take(n).map(|c| if c == '0' { "x".into() } else { ".".into() }).collect())
+}
+/// `bin(n)` — the binary digits of n as a rhythm (matches JS).
+fn expand_bin_token(tok: &str) -> Option<Vec<String>> {
+    let v: u64 = tok.strip_prefix("bin(")?.strip_suffix(')')?.trim().parse().ok()?;
+    if v == 0 { return Some(vec![".".into()]); }
+    Some(format!("{:b}", v).chars().map(|c| if c == '1' { "x".into() } else { ".".into() }).collect())
+}
+/// Expand bar/seed-INDEPENDENT generative tokens in place.
 fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
     let mut out = Vec::with_capacity(tokens.len());
     for t in tokens {
@@ -184,6 +241,12 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
         else if let Some(seq) = expand_golden_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_collatz_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_cantor_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_lsys_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_pi_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_recaman_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_logistic_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_trib_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_bin_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -344,6 +407,54 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
                 .map(|(i, t)| if i % n == 0 && t != "." && t != "~" && !t.contains('!') { format!("{}!", t) } else { t.clone() })
                 .collect()
         }
+        // generative variation (seeded — matches the JS engine bit-for-bit)
+        Some("mutate") | Some("mut") => {
+            let amt = parts.get(1).and_then(|x| x.parse::<f64>().ok()).unwrap_or(25.0) / 100.0;
+            let first_non_rest = tokens.iter().find(|t| t.as_str() != ".").cloned();
+            tokens.iter().enumerate().map(|(i, t)| {
+                if js_rng(seed as u32, bar, &format!("mut:{}", verb), i as i64) >= amt { return t.clone(); }
+                let r = js_rng(seed as u32, bar, &format!("mut2:{}", verb), i as i64);
+                let deg0 = t.as_bytes().first().map(|&c| (b'1'..=b'7').contains(&c)).unwrap_or(false);
+                if deg0 { let st = [-2i64, -1, 1, 2]; return transpose_deg(t, st[((r * 4.0).floor() as i64).rem_euclid(4) as usize]); }
+                if t == "." { return first_non_rest.clone().unwrap_or_else(|| t.clone()); }
+                t.clone()
+            }).collect()
+        }
+        Some("shuffle") | Some("shuf") => {
+            let mut a = tokens.to_vec();
+            let mut i = a.len();
+            while i > 1 { i -= 1; let j = (js_rng(seed as u32, bar, &format!("shuf:{}", verb), i as i64) * ((i + 1) as f64)).floor() as usize; a.swap(i, j); }
+            a
+        }
+        Some("markov") => {
+            if tokens.len() < 2 { return tokens.to_vec(); }
+            let mut trans: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+            for i in 0..tokens.len() { let a = tokens[i].clone(); let b = tokens[(i + 1) % tokens.len()].clone(); trans.entry(a).or_default().push(b); }
+            let mut out = Vec::with_capacity(tokens.len());
+            let mut cur = tokens[0].clone();
+            for i in 0..tokens.len() {
+                out.push(cur.clone());
+                let opts = trans.get(&cur).cloned().unwrap_or_else(|| tokens.to_vec());
+                let idx = ((js_rng(seed as u32, bar, &format!("mk:{}", verb), i as i64) * (opts.len() as f64)).floor() as usize) % opts.len();
+                cur = opts[idx].clone();
+            }
+            out
+        }
+        // melodic inversion (mirror degrees around the first note) + sequence
+        Some("invert") | Some("inv") => {
+            let deg = |t: &str| -> Option<i64> { let b = t.as_bytes(); if b.is_empty() || !(b'1'..=b'7').contains(&b[0]) { return None; }
+                let mut o = 0i64; for &c in &b[1..] { if c == b'\'' { o += 1; } else if c == b',' { o -= 1; } else { break; } } Some((b[0] - b'1') as i64 + o * 7) };
+            let pivot = match tokens.iter().find_map(|t| deg(t)) { Some(p) => p, None => return tokens.to_vec() };
+            tokens.iter().map(|t| { let b = t.as_bytes(); if b.is_empty() || !(b'1'..=b'7').contains(&b[0]) { return t.clone(); }
+                let mut o = 0i64; let mut k = 1; while k < b.len() && (b[k] == b'\'' || b[k] == b',') { if b[k] == b'\'' { o += 1; } else { o -= 1; } k += 1; }
+                let d = (b[0] - b'1') as i64 + o * 7; let nd = 2 * pivot - d; let base = nd.rem_euclid(7); let oc = (nd as f64 / 7.0).floor() as i64;
+                let mut s = String::new(); s.push((b'1' + base as u8) as char); for _ in 0..oc.abs() { s.push(if oc > 0 { '\'' } else { ',' }); }
+                s.push_str(std::str::from_utf8(&b[k..]).unwrap_or("")); s }).collect()
+        }
+        Some("sequence") | Some("seq") => {
+            let stp = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(2);
+            let mut r = tokens.to_vec(); r.extend(tokens.iter().map(|t| transpose_deg(t, stp))); r
+        }
         _ => tokens.to_vec(),
     }
 }
@@ -424,6 +535,19 @@ fn expand_walk_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
     }
     Some(out)
 }
+/// `perlin(n)` — smooth value-noise melody (seed-dependent; uses sin, so degree-level not bit-exact).
+fn expand_perlin_token(tok: &str, seed: u64) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("perlin(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let h = |k: i64| -> f64 { let s = ((k as f64 + 1.0) * 12.9898 + (seed as f64) * 0.137).sin() * 43758.5453; s - s.floor() };
+    let f = (n as f64 / 6.0).max(2.0);
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let x = i as f64 / f; let x0 = x.floor(); let tt = x - x0; let sm = tt * tt * (3.0 - 2.0 * tt);
+        let val = h(x0 as i64) * (1.0 - sm) + h(x0 as i64 + 1) * sm;
+        out.push((((val * 7.0).floor() as i64) + 1).clamp(1, 7).to_string());
+    }
+    Some(out)
+}
 /// `drunk(n)` — drifting-density rhythm (matches the JS engine bit-for-bit).
 fn expand_drunk_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
     let n: usize = tok.strip_prefix("drunk(")?.strip_suffix(')')?.trim().parse().ok()?;
@@ -451,6 +575,7 @@ fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<Stri
         if let Some(seq) = expand_generative_token(&tok, bar) { out.extend(seq); }
         else if let Some(seq) = expand_walk_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_drunk_token(&tok, bar, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_perlin_token(&tok, seed) { out.extend(seq); }
         else { out.push(tok); }
     }
     out
@@ -1869,6 +1994,31 @@ mod tests {
         assert_eq!(g("cantor(9)"), "x.x...x.x");     // Cantor set (no base-3 digit '1')
         assert_eq!(g("collatz(1)"), "x");
         assert_eq!(g("golden(8)").len(), 8);
+    }
+
+    #[test]
+    fn generators_match_js_engine() {
+        let g = |s: &str| expand_euclid(vec![s.to_string()]).join(" ");
+        assert_eq!(g("lsys(8)"), "1 2 3 1 5 2 1 2");
+        assert_eq!(g("pi(16)"), "3 1 4 1 5 2 2 6 5 3 5 1 2 7 2 3");
+        assert_eq!(g("recaman(12)"), "1 2 4 7 3 1 7 7 6 1 5 2");
+        assert_eq!(g("logistic(12)"), "7 1 3 6 4 7 1 3 7 2 5 6");
+        assert_eq!(expand_euclid(vec!["trib(16)".into()]).join(""), "x.x.x.xx.x.x.x.x");
+        assert_eq!(expand_euclid(vec!["bin(173)".into()]).join(""), "x.x.xx.x");
+        // perlin uses sin() -> assert length only (degree may differ by a ULP across runtimes)
+        assert_eq!(expand_perlin_token("perlin(12)", 5).unwrap().len(), 12);
+    }
+
+    #[test]
+    fn seeded_verbs_match_js_engine() {
+        let t: Vec<String> = "1 2 3 5 6 5 3 2".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&t, "mutate 30", 3, 5).join(" "), "1 2 2 5 5 3 3 2");
+        assert_eq!(apply_verb(&t, "shuffle", 3, 5).join(" "), "1 2 5 6 5 3 3 2");
+        assert_eq!(apply_verb(&t, "markov", 3, 5).join(" "), "1 2 1 2 1 2 3 5");
+        let q: Vec<String> = "1 2 3 5".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&q, "invert", 0, 5).join(" "), "1 7, 6, 4,");
+        let s3: Vec<String> = "1 2 3".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&s3, "sequence 2", 0, 5).join(" "), "1 2 3 3 4 5");
     }
 
     #[test]
