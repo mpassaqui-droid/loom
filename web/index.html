@@ -1457,7 +1457,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       fr.forEach((f,j)=>tone(t+(v.strum?j*v.strum:0),f,dur,v,{gain:g}));}}  // strum: stagger chord notes in time
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
-    if(songOn&&playing)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
+    if(songOn&&playing&&(!lintUntil||(((typeof performance!=="undefined"&&performance.now)?performance.now():9e15)>lintUntil)))log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
     if(accel||(tempoMap&&Object.keys(tempoMap).length))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (guarded: nothing set = unchanged)
     const _savedKey=key;if(sec&&keyMap[sec])key=keyMap[sec];  // modulation: this section resolves in its own key (restored at end)
     const anySolo=voices.some(v=>v.solo);  // live mixing: mute / solo per voice
@@ -2380,6 +2380,20 @@ void main(){
         c2.fillRect(cx+i*bw+0.5,H-h,bw-1.5,h);c2.fillRect(cx-(i+1)*bw+0.5,H-h,bw-1.5,h);}
       c2.shadowBlur=0;}}
 
+  // gentle linter: catch common beginner mistakes and explain them (warnings, never blocks playback)
+  let lintUntil=0;
+  function lint(){const w=[],secs=new Set(song.map(s=>s[0]));
+    const okSample=n=>!!((typeof SAMPLES!=="undefined"&&SAMPLES[n])||(sbuf&&sbuf[n]));
+    let usesDeg=false,usesProg=false;
+    for(const v of voices){
+      if(v.sample&&!okSample(v.sample))w.push("sample « "+v.sample+" » inconnu ("+v.name+")");
+      if(v.sections)for(const s of v.sections)if(secs.size&&!secs.has(s))w.push("« "+v.name+" » joue dans « "+s+" » mais cette section n'est pas dans song:");
+      if(v.section&&secs.size&&!secs.has(v.section))w.push("« "+v.name+"@"+v.section+" » : section absente de song:");
+      for(const t of (v.tokens||[])){if(/^[1-7][#b]?[',]*([?*!].*)?$/.test(t))usesDeg=true;else if(t&&t[0]==="^")usesProg=true;}}
+    if(usesDeg&&!key)w.push("des degrés (1-7) sont utilisés sans « key: » — ajoute p.ex. key: a minor");
+    if(usesProg&&!prog.length)w.push("le token ^ est utilisé sans « prog: » — ajoute p.ex. prog: Am F C G");
+    if(!w.length)return null;
+    return "[ aide ] "+w.slice(0,4).join("  ·  ")+(w.length>4?"  …(+"+(w.length-4)+")":"");}
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
@@ -2388,7 +2402,8 @@ void main(){
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
-    log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");}
+    log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");
+    const lw=lint();if(lw){log(lw,"err");lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+6000;}else lintUntil=0;}
   function stop(){playing=false;if(schedTimer)clearTimeout(schedTimer);
     voices.forEach(v=>v.cells.forEach(c=>c.classList.remove("play","hit")));log("[ stopped ]");}
 
