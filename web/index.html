@@ -133,6 +133,21 @@
   #docBody .de{padding:3px 0;display:flex;gap:10px;flex-wrap:wrap;}
   #docBody .de code{color:var(--glow);font-size:18px;white-space:nowrap;}
   #docBody .de span{color:var(--dim);font-size:17px;flex:1;min-width:160px;}
+  /* ---- TOUCH / MOBILE : bigger tap targets, readable text, stacked layout ---- */
+  @media (max-width:760px){
+    body{padding:10px;}
+    .transport{gap:8px;}
+    button{font-size:12px;padding:13px 13px;min-height:46px;}
+    button.tiny{font-size:12px;padding:11px 11px;min-height:42px;}
+    select.menu{font-size:18px;padding:11px 10px;min-height:46px;min-width:120px;}
+    .bpm{margin-left:0;font-size:18px;width:100%;}
+    textarea{height:42vh;line-height:1.55;-webkit-text-size-adjust:100%;}
+    #console{font-size:14px;line-height:1.5;}
+    input[type=number]{width:76px;padding:8px;}
+    summary{font-size:18px;}
+    /* font-size >= 16px on inputs avoids iOS auto-zoom on focus */
+    input,select,textarea{font-size:16px;}
+  }
 </style>
 <script src="https://js.puter.com/v2/"></script>
 </head>
