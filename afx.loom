@@ -1,0 +1,79 @@
+# ================================================================
+#  LOOM — « AFX∞ » : IDM mutant à la Aphex Twin. SORT TOUT.
+#  PAS de progression classique : que des degrés sur une GAMME MICROTONALE
+#  INVENTÉE (quarts de ton), qui MODULE selon la section. Et surtout : des
+#  générateurs qui CHANGENT À CHAQUE MESURE (walk · drunk · ca · {} · mutate
+#  · shuffle), donc ça ne se répète jamais. Polymétrie en dérive, scènes GPU.
+#
+#  > RUN et laisse couler longtemps. seed: 74 -> autre univers (toujours « juste »).
+# ================================================================
+
+title:  AFX∞
+bpm:    138
+key:    d 0 1.5 3 4 6 7.5 9 10        # gamme microtonale inventée (quarts de ton)
+key@bloom:    a 0 2 3.5 5 7 9 10.5    # modulation microtonale
+key@swarm:    f 0 1 4 6 7.5 9 11      # encore une autre couleur
+key@dissolve: c 0 2 3 5.5 7 8 11
+tune:   equal
+seed:   73
+duck:   32
+feel:   30
+warmth: 0.5
+meter:  7/8                            # mesure boiteuse (Aphex/Autechre)
+accel:  132 150                        # accélère lentement
+scene:  gwarp
+scene@fracture: gcells
+scene@bloom:    gaurora
+scene@swarm:    gmandel
+scene@dissolve: nebula
+scene@ghost:    gtorus
+film:   square
+song:   emerge*4 drift*6 fracture*6 bloom*6 collapse*4 swarm*6 dissolve*6 ghost*4
+
+# ---------- BOURDON / NAPPES microtonales (le lit Aphex, désaccordé) ----------
+drone:  1 . . . . . . . . . . . . . . . | bow | unison 3 | detune 10 | wow 0.4 | lp 1000 | ir cathedral 0.4 | reverb 0.7 | gate 3 | gain 0.06 | hue 30 | in emerge drift bloom dissolve ghost
+pad:    1 . . . 4 . . . 6 . . . 4 . . . | saw | unison 5 | detune 12 | vowel a | grain 0.4 | wow 0.3 | flange 0.2 | lfo cutoff 0.2 0.5 sine | lfo2 pitch 4 0.1 | reverb 0.8 | gate 2 | gain 0.06 | hue 300 | in drift bloom swarm dissolve ghost
+air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | gate 2 | gain 0.03 | in emerge drift dissolve ghost
+
+# ---------- BATTERIE GLITCH qui mute à chaque mesure ----------
+kick:   x . . x . . x . x . . . x . x*3 . | sample bd | gain 0.52 | comp 0.5 | every 8 fast 2 | in drift fracture bloom collapse swarm
+snare:  . . . . x! . . x?40 . . . . x . x*4> . | sample sd | shift 0.01 | gain 0.4 | in drift bloom collapse swarm
+hat:    ca(110,16) | sample hh | gain 0.11 | swing 58 | degrade 18 | orbit 0.25 | stereo 1.4 | chance 0.9 | in drift fracture bloom collapse swarm dissolve
+perc:   drunk(16) | sample perc | reson 330 0.4 | crush 6 | pan -0.3 | chance 0.6 | gain 0.13 | in fracture bloom swarm
+
+# ---------- BREAKS amen, hachés + aléatoires + remués (jamais pareils) ----------
+break@fracture:  {1 2} . [3 3 1] 2 1 . {2 4}*2 . 1 . [2 1] 3 1 . | sample amen | chop 8 | redux 4 | crush 4 | shuffle | gain 0.26
+break@collapse:  1 [2 2] 3 1*4 2 [3 1] 1' 2 [3 3] 2 1*3 . 3 . | sample amen | redux 3 | crush 5 | mutate 30 | gain 0.26
+break@swarm:     drunk(16) | sample amencut | redux 5 | crush 3 | gain 0.2
+
+# ---------- BASSE acid microtonale, qui se réécrit ----------
+bass@drift:     1 . 1' . 5 . 1 . 4 . 1 . 6 . 1 . | saw | oct 2 | slide | lp 480 q 9 | fenv 0.6 | drive 0.4 | every 4 rev | mutate 20 | gain 0.14 | hue 0
+bass@bloom:     1 . . . 5 . 1 . . . 4 . 6 . 5 . | saw | oct 2 | slide | lp 560 q 8 | fenv 0.5 | drive 0.3 | shuffle | gain 0.13 | hue 0
+bass@collapse:  1 1 . 1' 5 . 1 . 4 . 1' . 6 . 5 1 | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | drive 0.5 | gain 0.14 | hue 0
+sub:    1 . . . . . . . 5 . . . 4 . . . | sine | oct 1 | sub 0.6 | env 0.005 0.2 0.3 0.2 | gain 0.28 | in drift bloom collapse swarm dissolve
+
+# ---------- MÉLODIES GÉNÉRATIVES (différentes à chaque mesure) ----------
+lead@drift:  walk(14) | sine | fm 1 2.5 | wow 0.3 | slide | lp 2600 | delay 0.3 | echo 6 0.4 | gate 0.6 | humanize 50 | gain 0.1 | hue 200
+lead@bloom:  walk(16) | pluck 0.7 | harmonize 7 0.3 | reverb 0.5 | delay 0.4 | echo 8 0.45 | gate 0.6 | humanize 45 | gain 0.1 | hue 280
+lead@swarm:  logistic(16) | sine | fm 2 3 | ring 220 | lp 2400 | delay 0.2 | gate 0.5 | gain 0.08 | hue 0
+lead@ghost:  1 4 6 3 1' 6 4 2 | markov | bell | semi 12 | wow 0.3 | reverb 0.7 | delay 0.5 | degrade 40 | gain 0.07 | hue 60
+
+# ---------- BOÎTE À MUSIQUE / cloches désaccordées (le côté fragile) ----------
+box@emerge:    walk(8) | bell | detune 6 | wow 0.3 | reverb 0.7 | delay 0.4 | degrade 30 | gain 0.07 | pan 0.3 | hue 50
+box@dissolve:  perlin(16) | bell | detune 5 | semi 12 | reverb 0.8 | echo 8 0.5 | degrade 35 | gain 0.06 | pan -0.3 | hue 60
+box@ghost:     pi(16) | bell | detune 4 | reverb 0.85 | delay 0.5 | degrade 45 | gain 0.06 | hue 190
+
+# ---------- POLYMÉTRIE en dérive (phasing microtonal) ----------
+ph1@bloom:  1 4 6 3 5 1' | poly 13 | pluck 0.6 | reverb 0.6 | gate 0.5 | pan -0.35 | gain 0.07 | hue 180
+ph2@bloom:  1 4 6 3 5 1' | poly 17 | pluck 0.6 | reverb 0.6 | gate 0.5 | pan 0.35 | gain 0.07 | hue 320
+ph3@swarm:  1 3 5 6 4 2 | poly 11 | pluck 0.6 | autopan 0.3 | reverb 0.5 | gate 0.5 | gain 0.06 | hue 240
+
+# ---------- STABS / GLITCHES numériques ----------
+stab@fracture:  . . [1 1'] . . . . . . . [4 4 6] . . . . | saw | unison 3 | redux 5 | crush 3 | lp 1900 q 6 | gain 0.08 | hue 160
+glitch@collapse: bin(214) | sample glass | redux 6 | crush 4 | pan -0.3 | gain 0.12
+zap@swarm:      {1 6}*2 . . . {4 1'}*3 . . | tri | sync 3 | fold 0..0.7 | over 8 | redux 4 | gain 0.07 | hue 100
+
+# ----------------------------------------------------------------
+#  Tout est seedé : reproductible MAIS jamais répétitif (chaque mesure diffère).
+#  Essaie : seed: 74/75/76 · tune: 19edo · enlève meter: pour du 4/4.
+# ----------------------------------------------------------------
