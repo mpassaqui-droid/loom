@@ -184,6 +184,7 @@
       <button class="tiny go" data-ai="rends ce morceau plus exotique et oriental">&#127760; + exotique</button>
       <button class="tiny go" data-ai="crée une variation de ce morceau en gardant l'esprit">&#127922; varier</button>
       <button class="tiny go" data-ai="simplifie ce morceau, enlève le superflu">&#129529; simplifier</button>
+      <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)">&#10067; explique</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
     <div class="opt">laisse la clé vide pour le cerveau gratuit &middot; &#127908; = parle, ça écrit et ça génère.</div>
@@ -1054,6 +1055,41 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(scaleSpec){if(/^-?[\d.]+$/.test(scaleSpec[0])){const arr=scaleSpec.map(parseFloat).filter(x=>!isNaN(x));if(arr.length>=2)scale=arr;}if(!scale)scale=SCALES[scaleSpec[0]];}
     scale=scale||SCALES.major;
     return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE};}
+  // KNOWLEDGE layer: the story/mood of each scale — shown on RUN, so you learn while you make
+  const SCALE_LORE={
+    major:"le mode joyeux, lumineux, stable — la base de la musique occidentale",
+    minor:"le mode triste/grave (éolien) — mélancolie et profondeur",
+    dorian:"mineur avec une 6e majeure — médiéval, jazz, celtique ; doux-amer espéré",
+    phrygian:"mineur à 2e bémol — tension sombre, flamenco, metal",
+    lydian:"majeur à 4e augmentée — rêveur, flottant, cinéma (Vangelis)",
+    mixolydian:"majeur à 7e bémol — rock, funk, musique modale, blues planant",
+    locrian:"le plus instable (quinte diminuée) — inquiétant, rare",
+    pentatonic:"5 notes, sans demi-ton — universelle (Chine, Afrique, folk) ; impossible de se tromper",
+    minpent:"pentatonique mineure — le blues, le rock, la pentatonique du soliste",
+    blues:"pentatonique mineure + blue note — l'âme du blues et du jazz",
+    harmonic_minor:"mineur à 7e majeure — la seconde augmentée orientale, dramatique",
+    melodic_minor:"mineur de jazz — sophistiqué, lisse en montant",
+    whole_tone:"6 tons entiers égaux — irréel, suspendu, impressionniste (Debussy)",
+    chromatic:"les 12 notes — tension maximale, atonalité, sérialisme",
+    hijaz:"maqâm arabe à seconde augmentée — le son du Proche-Orient, du désert",
+    bhairav:"raga du petit matin (Inde du Nord) — grave, solennel, 2e et 6e bémols",
+    bhairavi:"raga doux et dévotionnel — souvent la pièce qui clôt un concert",
+    yaman:"raga du soir, lumineux (mode lydien) — sérénité, ouverture",
+    slendro:"gamelan indonésien — 5 notes presque équidistantes, hypnotique, non tempéré",
+    pelog:"gamelan (Bali/Java) — heptatonique aux intervalles inégaux, mystérieux",
+    hirajoshi:"gamme japonaise du koto — épurée, contemplative (wabi-sabi)",
+    bayati:"maqâm en quarts de ton — la seconde neutre, ni majeure ni mineure",
+    rast:"le maqâm « droit » — 3e et 7e neutres, noble et équilibré",
+    egyptian:"pentatonique suspendue (mode de 2e du majeur penta) — voyage",
+    ritusen:"pentatonique japonaise/chinoise — clair, pastoral",
+    chinese:"gamme chinoise brillante — éclat, antiquité",
+    malkauns:"raga nocturne profond (pentatonique mineure) — méditation grave",
+    gypsy:"hongrois mineur — deux secondes augmentées, flamme tzigane",
+    hungarian_minor:"mineur hongrois — exotique, intense, deux seconds augmentés"};
+  function currentScaleName(text){let nm=null;for(const raw of text.split("\n")){const l=raw.trim();const i=l.indexOf(":");if(i<0)continue;
+    const k=l.slice(0,i).trim().toLowerCase(),w=l.slice(i+1).trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if(k==="key"&&w[1]&&!/^-?[\d.]/.test(w[1]))nm=w[1];else if(k==="scale"&&w[0]&&!/^-?[\d.]/.test(w[0]))nm=w[0];}
+    return nm;}
   function isDegree(tok){return /^[1-7][#b]?[',]*$/.test(tok);}
   // microtuning: cents deviation from equal temperament for each semitone interval from the tonic
   const JI=[0,11.73,3.91,15.64,-13.69,-1.96,-9.78,1.96,13.69,-15.64,-3.91,-11.73];      // 5-limit just intonation
@@ -1220,7 +1256,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else cur+=ch;}
     if(cur)out.push(cur);
     return out.filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"));}
-  function parse(text){const out=[];for(let raw of text.split("\n")){const line=raw.trim();
+  // macros: "def riff: 1 2 3 5" defines a reusable fragment, used as $riff anywhere in a pattern
+  function expandMacros(text){const defs={};
+    const lines=text.split("\n").filter(l=>{const m=/^\s*def\s+([A-Za-z_][\w]*)\s*:\s*(.+)$/.exec(l);if(m){defs[m[1]]=m[2].trim();return false;}return true;});
+    let out=lines.join("\n");
+    for(let i=0;i<4;i++){let ch=false;out=out.replace(/\$([A-Za-z_][\w]*)/g,(s,n)=>{if(defs[n]!=null){ch=true;return defs[n];}return s;});if(!ch)break;}
+    return out;}
+  function parse(text){text=expandMacros(text);const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const full=line.slice(0,i).trim().toLowerCase();
     if(full==="key"||full==="scale"||full==="seed"||full==="song"||full==="arrange"||full==="duck"||full==="feel"||full==="scene"||full==="prog"||full==="tune"||full==="bpm"||full==="tempo"||full==="warmth"||full==="film"||full==="title")continue;
@@ -1401,8 +1443,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const idx=parseInt(m[1],10)-1;let midi=ch[((idx%ch.length)+ch.length)%ch.length]+12*Math.floor(idx/ch.length);
     for(const c2 of m[2]){if(c2==="'")midi+=12;else if(c2===",")midi-=12;}
     return midiToName(midi);}
+  // walk(n[,range]) : a seeded random walk over scale degrees -> an evolving melody (maths/algorithmic)
+  function expandWalk(tok,bar){const m=/^walk\((\d+)(?:,(\d+))?\)$/.exec(tok);if(!m)return null;
+    const n=+m[1],range=Math.max(2,m[2]?+m[2]:7);let d=1,out=[];
+    for(let i=0;i<n;i++){out.push(String(Math.max(1,Math.min(range,d))));const st=[-2,-1,-1,1,1,2][Math.floor(rng(seed,bar,"walk:"+i,i)*6)%6];d=Math.max(1,Math.min(range,d+st));}
+    return out;}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
-    let out=[];for(const tok of t){const c=expandCa(tok,bar);if(c)out.push(...c);else out.push(tok);}
+    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
@@ -2434,7 +2481,10 @@ void main(){
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");
-    const lw=lint();if(lw){log(lw,"err");lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+6000;}else lintUntil=0;
+    const now2=((typeof performance!=="undefined"&&performance.now)?performance.now():0);
+    const lw=lint();let info=lw;
+    if(!info){const sn=currentScaleName(editor.value);if(sn&&SCALE_LORE[sn])info="[ savoir ] "+sn+" — "+SCALE_LORE[sn];}
+    if(info){log(info,lw?"err":"ai");lintUntil=now2+(lw?6000:9000);}else lintUntil=0;
     try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   function stop(){playing=false;if(schedTimer)clearTimeout(schedTimer);
     voices.forEach(v=>v.cells.forEach(c=>c.classList.remove("play","hit")));log("[ stopped ]");}
@@ -4299,7 +4349,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     {t:"53 · Arrangement : chance",d:"| chance N : une voix entière ne joue qu'une partie des mesures (au hasard, seedé). Pour des fills/contre-chants qui vont et viennent.",c:"seed: 2\nkey:  a minor\nkick: x . . . x . . . | sample bd | gain 0.5\nperc: . . x . . . x . | sample perc | chance 0.6 | gain 0.2\nfill: . . . . . . x*4 | sample sd | chance 0.4 | gain 0.3"},
     {t:"54 · Trance gate",d:"| tgate N hache une nappe tenue en N pulsations par mesure — le son « pompé » de la trance/EDM.",c:"key:  a minor\nprog: auto edm\npad:  ^ . . . | saw | unison 4 | tgate 8 | lp 1500 | reverb 0.4 | gate 1.8 | gain 0.1\nkick: x . . . x . . . | sample bd | gain 0.5"},
     {t:"55 · LFO : formes & cibles",d:"Le LFO module cutoff/pitch/gain/pan/reso, avec une forme (sine/tri/saw/square). square sur cutoff = le wobble dubstep.",c:"key:  c minor\nwob:  1 1 1 1 1 1 1 1 | saw | lp 800 q 8 | lfo cutoff 2 0.7 square | gain 0.12\nvib:  1 . 3 . 5 . 3 . | sine | lfo pitch 6 0.3 tri | reverb 0.3 | gain 0.1\npn:   1 . . . 5 . . . | tri | lfo pan 1 0.9 | reverb 0.3 | gain 0.1"},
-    {t:"56 · Délai synchronisé (echo) & double LFO",d:"| echo DIV cale des échos sur le tempo (6=pointé, 8=croche). | lfo2 = un 2e LFO pour moduler deux choses à la fois.",c:"key:  a minor\nbpm:  120\nlead: 1 . . . 5 . . . | pluck 0.7 | echo 6 0.5 | reverb 0.3 | gain 0.12\nwob:  1 1 1 1 | saw | lp 700 q 9 | lfo cutoff 2 0.8 square | lfo2 pitch 5 0.2 | gain 0.1"}
+    {t:"56 · Délai synchronisé (echo) & double LFO",d:"| echo DIV cale des échos sur le tempo (6=pointé, 8=croche). | lfo2 = un 2e LFO pour moduler deux choses à la fois.",c:"key:  a minor\nbpm:  120\nlead: 1 . . . 5 . . . | pluck 0.7 | echo 6 0.5 | reverb 0.3 | gain 0.12\nwob:  1 1 1 1 | saw | lp 700 q 9 | lfo cutoff 2 0.8 square | lfo2 pitch 5 0.2 | gain 0.1"},
+    {t:"57 · Macros (def / $) & walk",d:"def NOM: … crée un motif réutilisable, rappelé par $NOM. walk(n) = une mélodie en marche aléatoire (maths).",c:"key: a minor\ndef riff: 1 2 3 5 3 2 1 .\nlead: $riff $riff | pluck 0.7 | gain 0.12\ngen:  walk(16) | sine | fm 1 2 | delay 0.2 | gain 0.1\nkick: x . . . x . . . | sample bd | gain 0.4"}
   ];
   // course lessons are wired below, in the unified APPRENDRE panel
 
@@ -4388,6 +4439,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Génératif (maths)","morse(n)   fib(n)","suites de Thue-Morse / mot de Fibonacci comme rythme (auto-similaire)"],
     ["Génératif (maths)","| poly N","vraie polymétrie : la voix tourne à N pas/mesure et dérive (phasing à la Reich)"],
     ["Génératif (maths)","| markov","régénère la mélodie d'après ses propres transitions note→note (chaîne de Markov, seedée)"],
+    ["Génératif (maths)","walk(n)","mélodie en MARCHE ALÉATOIRE sur les degrés (n notes, seedée) — évolue à chaque mesure"],
+    ["Motif","def nom: …   $nom","MACRO : définis un fragment réutilisable, rappelle-le avec $nom n'importe où"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","| chance N","la VOIX entière ne joue que N% des mesures (0-1) — variation d'arrangement (seedé)"],
     ["Effets & mix","| tgate N","trance gate : hache le son en N pulsations rythmiques par mesure (nappes pulsées)"],
@@ -4617,6 +4670,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
     "- Tempo-synced echo: | echo DIV [FB] adds a per-voice delay locked to the tempo — DIV taps per bar (4 = quarter notes, 8 = eighths, 6 = dotted, 3 = triplets), FB = feedback 0-0.9. e.g. lead: 1 . . . | pluck | echo 6 0.5 (the dub/IDM rhythmic echo). Different from | delay (the global ping-pong send).",
+    "- Macros: 'def riff: 1 2 3 5' defines a reusable fragment; use it as $riff anywhere in a pattern (e.g. lead: $riff $riff | pluck). Great to repeat a motif without retyping.",
+    "- walk(n) is a seeded random-walk melody generator over scale degrees (n notes), e.g. lead: walk(16) | pluck — algorithmic, evolves per bar.",
     "- GPU shader scenes: scene: shader | gtunnel | gfractal | gwarp are full-screen WebGL fragment shaders (plasma, infinite tunnel, fractal fold, warp) — far richer/smoother than Canvas2D, reactive to bass/mid/treble.",
     "- Second LFO: | lfo2 ... is an independent second LFO (same syntax as lfo) so you can modulate two things at once, e.g. | lfo cutoff 2 0.8 square | lfo2 pitch 5 0.2 (wobble filter AND vibrato).",
     "- LFO depth: | lfo TARGET RATE DEPTH [shape] modulates a parameter. TARGET = cutoff, pitch, gain, pan, reso (filter resonance). shape = sine, tri, saw, square (square cutoff = the dubstep wobble). e.g. | lfo cutoff 2 0.7 square , | lfo pan 1 0.9 , | lfo pitch 6 0.3 tri (vibrato).",
@@ -4870,6 +4925,13 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   // AI quick-action chips: one tap -> a canned request sent to the (free) brain
   {const chips=$("aiChips");if(chips)chips.addEventListener("click",e=>{const b=e.target.closest("[data-ai]");if(!b)return;
     $("vibeIn").value=b.getAttribute("data-ai");vibe();});}
+  // AI music teacher: explain the current piece in plain words (uses the free brain; prose, not code)
+  async function explain(){if(!editor.value.trim()){log("[ prof ] écris ou génère d'abord un morceau","err");return;}
+    log("[ prof ] j'analyse ton morceau…","ai");
+    const p="Tu es un professeur de musique bienveillant et clair. En français, en 3 ou 4 phrases simples (pas de code, pas de listes, pas de markdown), explique ce morceau écrit en langage LOOM : son ambiance, la gamme/tonalité et POURQUOI il sonne ainsi, et un conseil pour l'améliorer.\n\nCODE:\n"+editor.value;
+    try{const t=await callFree(p);const s=String(t||"").replace(/\s+/g," ").trim();log("[ prof ] "+(s.slice(0,650)||"(pas de réponse, réessaie)"),"ai");}
+    catch(_){log("[ prof ] indisponible — il faut une connexion internet","err");}}
+  {const eb=$("explainBtn");if(eb)eb.addEventListener("click",explain);}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;
