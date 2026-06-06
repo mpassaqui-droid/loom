@@ -184,6 +184,8 @@
       <button class="tiny go" data-ai="rends ce morceau plus exotique et oriental">&#127760; + exotique</button>
       <button class="tiny go" data-ai="crée une variation de ce morceau en gardant l'esprit">&#127922; varier</button>
       <button class="tiny go" data-ai="simplifie ce morceau, enlève le superflu">&#129529; simplifier</button>
+      <button class="tiny go" data-ai="continue et développe ce morceau avec une suite cohérente (nouvelle section)">&#9654; continuer</button>
+      <button class="tiny go" data-ai="corrige les erreurs et améliore ce morceau pour qu'il sonne bien">&#129657; corriger</button>
       <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)">&#10067; explique</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
@@ -221,6 +223,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       <option value="ja">日本語</option><option value="ru">Русский</option></select>
     <span id="google_translate_element" class="notranslate" translate="no" style="display:none;vertical-align:middle"></span>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
+    <span id="vu" title="niveau master (vert→ambre→rouge=saturation)" style="display:inline-block;width:90px;height:13px;border:1px solid var(--dim);border-radius:3px;overflow:hidden;vertical-align:middle"><span id="vuBar" style="display:block;height:100%;width:0;background:var(--cyan);transition:width .06s"></span></span>
   </div>
 
   <div class="knobs">
@@ -1484,8 +1487,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // drunk(n): a "drunk walk" rhythm — hit probability drifts, making natural clusters/gaps
   function expandDrunk(tok,bar){const m=/^drunk\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];let p=0.5,out=[];
     for(let i=0;i<n;i++){const r=rng(seed,bar,"drunk",i);out.push(r<p?"x":".");p=Math.max(0.15,Math.min(0.85,p+(r-0.5)*0.45));}return out;}
+  // prime(n): hits on prime positions ; bin(n): the binary digits of n as a rhythm (number music)
+  function expandPrime(tok){const m=/^prime\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
+    const isP=k=>{if(k<2)return false;for(let i=2;i*i<=k;i++)if(k%i===0)return false;return true;};
+    let o=[];for(let i=0;i<n;i++)o.push(isP(i)?"x":".");return o;}
+  function expandBin(tok){const m=/^bin\((\d+)\)$/.exec(tok);if(!m)return null;let n=+m[1];if(n<=0)return["."];
+    return n.toString(2).split("").map(d=>d==="1"?"x":".");}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
-    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar);if(c)out.push(...c);else out.push(tok);}
+    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
@@ -1649,6 +1658,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     drawPlayBoxes($("editGlow"),$("editor"),cph);
     if(stageOn)drawPlayBoxes($("stageGlow"),$("stageEditor"),cph);
     drawScope();if(stageOn)drawStage();
+    if(analyser){const tb=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(tb);let peak=0;for(let i=0;i<tb.length;i+=2){const a=Math.abs(tb[i]-128)/128;if(a>peak)peak=a;}
+      const bar=$("vuBar");if(bar){bar.style.width=Math.min(100,peak*140)+"%";bar.style.background=peak>0.98?"#ff5a5a":peak>0.72?"var(--amber)":"var(--cyan)";}}
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
   let vjOn=false;
@@ -4489,6 +4500,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Génératif (maths)","| poly N","vraie polymétrie : la voix tourne à N pas/mesure et dérive (phasing à la Reich)"],
     ["Génératif (maths)","| markov","régénère la mélodie d'après ses propres transitions note→note (chaîne de Markov, seedée)"],
     ["Génératif (maths)","walk(n)","mélodie en MARCHE ALÉATOIRE sur les degrés (n notes, seedée) — évolue à chaque mesure"],
+    ["Génératif (maths)","lsys(n)  drunk(n)","L-système (mélodie auto-similaire) · marche d'ivrogne (densité rythmique qui dérive)"],
+    ["Génératif (maths)","prime(n)  bin(n)","frappes sur les positions premières · les chiffres binaires de n comme rythme (musique des nombres)"],
     ["Motif","def nom: …   $nom","MACRO : définis un fragment réutilisable, rappelle-le avec $nom n'importe où"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","| chance N","la VOIX entière ne joue que N% des mesures (0-1) — variation d'arrangement (seedé)"],
