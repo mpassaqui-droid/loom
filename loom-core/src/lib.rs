@@ -143,13 +143,47 @@ fn expand_fib_token(tok: &str) -> Option<Vec<String>> {
     Some(s.iter().map(|c| if *c == 0 { "x".into() } else { ".".into() }).collect())
 }
 
-/// Expand any generative pattern tokens (euclid / morse / fib) in place.
+/// `prime(n)` -> hits on prime positions.
+fn expand_prime_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("prime(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let is_p = |k: usize| -> bool { if k < 2 { return false; } let mut i = 2; while i * i <= k { if k % i == 0 { return false; } i += 1; } true };
+    Some((0..n).map(|i| if is_p(i) { "x".into() } else { ".".into() }).collect())
+}
+/// `golden(n)` -> a golden-ratio (Beatty) rhythm, quasi-periodic.
+fn expand_golden_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("golden(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let phi = 1.618_033_988_75_f64;
+    Some((0..n).map(|i| if (((i + 1) as f64) / phi).floor() != ((i as f64) / phi).floor() { "x".into() } else { ".".into() }).collect())
+}
+/// `collatz(n)` -> the Collatz sequence parity as a rhythm.
+fn expand_collatz_token(tok: &str) -> Option<Vec<String>> {
+    let start: u64 = tok.strip_prefix("collatz(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let mut n = start.max(1); let mut o = Vec::new(); let mut g = 0;
+    while o.len() < 64 && g < 300 {
+        o.push(if n % 2 == 1 { "x".to_string() } else { ".".to_string() });
+        if n == 1 { break; }
+        n = if n % 2 == 1 { 3 * n + 1 } else { n / 2 }; g += 1;
+    }
+    Some(o)
+}
+/// `cantor(n)` -> the Cantor set (no base-3 digit equal to 1) as a fractal rhythm.
+fn expand_cantor_token(tok: &str) -> Option<Vec<String>> {
+    let n: usize = tok.strip_prefix("cantor(")?.strip_suffix(')')?.trim().parse().ok()?;
+    let in_c = |mut k: usize| -> bool { if k == 0 { return true; } while k > 0 { if k % 3 == 1 { return false; } k /= 3; } true };
+    Some((0..n).map(|i| if in_c(i) { "x".into() } else { ".".into() }).collect())
+}
+
+/// Expand any generative pattern tokens (euclid / morse / fib / prime / golden / collatz / cantor) in place.
 fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
     let mut out = Vec::with_capacity(tokens.len());
     for t in tokens {
         if let Some(seq) = expand_euclid_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_morse_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_fib_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_prime_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_golden_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_collatz_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_cantor_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -293,6 +327,22 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
             // diatonic transpose of every scale-degree token by N steps
             let n = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0);
             tokens.iter().map(|t| transpose_deg(t, n)).collect()
+        }
+        Some("mirror") => {
+            let mut r = tokens.to_vec();
+            r.extend(tokens.iter().rev().cloned());
+            r
+        }
+        Some("thin") => {
+            let n = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(2).max(2);
+            tokens.iter().enumerate()
+                .map(|(i, t)| if i % n == 0 { t.clone() } else { ".".to_string() }).collect()
+        }
+        Some("accent") => {
+            let n = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(4).max(1);
+            tokens.iter().enumerate()
+                .map(|(i, t)| if i % n == 0 && t != "." && t != "~" && !t.contains('!') { format!("{}!", t) } else { t.clone() })
+                .collect()
         }
         _ => tokens.to_vec(),
     }
@@ -1770,5 +1820,22 @@ mod tests {
         // hits at degrees 1,3,5,3 → c3, eb3, g3, eb3
         let toks: Vec<&str> = ev.iter().map(|e| e.token.as_str()).collect();
         assert_eq!(toks, ["c3", "eb3", "g3", "eb3"]);
+    }
+
+    #[test]
+    fn maths_generators() {
+        let g = |s: &str| expand_euclid(vec![s.to_string()]).join("");
+        assert_eq!(g("prime(8)"), "..xx.x.x");      // primes: 2,3,5,7
+        assert_eq!(g("cantor(9)"), "x.x...x.x");     // Cantor set (no base-3 digit '1')
+        assert_eq!(g("collatz(1)"), "x");
+        assert_eq!(g("golden(8)").len(), 8);
+    }
+
+    #[test]
+    fn new_verbs_mirror_thin_accent() {
+        let v = |s: &str| -> Vec<String> { s.split_whitespace().map(|x| x.to_string()).collect() };
+        assert_eq!(apply_verb(&v("1 2 3"), "mirror", 0, 0).join(" "), "1 2 3 3 2 1");
+        assert_eq!(apply_verb(&v("x x x x"), "thin 2", 0, 0).join(" "), "x . x .");
+        assert_eq!(apply_verb(&v("x x x x"), "accent 2", 0, 0).join(" "), "x! x x! x");
     }
 }
