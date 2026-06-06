@@ -97,6 +97,10 @@ pub struct Event {
     pub is_drum: bool,
     /// Velocity multiplier from accents (`!`) and crescendo/decrescendo rolls (`*N>`/`*N<`).
     pub vel: f32,
+    /// Exact frequency in Hz for pitched notes — carries microtonal precision that
+    /// the rounded `token` name can't (e.g. quarter-tones from custom scales).
+    /// `None` for drums and tokens that don't resolve to a pitch.
+    pub freq: Option<f32>,
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
@@ -729,6 +733,16 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
     }
     if base.is_empty() || base == "." || base == "~" { return; }
     let notes = resolve_token(base, v.is_drum, base_oct, key);
+    // Exact pitch for a single scale-degree note: the `token` name is rounded to
+    // 12-TET, but a custom microtonal scale needs the unrounded frequency. For
+    // everything else (chords, plain notes) we fall back to the note name below.
+    let deg_freq: Option<f32> = match key {
+        Some(k) if !v.is_drum && is_degree(base) => degree_to_midi(base, k).map(midi_f_to_freq),
+        _ => None,
+    };
+    let freq_for = |note: &str| -> Option<f32> {
+        if v.is_drum { None } else { deg_freq.or_else(|| note_to_freq(note)) }
+    };
     let span = p1 - p0;
     if let Some(mode) = v.arp {
         if !v.is_drum && notes.len() > 1 {
@@ -736,7 +750,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
             let m = ord.len();
             for (j, note) in ord.iter().enumerate() {
                 events.push(Event { phase: p0 + (j as f32 / m as f32) * span, voice: v.name.clone(),
-                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent });
+                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note) });
             }
             return;
         }
@@ -746,7 +760,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
         let vel = accent * ramp_factor(j, ratchet, ramp_dir);
         for note in &notes {
             events.push(Event { phase, voice: v.name.clone(), token: note.clone(),
-                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel });
+                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note) });
         }
     }
 }
@@ -1875,6 +1889,22 @@ mod tests {
         let k3 = parse_key("scale: 0 1 4 6 7.5 9 11").unwrap();
         assert_eq!(k3.tonic, 0);
         assert_eq!(k3.scale.len(), 7);
+    }
+
+    #[test]
+    fn event_carries_exact_microtonal_freq() {
+        // A degree on a quarter-tone scale: the token name rounds, but Event.freq
+        // must keep the exact pitch so the audio backend plays the quarter-tone.
+        let p = Program::parse("key: d 0 1.5 3 4 6 7.5 9 10\nlead: 1 2");
+        let ev = p.schedule_bar(0);
+        assert!((ev[0].freq.unwrap() - midi_f_to_freq(50.0)).abs() < 1e-3);   // d3
+        assert!((ev[1].freq.unwrap() - midi_f_to_freq(51.5)).abs() < 1e-3);   // quarter-tone up
+        // it is NOT a 12-TET semitone, proving the rounded token would be wrong
+        assert!((ev[1].freq.unwrap() - midi_to_freq(51)).abs() > 1.0);
+        assert!((ev[1].freq.unwrap() - midi_to_freq(52)).abs() > 1.0);
+        // a drum has no pitch
+        let pd = Program::parse("kick: x .");
+        assert!(pd.schedule_bar(0)[0].freq.is_none());
     }
 
     #[test]

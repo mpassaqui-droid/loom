@@ -47,7 +47,9 @@ pub fn schedule_bar_json(src: &str, bar: i32) -> String {
     let prog = loom_core::Program::parse(src);
     let events = prog.schedule_bar(bar as i64);
     let js: Vec<JsEvent> = events.into_iter().map(|e| {
-        let freq = if e.is_drum { None } else { loom_core::note_to_freq(&e.token) };
+        // e.freq carries exact (microtonal) pitch; fall back to the note name only
+        // if the core didn't resolve one (older paths / safety).
+        let freq = e.freq.or_else(|| if e.is_drum { None } else { loom_core::note_to_freq(&e.token) });
         JsEvent {
             phase: e.phase, voice: e.voice, wave: wave_name(e.wave).to_string(),
             gain: e.gain, is_drum: e.is_drum, vel: e.vel, freq, token: e.token,
