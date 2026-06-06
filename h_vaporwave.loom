@@ -1,0 +1,13 @@
+# ===== HISTOIRE 16 — VAPORWAVE (internet, ~2011) =====
+# Du 80s RALENTI, étiré, noyé de chorus, nostalgique jusqu'au malaise.
+# Le wow & flutter (| wow) et les accords maj7 font tout.
+title:  Vapor
+bpm:    68
+key:    f major
+scene:  superf
+song:   a*8
+keys:  Fmaj7 . . . Dm9 . . . Bbmaj7 . . . C . . . | wt warm | wow 0.4 | chorus 0.5 | lp 2000 | env 0.05 0.3 0.7 0.6 | reverb 0.6 | gain 0.12
+bass:  1 . . . 6, . . . 4, . . . 5, . . . | sine | oct 2 | wow 0.3 | gain 0.18
+lead:  1' . . 7 . 5 . . 3 . 5 . 6 . . . | sine | fm 1 1.5 | wow 0.35 | reverb 0.6 | delay 0.4 | gain 0.1
+kick:  x . . . . . . . x . . . . . . . | sample bd | gain 0.35
+hat:   . . x . . . x . . . x . . . x . | sample hh | gain 0.08

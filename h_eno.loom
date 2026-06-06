@@ -1,0 +1,15 @@
+# ===== HISTOIRE 13 — AMBIENT GÉNÉRATIF (Brian Eno, « Music for Airports », 1978) =====
+# Des boucles de longueurs PREMIÈRES ENTRE ELLES (7,9,11,13 pas) qui ne se
+# réalignent jamais -> une musique infinie qui ne se répète pas. Eno l'appelait
+# « generative ». LOOM le fait nativement avec poly N.
+title:  Airports
+bpm:    60
+key:    c major
+tune:   just
+scene:  flow
+song:   a*16
+v1:  1 . . . . . . . | poly 7  | bell | reverb 0.85 | delay 0.5 | gate 2 | gain 0.08
+v2:  3 . . . . . . . | poly 9  | bell | reverb 0.85 | delay 0.5 | gate 2 | pan 0.3 | gain 0.07
+v3:  5 . . . . . . . | poly 11 | bell | reverb 0.85 | delay 0.5 | gate 2 | pan -0.3 | gain 0.07
+v4:  1' . . . . . . . | poly 13 | bell | reverb 0.9 | gate 2 | gain 0.05
+pad: Cmaj9 . . . . . . . . . . . . . . . | saw | unison 4 | lp 800 | env 2 1 0.8 4 | reverb 0.9 | gate 3 | gain 0.05

@@ -1,0 +1,16 @@
+# ===== HISTOIRE 11 — DETROIT TECHNO (1987, Derrick May / Juan Atkins) =====
+# La techno SOUL : des stabs de cordes mélancoliques sur une 909 sèche.
+# (« Strings of Life ».) Ici naît la techno telle qu'on la connaît.
+title:  Strings
+bpm:    128
+key:    a minor
+duck:   35
+scene:  network
+song:   intro*4 main*16 break*4 main*16 out*4
+kick:  x . . . x . . . x . . . x . . . | sample bd | gain 0.5 | in main out
+clap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.32 | in main out
+hat:   . . x . . . x . . . x . . . x . | sample hh | gain 0.12 | swing 56 | in main break out
+oh:    . . . . . . x . . . . . . . x . | sample oh | gain 0.1 | in main
+str:   Am . . C . . Em . . F . . Am . . . | saw | unison 3 | lp 1700 q 4 | env 0.01 0.2 0.4 0.3 | reverb 0.5 | delay 0.3 | gain 0.12 | in main break
+bass:  1 . 1 . 1 . 5, . 1 . 1 . 6, . 5, . | saw | oct 2 | lp 800 | gate 0.5 | gain 0.15 | in main out
+pad@break: Am9 . . . F . . . | saw | unison 5 | lp 900 | env 1 0.6 0.7 2 | reverb 0.7 | gain 0.1

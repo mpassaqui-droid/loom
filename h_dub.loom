@@ -1,0 +1,14 @@
+# ===== HISTOIRE 12 — DUB (Jamaïque, ~1973, King Tubby / Lee Perry) =====
+# La CONSOLE devient instrument : skank à contretemps, basse profonde, et
+# d'immenses delay/reverb avec des coupures. L'ancêtre du remix et du sound-system.
+title:  Dub
+bpm:    140
+key:    a minor
+duck:   20
+scene:  aurora
+song:   a*8 b*8
+kick:  x . . . . . . . x . . . . . . . | sample bd | gain 0.5
+snare: . . . . x . . . . . . . x . . . | sample sd | reverb 0.6 | delay 0.5 | gain 0.3
+skank: . . . Am . . . Am . . . Am . . . Am | saw | unison 2 | lp 1500 | env 0.005 0.1 0.1 0.1 | delay 0.5 | reverb 0.4 | gate 0.3 | gain 0.1
+bass:  1 . . 1 . 1, . . 4, . . 5, . . 1 . | sine | oct 2 | sub 0.6 | lp 500 | gate 0.6 | gain 0.2
+melodica@b: 1' . 7 . 5 . . . 1' . 2' . 1' . . . | reed | delay 0.55 | reverb 0.6 | gain 0.1

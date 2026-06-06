@@ -1,0 +1,14 @@
+# ===== HISTOIRE 15 — FOOTWORK (Chicago, ~2010, RP Boo / DJ Rashad) =====
+# 160 bpm, basses en triolets syncopés, voix découpée, beaucoup d'espace
+# et de tension. La musique pour danser le footwork.
+title:  Footwork
+bpm:    160
+key:    c minor
+scene:  tracker
+song:   a*8 b*8
+kick:  x . . x . . x . . . x . . x . . | sample bd | gain 0.5
+clap:  . . . . . . . . x . . . . . . . | sample cp | gain 0.3
+bass:  1 . 1 . . 1 . . 1 . . 1 . 1 . . | sine | oct 2 | sub 0.5 | env 0.005 0.08 0.2 0.06 | gain 0.22
+vox:   . . 1' . . . 1' 1' . . 5 . . 1' . . | sample vox | delay 0.2 | gain 0.18
+hat:   x x x x x x x x x x x x x x x x | sample hh | degrade 30 | gain 0.08
+clave@b: x . . x . . x . x . . x . . x . | sample rim | gain 0.14
