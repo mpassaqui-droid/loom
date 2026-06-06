@@ -753,6 +753,12 @@ pub enum Tuning {
     Pyth,
     /// N-tone equal temperament (pure octaves, N equal steps).
     Edo(u32),
+    /// Werckmeister III well-temperament (1691).
+    Werck,
+    /// Kirnberger III well-temperament.
+    Kirn,
+    /// Quarter-comma meantone (pure major thirds).
+    Meantone,
 }
 
 /// Cents deviation from 12-TET for a semitone interval (0..=11) from the tonic.
@@ -760,11 +766,17 @@ pub enum Tuning {
 pub fn tune_cents(interval: i32, tuning: Tuning) -> f32 {
     const JI: [f32; 12]   = [0.0, 11.73, 3.91, 15.64, -13.69, -1.96, -9.78, 1.96, 13.69, -15.64, -3.91, -11.73];
     const PYTH: [f32; 12] = [0.0, -9.78, 3.91, -5.87, 7.82, -1.96, 11.73, 1.96, -7.82, 5.87, -3.91, 9.78];
+    const WERCK: [f32; 12] = [0.0, -10.0, -8.0, -6.0, -10.0, -2.0, -12.0, -4.0, -8.0, -12.0, -4.0, -8.0];
+    const KIRN: [f32; 12]  = [0.0, -10.0, -7.0, -6.0, -14.0, -2.0, -10.0, -3.0, -8.0, -10.0, -4.0, -12.0];
+    const MEAN: [f32; 12]  = [0.0, -24.0, -7.0, 10.0, -14.0, 3.0, -21.0, -3.0, -28.0, -10.0, 7.0, -17.0];
     let iv = interval.rem_euclid(12) as usize;
     match tuning {
         Tuning::Equal => 0.0,
         Tuning::Just => JI[iv],
         Tuning::Pyth => PYTH[iv],
+        Tuning::Werck => WERCK[iv],
+        Tuning::Kirn => KIRN[iv],
+        Tuning::Meantone => MEAN[iv],
         // N-EDO: snap the semitone interval to the nearest EDO step, return the cents delta.
         Tuning::Edo(n) => {
             let n = n.max(1) as f32;
@@ -1502,6 +1514,11 @@ mod tests {
         // perfect fifth (3/2) is ~2 cents sharp in both JI and Pythagorean
         assert!((tune_cents(7, Tuning::Just) - 1.96).abs() < 0.01);
         assert!((tune_cents(7, Tuning::Pyth) - 1.96).abs() < 0.01);
+        // historical temperaments match the JS tables exactly
+        assert_eq!(tune_cents(4, Tuning::Werck), -10.0);
+        assert_eq!(tune_cents(1, Tuning::Kirn), -10.0);
+        assert_eq!(tune_cents(4, Tuning::Meantone), -14.0);
+        assert_eq!(tune_cents(0, Tuning::Werck), 0.0);
         // equal temperament: no deviation
         assert_eq!(tune_cents(4, Tuning::Equal), 0.0);
         // 24-EDO (quarter tones): a 12-TET semitone is an exact EDO step -> 0 delta
