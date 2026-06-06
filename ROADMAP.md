@@ -1,97 +1,124 @@
-# LOOM — ROADMAP vers « meilleur qu'Ableton / Tidal / Strudel »
+# 🌌 LOOM — Le plan (vision + ce qui manque + ce qu'on peut ajouter)
 
-Objectif : un instrument de live-coding qui **sonne pro**, qui soit **plus beau** que tout
-ce qui existe, et qui ait un **avantage unique** (IA + voix + simplicité) que les autres
-n'ont pas. Effort : S (heures) · M (1 session) · L (plusieurs sessions) · XL (chantier).
+> **La vision** : un instrument unique qui réunit le **DAW** (studio), le **code**
+> (live-coding), le **visuel**, les **maths**, la **philosophie** et **toute la
+> connaissance** — mais entièrement **au service de la musique**.
+> On y va en COUCHES, jamais tout d'un coup ; la connaissance vit dans le modèle
+> IA + le prompt + une langue qui grandit (on ne code pas « toute la musique » en dur).
 
----
-
-## 🔎 Diagnostic honnête
-Le frein principal au « ça sonne nul » N'EST PAS le manque de features — on en a énormément.
-C'est :
-1. **Synthèse basique** (oscillateurs Web Audio). → besoin d'un vrai moteur DSP.
-2. **Samples lo-fi** (Dirt-Samples vieux). → besoin de sons propres / multi-échantillonnés.
-3. **IA gratuite faible + je n'entends pas.** → clé Claude pour les prompts ; retours d'oreille de l'owner.
-
-Donc la priorité absolue = **QUALITÉ AUDIO**, puis puissance du langage, puis beauté, puis IA.
+Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / ambition
 
 ---
 
-## ✅ Ce qu'on a déjà (rappel)
-Langage (degrés, ~50 gammes + microtonal, accords étendus + renversements, romains) ·
-génératif (euclidien, automates cellulaires, Thue-Morse, Fibonacci, proba+seed, ratchets,
-variation A/B, verbes Tidal, vraie polymétrie/phasing) · structure longue (song + @section) ·
-son (ADSR, filtres, super-saw, drive, LFO, automation, reverb/delay par voix, pan, sidechain,
-groove) · samples intégrés + perso · REC/RENDER WAV · MIDI out · IA VIBE + voix · UI (séquenceur
-cliquable, oscillo/spectre, SCÈNE plein écran, 48 thèmes, COURS+RÉFÉRENCE) · cœur Rust testé.
+## 0. Où on en est (la base, déjà solide)
+- **Langage** : notes, degrés, ~70 gammes (+ perso numériques), microtonal
+  (just/pyth/N-edo/maqâm en quarts de ton/Werckmeister/Kirnberger/méantone),
+  accords (qualités, romains, slash, `prog`, `^`, 8 arpèges, voicings,
+  voice-leading, `harmonize`, harmoniseur), rythme (euclide, automates `ca()`,
+  `morse/fib`, ratchets, rolls, proba, aléatoire `{}`, alternance `<>`,
+  sous-séquences `[]`, stacks `;`, accents, liaisons `_`), verbes (rev, every,
+  jux, chunk, off, add, semi, palindrome, sometimes, rot, iter, poly, markov,
+  invert, sequence, mutate, stutter, cresc, dim), structure (`song`, `@section`,
+  `in`, tempo par section, `meter`, modulation `key@section`, `accel`, `groove`, `chance`).
+- **Synthèse** : soustractive, FM, table d'ondes, **additive**, granulaire,
+  modèles physiques (pluck/bow/reed), modale (bell), hard-sync, wavefold,
+  ring/AM, PWM, vocodeur, formants.
+- **Effets** : filtres + fenv, ADSR, **2 LFO** (5 cibles × 4 formes), automation
+  `A..B`, signaux, drive, crush, redux, chorus, phaser, comp, eq, reverb, delay,
+  **echo sync**, **convolution `ir`**, flange, reson, stereo, haas, autopan,
+  tgate, slide, bend, wow, orbit, sub/double/noise, `tape`, swing/shift/humanize,
+  gate, strum, flam, sidechain, warmth.
+- **Sampler** : lecture, `chop`, `reverse`, `begin/end`, `root`, fichiers perso, granulaire.
+- **Visuel** : **95 scènes** (Canvas2D + 4 shaders **GPU**), viz/couleur par voix,
+  code à l'écran, **fondus** entre scènes, **mode VJ**, export **vidéo (FILM)**.
+- **Export / E-S** : WAV, stems, **MIDI (fichier + out + in clavier)**,
+  **partage URL**, save/load, **sauvegarde auto**.
+- **App** : **✨ GÉNÉRER**, **IA (VIBE) gratuite sans clé** + chips, **linter**,
+  **autocomplétion** (Tab), raccourcis, **menu de langues** (11 + 100+),
+  thèmes, **mobile**, 56 leçons, référence, tutoriel.
+- **Rust** : `loom-core` (parseur/scheduler testé) — **en retard** sur le moteur JS.
 
 ---
 
-## ❌ Ce qui nous manque vs eux
-- **Ableton** : enregistrement/import audio, instruments FM/wavetable/sampler/granulaire, effets
-  pro (EQ, multibande, reverb algorithmique, chorus…), mixette par piste + sends + groupes,
-  automation dessinée, piano-roll, session/clips, plugins VST.
-- **Tidal/Strudel** : algèbre de patterns (stack, jux, off, sometimes, chunk, striate, signaux
-  continus, patterns de patterns), mini-notation riche, énorme librairie de samples + synthés
-  SuperCollider, effets par événement.
+## 1. 🎚️ DAW — devenir un vrai studio  *(le plus gros écart)*
+- 🔨 **Mixeur visuel** : faders, pan, VU-mètres (M/S existent).
+- 🔨 **Bus & sends** : groupes + returns d'effets partagés.
+- 🔨 **Métrage pro** : LUFS / crête / corrélation, cible de loudness.
+- 🔨 **Mastering** : EQ + multibande + limiteur soigné.
+- 🔨 **Sampler instrument** : charger des fichiers, slice/loop à la souris,
+  multisample, ADSR visuel, **time-stretch**.
+- 🌠 **Timeline / arrangement** visuel (clips qu'on glisse, automation dessinée).
+- 🌠 **Enregistrement audio** (micro/ligne, overdub).
+- 🌠 **Clip launcher / vue Session** (live, lancement quantisé, tap-tempo).
+- 🌠 **MIDI complet** : clock sync, MPE, mapping CC, enregistrer en pattern.
+- 🌠 **Plugins** (Web Audio Modules) / LOOM exporté en plugin.
+- 🌠 **Projets** multi-morceaux + versions + cloud.
+
+## 2. ⌨️ CODE / LANGAGE — la langue qui grandit
+- 🔨 **Fonctions / macros / variables** (motifs et verbes définis par toi).
+- 🔨 **Polyrythmie explicite** (`3:2`), métrique composée, modulation métrique.
+- 🔨 **Undo/redo** des chargements (preset / IA / génération).
+- 🌠 **Théorie du monde en profondeur** : raga (aroha/avaroha, pakad, vadi),
+  maqâm (ajnas, sayr), gamelan (pathet), talas carnatiques, timelines africaines.
+- 🌠 **Harmonie fonctionnelle** : dominantes secondaires, emprunts, réharmonisation.
+- 🌠 **Contrepoint** : espèces, canon/fugue, harmoniser une mélodie.
+- 🌠 **Paroles / chant** : texte → rythme, synthèse de voix chantée.
+- 🌠 **Accordages** : import Scala (.scl), juste intonation adaptative.
+
+## 3. 🎬 VISUEL — le saut GPU continue
+- 🔨 **Post-traitement GPU** : bloom, feedback, glitch.
+- 🔨 **Plus de shaders** : raymarching 3D, fractales, néons.
+- 🔨 **Vue partition + piano-roll** (lire/éditer en notation, pas qu'en code).
+- 🌠 **Éditeur de shader** intégré (écris ton GLSL réactif au son).
+- 🌠 **Export vidéo pro** (MP4/4K, GIF, transparent).
+- 🌠 **Sortie scène** (Syphon/Spout, visuels pilotés par MIDI).
+- 🌠 **Générateur de pochette** par morceau.
+
+## 4. 🔢 MATHS — la musique comme structure
+- ✅ euclide, automates, morse/fib, Markov, chaos, microtonal.
+- 🔨 **Markov d'ordre N**, chaînes apprises d'un morceau.
+- 🌠 **Composition algorithmique** : L-systèmes, grammaires, stochastique (Xenakis),
+  génétique/évolutionnaire, RNN/IA mélodique.
+- 🌠 **Résolution sous contraintes** (« une mélodie qui respecte ces règles »).
+- 🌠 **Maths de l'accordage** : lattices, comma pumps, explorateur N-EDO, spectres → accords.
+- 🌠 **Atelier DSP** (construire son synthé depuis les maths).
+- 🌠 **Théorie de l'information** : entropie/complexité, auto-similarité, surprise.
+
+## 5. 🏛️ PHILOSOPHIE / CONNAISSANCE — « tout, pour la musique »  *(le plus singulier)*
+- 🔨 **Base de connaissance intégrée** : chaque gamme/tradition avec son **histoire,
+  son contexte et son sens** (rasa indien, ethos des modes grecs, humeurs des
+  maqâmat, wuxing chinois ↔ notes).
+- 🔨 **L'explicateur « pourquoi ça sonne »** : consonance, tension/détente, attente
+  (Huron/Meyer), psychoacoustique — l'IA + la théorie.
+- 🌠 **Musique & nombre / cosmos** (Pythagore, harmonie des sphères, ratios justes).
+- 🌠 **Musique & émotion & langage**.
+- 🌠 **Une « université de la musique » dans l'app** : parcours interactifs reliant
+  théorie, histoire, acoustique, maths et philosophie — sources citées.
+
+## 6. 🧠 LE CERVEAU IA — le tissu qui relie tout
+- ✅ composer depuis une description (gratuit, sans clé), chips d'action, voix, prompt à jour.
+- 🔨 **Explique mon code**, **corrige**, **continue**, **réharmonise**, **« à la manière de X »**, **critique**.
+- 🌠 **Prof interactif** qui connaît TOUTE la base (théorie + histoire + philosophie)
+  et l'**applique** : il explique ET modifie ton morceau pour te le faire entendre.
+- 🌠 **Conversation multi-tours**, mémoire du projet, modèle local optionnel.
+
+## 7. 🛠️ PLATEFORME / FONDATIONS
+- 🌠 **Moteur unifié Rust→WASM** : web + terminal + téléphone sur UN moteur
+  (sample-accurate, latence basse) — la grande dette technique.
+- 🔨 **Accessibilité** (lecteur d'écran, daltoniens, grandes polices).
+- 🔨 **PWA** (installer comme app).
+- 🌠 **Communauté** : galerie, packs, **collaboration temps réel**.
+- 🔨 **CI / tests / docs**.
 
 ---
 
-## 🛣️ PHASES
+## 🎯 Ordre conseillé (impact / effort)
+1. **Vue partition / piano-roll** + **mixeur visuel** → ça *ressemble* enfin à un DAW.
+2. **Base de connaissance + explicateur IA** → le cœur de ta vision (relier maths/philo/théorie à l'écoute).
+3. **Post-traitement GPU (bloom) + shaders** → le « waouh » visuel continue.
+4. **Sampler instrument (slice/multisample/stretch)** → vrai studio.
+5. **Fonctions / macros** → la langue devient extensible par toi.
+6. **Moteur Rust unifié** (fond) → durable partout.
 
-### PHASE 0 — Qualité audio (LE plus gros levier)  ⭐ commencer ici
-- [~] 0.1 \*\*Moteur synthé AudioWorklet** : FM (2-4 opérateurs), wavetable, sub osc, meilleures
-      enveloppes, anti-alias. Remplace/augmente `tone()`. → des sons riches/pro.  **XL**
-- [ ] 0.2 **Drums synthétisés pro** : kick pitch-drop + clic + corps, snare layered (corps+bruit),
-      hats métalliques (FM), clap multi-tap. → ne plus dépendre des samples lo-fi.  **L**
-- [ ] 0.3 **Meilleurs samples** : banque propre vérifiée (ou soundfonts/instruments
-      multi-échantillonnés), + import dossier.  **M**
-- [ ] 0.4 **Effets pro** : reverb algorithmique (FDN) + meilleurs IR, EQ par voix (3 bandes),
-      saturation/warmth, chorus, stéréo widener.  **L**
-- [ ] 0.5 **Mastering** : EQ master, compresseur multibande, limiteur soigné (déjà un début).  **M**
-
-### PHASE 1 — Algèbre de patterns (puissance façon Tidal)
-- [ ] 1.1 **Signaux continus** : `sine`/`saw`/`tri`/`rand`/`perlin` utilisables comme valeur de
-      paramètre qui varie (ex. `| lp sine 0.5 200 4000`).  **L**
-- [ ] 1.2 **Combinateurs** : `stack`, `jux` (sépare en stéréo + transforme un côté), `off N <verbe>`
-      (couche décalée), `sometimes`/`someBy P`, `chunk N`.  **L**
-- [ ] 1.3 **Mini-notation** : groupements `[a b]`, sous-séquences `[a b]/3`, alternances déjà via
-      `<a/b>`. Étendre.  **L**
-- [ ] 1.4 **D2 enfin** : changements de tempo/mesure par section.  **M**
-
-### PHASE 2 — Mixette + FX par piste + automation visuelle
-- [ ] 2.1 **Mixette** : volume/pan/mute/solo par voix, faders style terminal, metering.  **L**
-- [ ] 2.2 **Sends partagés** : bus reverb/delay communs + niveau d'envoi par voix.  **M**
-- [ ] 2.3 **Lanes d'automation visuelles** (dessiner une courbe par paramètre).  **L**
-
-### PHASE 3 — Nouvelles vues / beauté (au-delà du terminal)
-- [ ] 3.1 **Visuels WebGL/shaders** (bloom, feedback, raymarching) pour SCÈNE + oscillo.  **L**
-- [ ] 3.2 **Vue modulaire à câbles** (patchbay) — magnifique et adapté.  **XL**
-- [ ] 3.3 **Vue tracker** (colonnes verticales façon Renoise/ProTracker).  **L**
-- [ ] 3.4 **Piano-roll** cliquable pour les mélodies.  **L**
-- [ ] 3.5 **Skins d'OS** : Mac System 7 / OS 9, Windows 95/98/XP, Amiga Workbench, BeOS, NeXT…  **M**
-- [ ] 3.6 **Pochette générative** par morceau + système de design (typo, micro-animations).  **M**
-
-### PHASE 4 — IA co-producteur (NOTRE avantage décisif)
-- [ ] 4.1 **Itération conversationnelle** : « plus sombre », « ajoute un drop à 2 min »,
-      « dans le style de X » → édite le code existant.  **L**
-- [ ] 4.2 **Génération d'arrangements longs entiers** (few-shot riche, plan de morceau).  **M**
-- [ ] 4.3 **Hum-to-melody** : chante/siffle → transcription en notes.  **XL**
-- [ ] 4.4 Intégration **Claude** soignée (clé) + presets de prompts par genre.  **S**
-
-### PHASE 5 — Sortie pro / interop
-- [ ] 5.1 **Export stems** (chaque voix en WAV séparé).  **M**
-- [ ] 5.2 **MIDI avancé** (CC, clock, clips) + **MIDI in** (jouer au clavier).  **L**
-- [ ] 5.3 **Import audio** (charger un loop, le découper).  **L**
-- [ ] 5.4 **Partage cloud / galerie** de morceaux.  **M**
-
----
-
-## 🎯 Recommandation d'ordre
-1. **Phase 0.1 + 0.2** (moteur synthé + drums pro) — le vrai déblocage du son.
-2. **Phase 1.1 + 1.2** (signaux + combinateurs) — la puissance qui dépasse Strudel.
-3. **Phase 3.1 ou 3.2** (WebGL ou modulaire) — la beauté qui marque.
-4. **Phase 4** (IA) en continu — l'avantage que personne n'a.
-
-> Note : matcher la qualité audio d'un DAW est un long chemin ; mais sur l'IA, la voix,
-> la beauté réactive et la simplicité, LOOM peut être **devant** dès maintenant.
+> Rien n'est bloqué par une clé : l'IA marche déjà gratuitement (Puter/Pollinations).
+> Chaque ligne ci-dessus peut devenir une « vague » concrète, testée et commitée.
