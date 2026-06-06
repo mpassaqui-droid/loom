@@ -5040,11 +5040,41 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     finally{clearTimeout(to);}
   }
   // instant offline lookup: type ?dorian / ?reverb / ?chunk in the VIBE box to learn a term
-  function lookup(term){term=(term||"").toLowerCase().trim();if(!term){log("[ ? ] tape ?mot (ex. ?dorian, ?reverb, ?chunk)","ai");return;}
+  // music-theory concept base (intervals, chords, ideas) — for the ? teacher
+  const LORE={
+    quinte:"intervalle le plus consonant après l'octave (ratio 3:2) — la base des accords et des bourdons",
+    tierce:"l'intervalle qui décide majeur (gai) ou mineur (triste) d'un accord",
+    octave:"même note, doublée en fréquence (2:1) — la consonance parfaite",
+    quarte:"intervalle stable mais suspendu — l'organum médiéval, le son quartal/modal",
+    triton:"la quinte diminuée, « diabolus in musica » — tension maximale, jazz et metal",
+    "maj7":"accord majeur + 7e majeure — doux, rêveur, jazzy (bossa, néo-soul)",
+    "m7":"mineur + 7e mineure — feutré, cool jazz, fondation du groove",
+    "dim":"accord diminué — instable, suspense, passage",
+    "sus4":"la tierce remplacée par la quarte — suspendu, ni gai ni triste, attend sa résolution",
+    "7":"accord de dominante (7e mineure) — tension qui veut résoudre vers la tonique (le blues vit dedans)",
+    consonance:"sons qui « fusionnent » (octave, quinte, tierce) — repos, stabilité",
+    dissonance:"sons en frottement — tension, qui crée le besoin de résolution",
+    tension:"l'éloignement du repos (dissonance, dominante) — moteur de l'émotion musicale",
+    cadence:"formule de fin de phrase (V→I = résolue ; autres = suspendues)",
+    modulation:"changer de tonalité en cours de morceau — relance, élévation",
+    tonique:"la note de repos d'une tonalité (le degré 1), le centre de gravité",
+    dominante:"le degré 5 — la plus forte attraction vers la tonique",
+    polyrythmie:"deux pulsations différentes superposées (3 contre 2) — richesse africaine, jazz",
+    swing:"décaler les contretemps — le balancement du jazz/hip-hop, au lieu du droit",
+    arpege:"jouer les notes d'un accord une par une, au lieu d'ensemble",
+    microtonal:"des notes « entre les touches » du piano (quarts de ton, EDO) — maqâm, gamelan",
+    edo:"division égale de l'octave en N pas (12 = piano ; 19, 31 = microtonal)",
+    bourdon:"une note tenue en continu sous la mélodie (drone) — Inde, cornemuse, raga"};
+  async function lookup(term){term=(term||"").toLowerCase().trim();if(!term){log("[ ? ] pose une question : ?dorian, ?quinte, ?maj7, ?reverb, ou ?comment rendre ça plus triste","ai");return;}
     if(typeof SCALE_LORE!=="undefined"&&SCALE_LORE[term]){log("[ ? ] "+term+" — "+SCALE_LORE[term],"ai");return;}
+    if(LORE[term]){log("[ ? ] "+term+" — "+LORE[term],"ai");return;}
     const hit=(typeof REF!=="undefined")&&REF.find(r=>(r[1]+" "+r[0]).toLowerCase().includes(term));
     if(hit){log("[ ? ] "+hit[1].replace(/</g,"&lt;")+" — "+hit[2],"ai");return;}
-    log("[ ? ] rien trouvé pour « "+term+" » — essaie ?hijaz, ?delay, ?euclid","err");}
+    // unknown -> ask the AI teacher (prose), free brain
+    log("[ prof ] je réfléchis à « "+term+" »…","ai");
+    try{const t=await callFree("Tu es un professeur de musique clair et bref. Réponds en français en 2-3 phrases simples (sans listes, sans code) à cette question : "+term);
+      log("[ prof ] "+String(t||"").replace(/\s+/g," ").trim().slice(0,600),"ai");}
+    catch(_){log("[ prof ] indisponible (besoin d'internet)","err");}}
   async function vibe(){const req=$("vibeIn").value.trim();if(!req){log("[ vibe ] ecris d'abord ce que tu veux","err");return;}
     if(req[0]==="?"){lookup(req.slice(1));return;}
     const key=$("apiKey").value.trim();log("[ vibe ] reflexion... (jusqu'a 30s)","ai");
