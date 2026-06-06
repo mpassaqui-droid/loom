@@ -160,6 +160,7 @@ Après un `|`, on enchaîne des verbes :
 | `palindrome` | endroit une mesure, envers la suivante |
 | `invert` / `sequence N` | mélodie en miroir / motif + copie transposée |
 | `cresc` / `dim` | crescendo / diminuendo (vélocité montante / descendante) |
+| `mutate N` / `stutter N` | variation évolutive (change chaque mesure) / beat-repeat |
 | `sometimes <v>` | applique au hasard (`often` 75 % · `rarely` 25 % · `someby P`) |
 | `rot N` / `iter N` | rotation fixe / décalage d'un pas par mesure |
 | `poly N` | **vraie polymétrie** : tourne à N pas/mesure et dérive (phasing) |
@@ -244,6 +245,7 @@ pad: Cm7 . . . Ab . . . | saw | lp 800 q 6 | env 0.4 0.3 0.7 1.2 | gain 0.16
 | `| slide N` | portamento (glisse depuis la note précédente, son 303) |
 | `| bend N [T]` | pitch-bend (démarre N demi-tons plus loin, glisse en T s : kick drop, 808) |
 | `| wow N` | wow & flutter (pleurage de bande, lo-fi vintage) |
+| `| tape N` | macro cassette lo-fi (wow + saturation + souffle en un réglage) |
 | `| orbit RATE` | la voix tourne autour de l'auditeur (mouvement stéréo) |
 
 ```
