@@ -183,6 +183,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="filmBtn" class="go" title="filmer la SCÈNE (vidéo + son) en .webm">&#127909; FILM</button>
     <button id="renderBtn" class="go" title="exporter tout le morceau en WAV">&#11015; RENDER</button>
     <button id="stemsBtn" class="go" title="exporter chaque voix en WAV séparé (stems)">&#11015; STEMS</button>
+    <button id="midiBtn" class="go" title="exporter en fichier MIDI (.mid) pour ton DAW">&#127926; MIDI</button>
+    <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
   </div>
@@ -280,7 +282,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,analyser=null,scopeMode="wave";
-  let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
+  let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
   const WAVES={sine:"sine",square:"square",saw:"sawtooth",sawtooth:"sawtooth",tri:"triangle",triangle:"triangle",pulse:"square"};
@@ -468,13 +470,50 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const a=document.createElement("a");a.href=url;a.download="loom.wav";document.body.appendChild(a);a.click();
       setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1000);
       log("[ rec ] loom.wav telecharge ("+Math.round(L.length/ctx.sampleRate)+"s)","ai");}}
+  // ---- MIDI file export: build a Standard MIDI File (type 0) from the song ----
+  const GM_DRUM={kick:36,bd:36,snare:38,sd:38,hat:42,hh:42,clap:39,cp:39,tom:45,cowbell:56,cow:56,rim:37,rimshot:37,oh:46,ride:51,perc:47,tabla:41};
+  function buildMidiBytes(text){
+    const parsed=parse(text);if(!parsed.length)return null;
+    voices=parsed;key=parseKey(text);seed=parseSeed(text);song=parseSong(text);prog=parseProg(text);tuning=parseTune(text);
+    baseBpm=parseBpm(text)||120;meterBeats=parseMeter(text);keyMap=parseKeyMap(text);accel=parseAccel(text);tempoMap=parseTempoMap(text);
+    const nbars=song.length?song.reduce((a,s)=>a+s[1],0):8,TPQ=480,notes=[],chOf={};let chN=0,beatAcc=0;
+    const chan=v=>{if(v.type==="drum")return 9;if(chOf[v.name]==null){if(chN===9)chN++;chOf[v.name]=chN%16;chN++;}return chOf[v.name];};
+    for(let bar=0;bar<nbars;bar++){const sec=song.length?sectionAtBar(song,bar):null,_k=key;if(sec&&keyMap[sec])key=keyMap[sec];
+      for(const v of activeVoices(bar)){if(v.mute)continue;
+        const stk=(v.stacks&&v.stacks.length>1)?v.stacks:[v.tokens];
+        for(const toks of stk){const eff=effectiveOf(toks,v,bar),n=eff.length;if(!n)continue;const stepBeats=meterBeats/n;
+          const tieN=idx=>{let c=0;for(let j=idx+1;j<n&&eff[j]==="_";j++)c++;return c;};
+          for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);
+            if(tok==="."||tok==="~"||tok==="_"||tok.startsWith("["))continue;
+            const tm=tokenMods(tok),base=tm[0];if(base===""||base==="."||base==="~")continue;
+            if(tm[1]!=null&&rng(seed,bar,v.name,i)>=tm[1])continue;
+            const startBeat=beatAcc+i*stepBeats,vel=Math.max(1,Math.min(127,Math.round(92*(tm[3]||1)))),st=Math.round(startBeat*TPQ);
+            if(v.type==="drum"){const note=GM_DRUM[v.name]!=null?GM_DRUM[v.name]:38;notes.push({t:st,d:Math.max(1,Math.round(0.22*TPQ)),n:note,v:vel,c:9});}
+            else{let kk=key;if(kk&&v.oct!=null)kk={tonic:key.tonic,scale:key.scale,octave:v.oct};const baseOct=v.oct!=null?v.oct:(kk?kk.octave:3);
+              const dur=Math.max(1,Math.round(stepBeats*(1+tieN(i))*(v.gate||1)*0.92*TPQ));
+              for(const f of melFreqs(base,v,kk,baseOct)){if(!f)continue;const note=Math.max(0,Math.min(127,Math.round(69+12*Math.log2(f/440))));notes.push({t:st,d:dur,n:note,v:vel,c:chan(v)});}}}}}
+      key=_k;beatAcc+=meterBeats;}
+    if(!notes.length)return null;
+    const ev=[];for(const x of notes){ev.push({t:x.t,a:[0x90|x.c,x.n,x.v]});ev.push({t:x.t+x.d,a:[0x80|x.c,x.n,0]});}
+    ev.sort((p,q)=>p.t-q.t||((q.a[0]&0xf0)-(p.a[0]&0xf0)));
+    const vlq=k=>{const b=[k&0x7f];k=Math.floor(k/128);while(k){b.unshift((k&0x7f)|0x80);k=Math.floor(k/128);}return b;};
+    const trk=[],us=Math.round(60000000/baseBpm);trk.push(0,0xff,0x51,0x03,(us>>16)&0xff,(us>>8)&0xff,us&0xff);
+    let last=0;for(const e of ev){trk.push(...vlq(e.t-last),...e.a);last=e.t;}
+    trk.push(0,0xff,0x2f,0x00);
+    const tl=trk.length,hdr=[0x4d,0x54,0x68,0x64,0,0,0,6,0,0,0,1,(TPQ>>8)&0xff,TPQ&0xff,0x4d,0x54,0x72,0x6b,(tl>>>24)&0xff,(tl>>16)&0xff,(tl>>8)&0xff,tl&0xff];
+    return new Uint8Array(hdr.concat(trk));}
+  function exportMidi(){const bytes=buildMidiBytes(editor.value);
+    if(!bytes){log("[ midi ] rien à exporter — écris un morceau (notes/accords)","err");return;}
+    const url=URL.createObjectURL(new Blob([bytes],{type:"audio/midi"})),a=document.createElement("a");
+    a.href=url;a.download=(curProject||"loom")+".mid";document.body.appendChild(a);a.click();
+    setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1000);log("[ midi ] fichier MIDI téléchargé ("+a.download+")","ai");}
 
   // --- offline render: bounce the whole song to a WAV faster than real time ---
   async function renderOffline(){
     initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ render ] rien à rendre - écris un morceau","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
     if(!OAC){log("[ render ] non supporté par ce navigateur","err");return;}
@@ -502,7 +541,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   async function renderStems(){initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ stems ] rien à rendre","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC){log("[ stems ] non supporté","err");return;}
     const btn=$("stemsBtn");if(btn)btn.disabled=true;
     try{await Promise.all(voices.filter(v=>v.sample).map(v=>loadSample(v.sample)));}catch(_){}
@@ -943,7 +982,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // microtuning: cents deviation from equal temperament for each semitone interval from the tonic
   const JI=[0,11.73,3.91,15.64,-13.69,-1.96,-9.78,1.96,13.69,-15.64,-3.91,-11.73];      // 5-limit just intonation
   const PYTH=[0,-9.78,3.91,-5.87,7.82,-1.96,11.73,1.96,-7.82,5.87,-3.91,9.78];          // 3-limit Pythagorean
-  function tuneCents(iv){iv=((iv%12)+12)%12;return tuning==="just"?JI[iv]:tuning==="pyth"?PYTH[iv]:0;}
+  const WERCK=[0,-10,-8,-6,-10,-2,-12,-4,-8,-12,-4,-8];   // Werckmeister III (1691) well-temperament
+  const KIRN=[0,-10,-7,-6,-14,-2,-10,-3,-8,-10,-4,-12];   // Kirnberger III well-temperament
+  const MEAN=[0,-24,-7,10,-14,3,-21,-3,-28,-10,7,-17];    // quarter-comma meantone (pure major thirds)
+  function tuneCents(iv){iv=((iv%12)+12)%12;return tuning==="just"?JI[iv]:tuning==="pyth"?PYTH[iv]:tuning==="werck"?WERCK[iv]:tuning==="kirn"?KIRN[iv]:tuning==="meantone"?MEAN[iv]:0;}
   function degreeToMidi(tok,key){const d=parseInt(tok[0],10);let i=1,acc=0;
     if(tok[1]==="#"){acc=1;i=2;}else if(tok[1]==="b"){acc=-1;i=2;}
     let oct=0;for(const c of tok.slice(i)){if(c==="'")oct++;else if(c===",")oct--;else return null;}
@@ -1031,6 +1073,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parseTempoMap(text){const m={};for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="tempo"){const t=line.slice(i+1).trim().split(/\s+/);
       for(let k=0;k+1<t.length;k+=2){const n=parseFloat(t[k+1]);if(!isNaN(n)&&isNaN(parseFloat(t[k])))m[t[k].toLowerCase()]=Math.max(40,Math.min(300,n));}return m;}}return m;}
+  // groove templates: per-16th microtiming offsets (fraction of a step). Named feels.
+  const GROOVES={
+    dilla:[0,0.11,-0.05,0.07,0,0.09,-0.04,0.06,0,0.11,-0.05,0.07,0,0.09,-0.04,0.06],
+    mpc:[0,0.07,0,0.07,0,0.07,0,0.07],
+    swing16:[0,0.13,0,0.13,0,0.13,0,0.13],
+    push:[-0.04],laidback:[0.05],humanish:[0,0.03,-0.02,0.02,0.01,0.03,-0.01,0.02]};
+  function parseGroove(text){for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="groove"){const w=line.slice(i+1).trim().toLowerCase();return GROOVES[w]?w:null;}}return null;}
   // odd meters: meter: 7/8 -> a bar = 7 eighth-notes (= 3.5 quarters). meter: 3 = 3 beats.
   function parseMeter(text){let mb=4;for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="meter"){const v=line.slice(i+1).trim(),m=/^(\d+)\s*\/\s*(\d+)$/.exec(v);
@@ -1054,7 +1104,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parseTune(text){for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="tune"){const w=line.slice(i+1).trim().toLowerCase();
       const edo=/^(\d+)\s*edo$/.exec(w);if(edo){const N=Math.max(3,Math.min(96,+edo[1]));return N;}  // N-tone equal temperament
-      return(w.startsWith("just")||w==="ji")?"just":(w.startsWith("pyth"))?"pyth":"equal";}}return "equal";}
+      return(w.startsWith("just")||w==="ji")?"just":w.startsWith("pyth")?"pyth":w.startsWith("werck")?"werck":w.startsWith("kirn")?"kirn":(w.startsWith("mean")||w.startsWith("quart"))?"meantone":"equal";}}return "equal";}
   function sectionAtBar(song,bar){const total=song.reduce((a,s)=>a+s[1],0);if(total===0)return null;
     let pos=((bar%total)+total)%total;for(const s of song){if(pos<s[1])return s[0];pos-=s[1];}return null;}
   function parseDuck(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
@@ -1094,7 +1144,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1118,6 +1168,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="ir"){ir=p[1]||"hall";const mx=parseFloat(p[2]);if(!isNaN(mx))irmix=Math.max(0,Math.min(1,mx));}
       else if(p[0]==="voicing"||p[0]==="voice")voicing=p[1]||"open";
+      else if(p[0]==="cresc")dyn=1;else if(p[0]==="dim"||p[0]==="decresc")dyn=-1;
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
       else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
       else if(p[0]==="fm")fm={ratio:Math.max(0.1,Math.min(16,parseFloat(p[1])||2)),index:Math.max(0,Math.min(12,parseFloat(p[2])!=null&&!isNaN(parseFloat(p[2]))?parseFloat(p[2]):3))};
@@ -1169,7 +1220,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -1213,6 +1264,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const out=[];let cur=tokens[0];
       for(let i=0;i<tokens.length;i++){out.push(cur);const opts=trans[cur]||tokens;cur=opts[Math.floor(rng(seed,bar,"mk:"+v,i)*opts.length)%opts.length];}
       return out;}
+    if(c==="invert"||c==="inv"){  // melodic inversion: mirror each degree around the first note
+      const deg=t=>{const m=/^([1-7])([',]*)/.exec(t);if(!m)return null;let o=0;for(const ch of m[2])o+=ch==="'"?1:ch===","?-1:0;return (+m[1]-1)+o*7;};
+      let pivot=null;for(const t of tokens){const d=deg(t);if(d!=null){pivot=d;break;}}if(pivot==null)return tokens;
+      return tokens.map(t=>{const m=/^([1-7])([',]*)(.*)$/.exec(t);if(!m)return t;let o=0;for(const ch of m[2])o+=ch==="'"?1:ch===","?-1:0;
+        const d=(+m[1]-1)+o*7,nd=2*pivot-d,base=((nd%7)+7)%7,oc=Math.floor(nd/7);let s=String(base+1);for(let i=0;i<Math.abs(oc);i++)s+=oc>0?"'":",";return s+(m[3]||"");});}
+    if(c==="sequence"||c==="seq"){const n=parseInt(p[1]);const stp=isNaN(n)?2:n;return tokens.concat(tokens.map(t=>transposeDeg(t,stp)));}  // melodic sequence: motif + transposed copy
     return tokens;}
   // cellular automaton: ca(rule,n) evolves one Wolfram generation per bar
   function caRow(rule,n,gen){let row=new Array(n).fill(false);row[n>>1]=true;
@@ -1350,6 +1407,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         if(v.degrade&&rng(seed,bar,v.name+"dg",i)<v.degrade)continue;  // degrade N: randomly drop a fraction of hits
         let t0=barT+i*step+sh+(v.nudge||0)*step,vel=1;if(i%2===1)t0+=sw*step;  // nudge: per-voice microtiming (push/lay-back)
         {const fa=v.humanize!=null?v.humanize:feelAmt;if(fa){t0+=(rng(seed,bar,v.name,i*3+7)-0.5)*fa*0.016;vel=1+(rng(seed,bar,v.name,i*3+11)-0.5)*fa*0.5;}}
+        if(groove&&GROOVES[groove])t0+=(GROOVES[groove][i%GROOVES[groove].length]||0)*step;  // groove template microtiming
+        if(v.dyn&&n>1)vel*=0.35+0.65*(v.dyn>0?i/(n-1):1-i/(n-1));  // cresc/dim: ramp velocity across the bar
         // sub-sequence [a b ...]: subdivide this step among the children (recursive)
         if(tok.startsWith("[")){scheduleGroup(v,tok,bar,t0,step,vel);continue;}
         const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,i)>=tm[1])continue;
@@ -2120,7 +2179,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     codeView=buildCodeView(editor.value);
-    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
@@ -3561,6 +3620,16 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   buildPresetMenu();
   const PRESET_ORDER=PRESET_GROUPS.flatMap(g=>g[1].filter(p=>PRESETS[p]));let presetIdx=-1;
   function loadPreset(p){if(!PRESETS[p])return;editor.value=PRESETS[p];run();$("presetSel").value="";presetIdx=PRESET_ORDER.indexOf(p);}
+  // share-by-URL: the whole song lives in the link's #s= fragment (base64 of the code)
+  function encShare(s){try{return btoa(unescape(encodeURIComponent(s)));}catch(_){return"";}}
+  function decShare(h){try{return decodeURIComponent(escape(atob(h)));}catch(_){return null;}}
+  function shareLink(){if(typeof location==="undefined")return;const h=encShare(editor.value);if(!h){log("[ lien ] echec d'encodage","err");return;}
+    const url=location.origin+location.pathname+"#s="+h;try{location.hash="s="+h;}catch(_){}
+    const done=()=>log("[ lien ] copié ! colle-le n'importe où ("+url.length+" car.)","ai");
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(url).then(done,()=>{prompt("Copie ce lien :",url);});
+    else prompt("Copie ce lien :",url);}
+  (function loadFromHash(){if(typeof location==="undefined")return;const h=location.hash||"";if(h.indexOf("#s=")===0){const code=decShare(h.slice(3));
+    if(code){editor.value=code;log("[ lien ] morceau chargé depuis l'URL","ai");run();}}})();
   $("presetSel").addEventListener("change",e=>{if(e.target.value)loadPreset(e.target.value);});
   $("presetNext").addEventListener("click",()=>{presetIdx=(presetIdx+1)%PRESET_ORDER.length;loadPreset(PRESET_ORDER[presetIdx]);});
   $("presetRand").addEventListener("click",()=>{loadPreset(PRESET_ORDER[Math.floor(Math.random()*PRESET_ORDER.length)]);});
@@ -3618,7 +3687,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     {t:"37 · Gammes perso & liaisons",d:"scale: 0 2 3 5 7 9 10 invente N'IMPORTE quelle gamme (microtonal ok). Le _ prolonge la note précédente (notes tenues).",c:"key:  d 0 1.5 3 5 7 8 10\nlead: 1 _ _ 3 . 5 _ 2 1 _ 7, . 1 _ _ . | pluck 0.7 | reverb 0.4 | gain 0.13\ndrone: 1 . . . . . . . | bow | gain 0.1"},
     {t:"38 · Voicings & Markov",d:"| voicing aère un accord (open/drop2/wide). | markov régénère une mélodie d'après ses propres enchaînements.",c:"key:  c major\nseed: 4\nkeys: Cmaj7 . Fmaj7 . G7 . Em7 . | voicing open | sine | reverb 0.3 | gain 0.14\nlead: 1 2 3 5 6 5 3 2 | markov | pluck 0.7 | delay 0.2 | gain 0.1"},
     {t:"39 · Mesures impaires & tempo qui glisse",d:"meter: 7/8 met la barre en temps impairs. accel: A B fait glisser le tempo de A à B (montée/ralenti).",c:"meter: 7/8\naccel: 100 130\nkey:  e phrygian\nlead: 1 2 3 4 5 4 3 | pluck 0.7 | gain 0.13\nkick: x . . x . x . | sample bd | gain 0.4"},
-    {t:"40 · Modulation & voice-leading",d:"key@section change de tonalité pour une section (vraie modulation). | voicing lead enchaîne les accords en douceur.",c:"song: verse*4 chorus*4\nkey:  a minor\nkey@chorus: c minor\nprog: Am F C G\nkeys: ^ . . . | voicing lead | sine | reverb 0.3 | gain 0.15\nbass: ^1 . . . | sine | oct 2 | gain 0.2"}
+    {t:"40 · Modulation & voice-leading",d:"key@section change de tonalité pour une section (vraie modulation). | voicing lead enchaîne les accords en douceur.",c:"song: verse*4 chorus*4\nkey:  a minor\nkey@chorus: c minor\nprog: Am F C G\nkeys: ^ . . . | voicing lead | sine | reverb 0.3 | gain 0.15\nbass: ^1 . . . | sine | oct 2 | gain 0.2"},
+    {t:"41 · Groove & dynamiques",d:"groove: dilla donne le swing « bancal » du hip-hop à tout. | cresc fait monter la vélocité (crescendo), | dim la fait descendre.",c:"groove: dilla\nkey:  f minor\nkick: x . . . x . . . | sample bd | gain 0.5\nhat:  x x x x x x x x | sample hh | gain 0.1\nfill: 1 2 3 4 5 6 7 1' | cresc | pluck 0.7 | gain 0.12"},
+    {t:"42 · Verbes de motif & tempéraments",d:"| invert renverse la mélodie (miroir). | sequence la répète transposée. tune: werck = tempérament baroque.",c:"key:  c major\ntune: werck\nlead: 1 2 3 5 3 2 | invert | pluck 0.7 | reverb 0.3 | gain 0.12\nseq:  1 2 3 | sequence 2 | sine | gain 0.1"}
   ];
   // course lessons are wired below, in the unified APPRENDRE panel
 
@@ -3684,7 +3755,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Effets & mix","| phaser N","phaser (0-1) : filtres all-pass balayés par un LFO → encoches mouvantes (psyché, nappes)"],
     ["Effets & mix","| comp N","compression par voix (0-1) : transitoires domptés, punch & glue (basses, drums, bus)"],
     ["Théorie","| chord NAME","harmoniseur : chaque note devient un accord (maj min sus dim aug fifth oct maj7 min7 dom7 add9)"],
-    ["Théorie","tune: just|pyth|Nedo|equal","accordage : juste intonation / Pythagore / N-EDO (ex. 19edo, 31edo) / tempérament égal"],
+    ["Théorie","tune: werck|kirn|meantone","tempéraments historiques : Werckmeister III, Kirnberger III, méantone (1/4 de comma)"],
+    ["Théorie","tune: just|pyth|Nedo|equal","accordage : juste intonation / Pythagore / N-EDO (ex. 19edo, 31edo) /tempérament égal"],
     ["Tempo","bpm: 128","fixe le tempo du morceau (BPM, dans le fichier) — sinon le bouton BPM"],
     ["Tempo","tempo: intro 120 drop 140","tempo PAR SECTION (paires nom/bpm) — accélère/ralentit selon le morceau"],
     ["Tempo","meter: 7/8","MESURE impaire : N/D temps par barre (7/8, 5/4, 3/4…) — change la longueur de la barre"],
@@ -3739,6 +3811,10 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Mes sons","panneau « mes sons »","dépose tes fichiers audio → | sample <ton_nom> (mémorisés)"],
     ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
+    ["Exporter","MIDI   /   LIEN","télécharger un fichier .mid (pour ton DAW) · copier un lien de partage (le morceau est dans l'URL)"],
+    ["Groove","groove: dilla|mpc|swing16|push|laidback","groove nommé : microtiming (le swing de Dilla, le MPC…) appliqué à tout"],
+    ["Groove","| cresc   | dim","crescendo / diminuendo : la vélocité monte / descend au fil de la mesure"],
+    ["Verbes","| invert   | sequence N","invert = mélodie en miroir ; sequence = motif suivi d'une copie transposée"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
     ["Son","| gate N","longueur des notes (0.05-4) : <1 staccato, >1 legato/tenu"],
@@ -3915,6 +3991,10 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
+    "- Groove templates: groove: dilla (also mpc, swing16, push, laidback, humanish) applies a named microtiming feel to the whole track — dilla = the loose, drunk hip-hop swing. One groove per song.",
+    "- Phrase dynamics: | cresc makes a voice's notes get LOUDER across the bar, | dim gets softer (a crescendo/diminuendo). e.g. fill: x x x x x x x x | cresc | sample sd.",
+    "- Motif verbs: | invert mirrors a melody upside-down around its first note; | sequence N repeats the motif transposed by N scale-steps (a melodic sequence). e.g. lead: 1 2 3 5 | invert , or 1 2 3 | sequence 2 (motif then up a third).",
+    "- Historical temperaments: tune: werck (Werckmeister III), tune: kirn (Kirnberger III), tune: meantone (quarter-comma) — Baroque/Renaissance tunings where each key has its own colour. (Plus just, pyth, Nedo.)",
     "- Odd meters: meter: 7/8 sets the bar to N/D beats (7/8, 5/4, 3/4, 12/8…) — changes the bar length, so patterns feel in odd time. meter: 3 = 3 beats. One meter per song.",
     "- Modulation (key change): key@SECTION: c minor makes that song section resolve its degrees AND its ^/prog chords in a different key. e.g. song: verse*4 chorus*4 with key: a minor and key@chorus: c minor -> the chorus lifts to C minor. Great for a key change at the drop/chorus.",
     "- Accelerando/ritardando: accel: 120 160 ramps the tempo from 120 to 160 across the whole piece (accel: 160 90 8 = slow down over 8 bars). For a build-up or a tape-stop ending.",
@@ -4024,6 +4104,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   $("rec").addEventListener("click",toggleRec);
   $("renderBtn").addEventListener("click",renderOffline);
   $("stemsBtn").addEventListener("click",renderStems);
+  $("midiBtn").addEventListener("click",exportMidi);
+  $("linkBtn").addEventListener("click",shareLink);
   $("humBtn").addEventListener("click",humToMelody);
   // --- FILM: record the SCÈNE canvas + master audio to a .webm video ---
   function recordVideo(){
@@ -4118,7 +4200,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   bind("vol","vVol",v=>{if(master)master.gain.value=v/100*0.8;});
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   // expose pure language functions for unit testing (harmless in the browser)
-  try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;}};}catch(_){}
   animate();
 })();
 </script>

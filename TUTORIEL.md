@@ -154,6 +154,8 @@ Après un `|`, on enchaîne des verbes :
 | `off N <verbe>` | couche décalée de N pas, plus douce (canon/écho) |
 | `add N` | transpose les degrés de N pas de gamme (`jux add 2` = tierce à droite) |
 | `palindrome` | endroit une mesure, envers la suivante |
+| `invert` / `sequence N` | mélodie en miroir / motif + copie transposée |
+| `cresc` / `dim` | crescendo / diminuendo (vélocité montante / descendante) |
 | `sometimes <v>` | applique au hasard (`often` 75 % · `rarely` 25 % · `someby P`) |
 | `rot N` / `iter N` | rotation fixe / décalage d'un pas par mesure |
 | `poly N` | **vraie polymétrie** : tourne à N pas/mesure et dérive (phasing) |
@@ -283,6 +285,7 @@ pad:  Am7 . . . F . . . | saw | lp 1100 | crush 6 | gain 0.18
 - **`bpm: 128`** : tempo · **`tempo: intro 120 drop 140`** : tempo par section
 - **`meter: 7/8`** : **mesure impaire** (5/4, 12/8…) — change la longueur de la barre
 - **`accel: 120 160 [bars]`** : **accelerando / ritardando** (le tempo glisse de A à B)
+- **`groove: dilla`** : **groove** nommé (mpc, swing16, push, laidback) — microtiming sur tout
 - **`song: intro*4 drop*8 break*4`** : l'arrangement (nom\*mesures, en boucle)
 - **`| in verse chorus`** : la voix ne joue que dans ces sections
 - **`nom@section: motif`** : un motif **différent** par section → morceaux longs
@@ -351,6 +354,7 @@ lead:  1 5 1' 3' 5 1' | pluck 0.7 | hue 200 | viz ring | gain 0.15
 ## 16. Exporter & partager
 
 - **REC** : enregistre en live · **RENDER** : bounce tout le morceau en **WAV**
+- **MIDI** : télécharge un fichier **`.mid`** (pour ton DAW) · **LIEN** : copie un **lien de partage** (le morceau est encodé dans l'URL)
 - **FILM** : exporte une **vidéo** ; `film: vertical|square|wide` (format) ;
   `title: Mon morceau` (carte-titre en fondu)
 - **SAVE / LOAD / DEL** : ta bibliothèque locale + un code de partage `LOOM1:…`

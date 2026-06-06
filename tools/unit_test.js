@@ -114,5 +114,22 @@ eq(L.parseAccel('accel: 100 130'), {a:100,b:130,bars:0}, 'accel 100->130');
 eq(L.parseAccel('accel: 140 90 16'), {a:140,b:90,bars:16}, 'ritard 140->90 over 16 bars');
 eq(L.parseAccel('bpm: 120'), null, 'no accel directive -> null');
 
+// historical temperaments: Werckmeister/Kirnberger differ from equal
+const cmajT = L.parseKey('key: c major');
+L.setTuning('werck'); const wT = L.degreeToMidi('3', cmajT);
+L.setTuning('equal'); const eT = L.degreeToMidi('3', cmajT);
+eq(wT !== eT, true, 'werckmeister 3rd differs from equal');
+
+// share-by-URL round-trips (unicode-safe)
+const sng = 'key: a minor\nlead: 1 2 3 | pluck  # é à ç';
+eq(L.decShare(L.encShare(sng)), sng, 'share URL round-trips unicode');
+
+// MIDI export produces a valid Standard MIDI File
+const mid = L.buildMidiBytes('key: c major\nlead: 1 2 3 5 6 5 3 2 | pluck\nkick: x . x . | sample bd');
+eq(String.fromCharCode(mid[0],mid[1],mid[2],mid[3]), 'MThd', 'MIDI file starts with MThd');
+eq(String.fromCharCode(mid[14],mid[15],mid[16],mid[17]), 'MTrk', 'MIDI has a track chunk');
+let _non=0; for(let i=22;i<mid.length;i++) if((mid[i]&0xf0)===0x90 && mid[i+2]>0) _non++;
+eq(_non > 5, true, 'MIDI has note-on events');
+
 console.log((fail===0 ? 'OK' : 'FAIL') + ': ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
