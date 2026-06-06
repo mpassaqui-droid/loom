@@ -1,0 +1,16 @@
+# ===== HISTOIRE 27 — ELECTRO (1982, Afrika Bambaataa / Drexciya) =====
+# La 808 syncopée, des stabs robotiques, une basse carrée : l'électro-funk,
+# l'ADN du breakdance et un pont direct du Kraftwerk vers le hip-hop.
+title:  Electro
+bpm:    128
+key:    c minor
+duck:   25
+scene:  network
+song:   a*8 b*8
+kick:  x . . . . . x . . . x . . . . . | sample bd | gain 0.5
+snare: . . . . x . . . . . . . x . . . | sample sd | gain 0.4
+hat:   x . x . x . x . x . x . x . x . | sample hh | gain 0.1
+clap@b: . . . . x . . . . . . . x . . . | sample cp | gain 0.3
+bass:  1 . 1 . . 1 . 5, . 1 . . 1 . 6, . | square | oct 2 | lp 900 | gate 0.5 | gain 0.16
+stab:  1 . . . 3 . . . 5 . . . 1' . . . | saw | unison 3 | lp 1800 | env 0.01 0.1 0.2 0.2 | reverb 0.3 | gain 0.1
+vox@b: 1 . 5 . 1' . 5 . | saw | unison 2 | vocode vox | gain 0.09

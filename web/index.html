@@ -2620,6 +2620,116 @@ perc:  . . x . x . . x . . x . x . . . | sample perc | pan 0.3 | gain 0.2
 tom:   . . . . . . . . . . . . x . x . | sample tom | gain 0.22
 sub:   1 . . . . . . . 1 . . . . . . . | sine | oct 1 | sub 0.6 | gain 0.28
 chant@b: 1 . . . 1 . 7, . 1 . . . 5, . . . | saw | unison 2 | vowel a | lp 1100 | reverb 0.5 | gain 0.08`;
+  PRESETS.afrobeat=`# ===== HISTOIRE 25 — AFROBEAT (Lagos, ~1970, Fela Kuti / Tony Allen) =====
+# Un groove polyrythmique hypnotique : guitares en tuilage, congas, cuivres,
+# une batterie qui respire. La rencontre du funk, du jazz et des rythmes yoruba.
+title:  Afrobeat
+bpm:    112
+key:    e dorian
+feel:   26
+scene:  phyllo
+song:   a*8 b*8
+kick:  x . . x . . x . . x . x . . x . | sample bd | gain 0.45
+snare: . . . . x . . x . . . . x . . x | sample sd | gain 0.3
+hat:   x . x x . x x . x . x x . x x . | sample hh | swing 58 | gain 0.1
+conga: . x . . x . x . . x . . x . x . | sample perc | pan 0.3 | gain 0.18
+gtr:   1 . 3 . 5 3 . 1' . 5 . 3 . 2 . . | pluck 0.7 | lp 2200 | delay 0.2 | gate 0.4 | gain 0.1
+bass:  1 . . 1 . 5, . . 4, . . 1 . 5, . . | sine | oct 2 | gate 0.5 | gain 0.18
+horn@b: 1' . 7 5 . . 1' . 2' . 1' 7 5 . . . | reed | lp 2400 | reverb 0.3 | gain 0.12`;
+  PRESETS.gabber=`# ===== HISTOIRE 26 — GABBER (Rotterdam, ~1992) =====
+# La grosse caisse SATURÉE et accordée devient l'instrument principal, à 180+ bpm.
+# Le hardcore le plus brutal d'Europe — distorsion, vitesse, transe.
+title:  Gabber
+bpm:    180
+key:    a minor
+scene:  fire
+song:   intro*2 main*12 out*2
+kick:  x . x . x . x . x . x . x . x . | sample bd | drive 0.6 | crush 6 | comp 0.4 | gain 0.5 | in main out
+hoover@main: 1 . . . 1' . . . 5 . . . 6, . . . | saw | supersaw | drive 0.5 | lp 2000 | gain 0.1
+stab@main:   . . . . x . . . . . . . x . . . | sample stab | crush 5 | gain 0.16
+sub:   1 . . . 1 . . . | sine | oct 1 | sub 0.5 | gain 0.2 | in main out`;
+  PRESETS.electro=`# ===== HISTOIRE 27 — ELECTRO (1982, Afrika Bambaataa / Drexciya) =====
+# La 808 syncopée, des stabs robotiques, une basse carrée : l'électro-funk,
+# l'ADN du breakdance et un pont direct du Kraftwerk vers le hip-hop.
+title:  Electro
+bpm:    128
+key:    c minor
+duck:   25
+scene:  network
+song:   a*8 b*8
+kick:  x . . . . . x . . . x . . . . . | sample bd | gain 0.5
+snare: . . . . x . . . . . . . x . . . | sample sd | gain 0.4
+hat:   x . x . x . x . x . x . x . x . | sample hh | gain 0.1
+clap@b: . . . . x . . . . . . . x . . . | sample cp | gain 0.3
+bass:  1 . 1 . . 1 . 5, . 1 . . 1 . 6, . | square | oct 2 | lp 900 | gate 0.5 | gain 0.16
+stab:  1 . . . 3 . . . 5 . . . 1' . . . | saw | unison 3 | lp 1800 | env 0.01 0.1 0.2 0.2 | reverb 0.3 | gain 0.1
+vox@b: 1 . 5 . 1' . 5 . | saw | unison 2 | vocode vox | gain 0.09`;
+  PRESETS.evolution=`# ================================================================
+#  LOOM — « EVOLUTION » : un seul morceau qui REMONTE LE TEMPS.
+#  Chaque section = une époque, avec son TEMPO propre (tempo: …) et son
+#  instrumentation (voix@section). Tout en la mineur pour que ça coule.
+#
+#   concrète  -> bande manipulée (GRM 1948)
+#   cologne   -> sinus + ring mod (1954)
+#   berlin    -> séquenceur (Tangerine Dream 1974)
+#   detroit   -> techno à cordes (1987)
+#   acid      -> 303 (Chicago 1987)
+#   jungle    -> breakbeat haché (1993)
+#   future    -> 808 + trap (2010s)
+#
+#  > RUN et laisse défiler 70 ans de musique électronique en un morceau.
+#    La console montre la section ; le tempo change tout seul.
+# ================================================================
+
+title:  Evolution
+key:    a minor
+prog:   Am F C G
+tune:   just
+warmth: 0.45
+feel:   16
+scene:  spectro
+tempo:  concrete 96 cologne 80 berlin 132 detroit 128 acid 130 jungle 160 future 140
+song:   concrete*2 cologne*2 berlin*4 detroit*4 acid*4 jungle*4 future*4
+
+# fil conducteur : un bourdon qui traverse les époques
+drone:  1 . . . . . . . . . . . . . . . | bow | unison 2 | lp 1000 | reverb 0.7 | gate 3 | gain 0.06 | in cologne berlin detroit acid jungle future
+
+# 1948 — musique concrète
+tape@concrete:  x . x . x x . x . . x . x . x x | sample metal | rev | redux 4 | crush 5 | gain 0.2
+voixc@concrete: . . x . . . . . . . x . . . . . | sample vox | grain 0.6 | reverb 0.6 | delay 0.5 | gain 0.16
+
+# 1954 — elektronische Musik (sinus + ring)
+sine1@cologne: 1 . . . 5 . . . 1' . . . 3 . . . | sine | ring 110 | reverb 0.6 | gain 0.1
+sine2@cologne: . . 4 . . . 7 . . . 2 . . . 5 . | sine | ring 220 | reverb 0.6 | pan 0.3 | gain 0.08
+
+# 1974 — Berlin School (séquenceur)
+seq@berlin:  1 1 1' 1 5, 5, 1 5, 1 1 1' 1 6, 6, 5, 6, | saw | unison 2 | lp 600..2400 | over 8 | q 6 | delay 0.3 | gate 0.5 | gain 0.12
+padb@berlin: Am9 . . . Cmaj7 . . . | saw | unison 5 | detune 12 | lp 1100 | env 1.2 0.8 0.7 3 | reverb 0.7 | gain 0.08
+
+# 1987 — Detroit techno (cordes)
+kickd@detroit: x . . . x . . . x . . . x . . . | sample bd | gain 0.5
+str@detroit:   Am . . C . . Em . . F . . Am . . . | saw | unison 3 | lp 1700 q 4 | env 0.01 0.2 0.4 0.3 | reverb 0.5 | delay 0.3 | gain 0.1
+hatd@detroit:  . . x . . . x . . . x . . . x . | sample hh | swing 56 | gain 0.1
+
+# 1987 — acid (303)
+kicka@acid: x . . . x . . . x . . . x . . . | sample bd | gain 0.5
+acid@acid:  1 5, 1' 5 4 1 5 3 1 5, 1' 7, 5 1 4 1 | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | drive 0.4 | gate 0.4 | gain 0.13
+clapa@acid: . . . . x . . . . . . . x . . . | sample cp | gain 0.3
+
+# 1993 — jungle (breakbeat)
+break@jungle: 1 . [2 2] 3 1 . 2 [3 3] 1 . [2 1] 3 1 2 3 . | sample amen | gain 0.28
+subj@jungle:  1 . . . . . . . 5, . . . 6, . . . | sine | oct 1 | sub 0.6 | gain 0.28
+
+# 2010s — futur (808 + trap)
+kickf@future: x . . . . . x . . . . . . . . . | sample bd | gain 0.5
+hatf@future:  x x x x x x [x x] x x x [x x x] x x x | sample hh | gain 0.1
+b808@future:  1 . . . . . 1 . 6, . . . 4, . 5, . | sine | oct 1 | bend -12 0.08 | sub 0.5 | env 0.005 0.6 0.2 0.5 | gain 0.28
+leadf@future: . . 1' . . . 7 . . . 5 . . . 4 . | bell | reverb 0.5 | delay 0.3 | gain 0.1
+
+# ----------------------------------------------------------------
+#  Change l'ordre des sections dans song: pour réécrire l'histoire.
+#  Ajoute tes propres époques avec voix@nom + tempo: nom BPM.
+# ----------------------------------------------------------------`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -3245,8 +3355,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mixtape","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
-    ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom"]],
+    ["★ Vitrines",["mixtape","evolution","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto","signals"]],

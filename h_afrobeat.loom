@@ -1,0 +1,16 @@
+# ===== HISTOIRE 25 — AFROBEAT (Lagos, ~1970, Fela Kuti / Tony Allen) =====
+# Un groove polyrythmique hypnotique : guitares en tuilage, congas, cuivres,
+# une batterie qui respire. La rencontre du funk, du jazz et des rythmes yoruba.
+title:  Afrobeat
+bpm:    112
+key:    e dorian
+feel:   26
+scene:  phyllo
+song:   a*8 b*8
+kick:  x . . x . . x . . x . x . . x . | sample bd | gain 0.45
+snare: . . . . x . . x . . . . x . . x | sample sd | gain 0.3
+hat:   x . x x . x x . x . x x . x x . | sample hh | swing 58 | gain 0.1
+conga: . x . . x . x . . x . . x . x . | sample perc | pan 0.3 | gain 0.18
+gtr:   1 . 3 . 5 3 . 1' . 5 . 3 . 2 . . | pluck 0.7 | lp 2200 | delay 0.2 | gate 0.4 | gain 0.1
+bass:  1 . . 1 . 5, . . 4, . . 1 . 5, . . | sine | oct 2 | gate 0.5 | gain 0.18
+horn@b: 1' . 7 5 . . 1' . 2' . 1' 7 5 . . . | reed | lp 2400 | reverb 0.3 | gain 0.12

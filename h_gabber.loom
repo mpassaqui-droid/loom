@@ -1,0 +1,12 @@
+# ===== HISTOIRE 26 — GABBER (Rotterdam, ~1992) =====
+# La grosse caisse SATURÉE et accordée devient l'instrument principal, à 180+ bpm.
+# Le hardcore le plus brutal d'Europe — distorsion, vitesse, transe.
+title:  Gabber
+bpm:    180
+key:    a minor
+scene:  fire
+song:   intro*2 main*12 out*2
+kick:  x . x . x . x . x . x . x . x . | sample bd | drive 0.6 | crush 6 | comp 0.4 | gain 0.5 | in main out
+hoover@main: 1 . . . 1' . . . 5 . . . 6, . . . | saw | supersaw | drive 0.5 | lp 2000 | gain 0.1
+stab@main:   . . . . x . . . . . . . x . . . | sample stab | crush 5 | gain 0.16
+sub:   1 . . . 1 . . . | sine | oct 1 | sub 0.5 | gain 0.2 | in main out
