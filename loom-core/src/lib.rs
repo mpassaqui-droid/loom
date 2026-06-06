@@ -27,6 +27,11 @@ pub struct Voice {
     /// If this is a per-section variant (`bass@chorus:`), the section it's for.
     /// `None` = the base voice (used when no variant matches the section).
     pub section: Option<String>,
+    /// Swing (`| swing N`): delays every odd 16th by a fraction of a step (0..0.9).
+    pub swing: f32,
+    /// Per-voice timing nudge (`| shift N` / `| nudge N`): shifts the whole voice
+    /// by a fraction of a step (-0.5..0.5). Positive = laid back (late), negative = pushed.
+    pub nudge: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,7 +100,10 @@ pub struct Event {
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 12] = ["key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune", "bpm", "tempo"];
+const DIRECTIVES: [&str; 19] = [
+    "key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune",
+    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop",
+];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
 /// steps, then rotate left by `rot`. E(3,8) = the tresillo `x . . x . . x .`.
@@ -286,6 +294,8 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut octave = None;
         let mut arp = None;
         let mut sections: Option<Vec<String>> = None;
+        let mut swing = 0.0_f32;
+        let mut nudge = 0.0_f32;
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -302,6 +312,15 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 octave = parts.next().and_then(|x| x.parse::<i32>().ok());
             } else if head == "arp" {
                 arp = Some(arp_mode(parts.next().unwrap_or("up")));
+            } else if head == "swing" {
+                if let Some(mut nn) = parts.next().and_then(|x| x.parse::<f32>().ok()) {
+                    if nn > 1.0 { nn /= 100.0; }
+                    swing = nn.clamp(0.0, 0.9);
+                }
+            } else if head == "shift" || head == "nudge" {
+                if let Some(nn) = parts.next().and_then(|x| x.parse::<f32>().ok()) {
+                    nudge = nn.clamp(-0.5, 0.5);
+                }
             } else if head == "in" {
                 let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
                 if !secs.is_empty() { sections = Some(secs); }
@@ -309,7 +328,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge });
     }
     out
 }
@@ -607,16 +626,24 @@ pub fn schedule_bar_keyed(voices: &[Voice], key: Option<&Key>, bar: i64) -> Vec<
 /// Like [`schedule_bar_keyed`] but with an explicit RNG `seed` for probabilistic
 /// tokens (`x?`, `c3?70`). Same seed + bar ⇒ identical events every time.
 pub fn schedule_bar_seeded(voices: &[Voice], key: Option<&Key>, bar: i64, seed: u64) -> Vec<Event> {
-    sched_prog(voices, key, &[], bar, seed)
+    sched_prog(voices, key, &[], bar, seed, &[])
 }
 
 /// Like [`schedule_bar_seeded`] but with a chord progression so `^`/`^N` tokens
 /// follow the harmony (see [`parse_prog`]).
 pub fn schedule_bar_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64) -> Vec<Event> {
-    sched_prog(voices, key, prog, bar, seed)
+    sched_prog(voices, key, prog, bar, seed, &[])
 }
 
-fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64) -> Vec<Event> {
+/// Per-step onset offset (fraction of a bar) from swing, per-voice nudge, and the
+/// program groove template. Mirrors the JS engine: `t0 += (nudge + swing? + groove)*step`.
+fn step_offset(i: usize, n: usize, v: &Voice, groove: &[f32]) -> f32 {
+    let sw = if i % 2 == 1 { v.swing } else { 0.0 };
+    let g = if groove.is_empty() { 0.0 } else { groove[i % groove.len()] };
+    (v.nudge + sw + g) / n as f32
+}
+
+fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64, groove: &[f32]) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
         // Effective key for this voice: a `| oct N` overrides the key's octave.
@@ -632,8 +659,9 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
         let n = eff.len();
         if n == 0 { continue; }
         for (i, raw) in eff.iter().enumerate() {
-            let p0 = i as f32 / n as f32;
-            let p1 = (i + 1) as f32 / n as f32;
+            let off = step_offset(i, n, v, groove);
+            let p0 = i as f32 / n as f32 + off;
+            let p1 = (i + 1) as f32 / n as f32 + off;
             emit_token(&mut events, raw, p0, p1, v, voice_key.as_ref(), base_oct, bar, seed, i, prog);
         }
         }
@@ -1359,6 +1387,33 @@ pub fn parse_tempo_map(src: &str) -> Vec<(String, f64)> {
     Vec::new()
 }
 
+/// Named groove templates: per-step microtiming offsets (fraction of a step),
+/// mirroring the JS engine's GROOVES table exactly.
+pub fn groove_offsets(name: &str) -> Option<Vec<f32>> {
+    let v = match name {
+        "dilla"    => vec![0.0, 0.11, -0.05, 0.07, 0.0, 0.09, -0.04, 0.06, 0.0, 0.11, -0.05, 0.07, 0.0, 0.09, -0.04, 0.06],
+        "mpc"      => vec![0.0, 0.07, 0.0, 0.07, 0.0, 0.07, 0.0, 0.07],
+        "swing16"  => vec![0.0, 0.13, 0.0, 0.13, 0.0, 0.13, 0.0, 0.13],
+        "push"     => vec![-0.04],
+        "laidback" => vec![0.05],
+        "humanish" => vec![0.0, 0.03, -0.02, 0.02, 0.01, 0.03, -0.01, 0.02],
+        _ => return None,
+    };
+    Some(v)
+}
+
+/// `groove: <name>` -> the resolved per-step offset table (empty if absent/unknown).
+pub fn parse_groove(src: &str) -> Vec<f32> {
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        if line[..colon].trim().to_lowercase() != "groove" { continue; }
+        let w = line[colon + 1..].trim().to_lowercase();
+        return groove_offsets(&w).unwrap_or_default();
+    }
+    Vec::new()
+}
+
 /// A whole parsed LOOM program: voices plus the optional key/seed/arrangement.
 /// This is the convenient front door — `Program::parse` then `schedule_bar`.
 #[derive(Debug, Clone)]
@@ -1377,6 +1432,8 @@ pub struct Program {
     pub accel: Option<Accel>,
     /// Per-section tempo overrides (`tempo: name bpm …`).
     pub tempo_map: Vec<(String, f64)>,
+    /// Resolved groove microtiming table (`groove: dilla`), empty if none.
+    pub groove: Vec<f32>,
 }
 
 impl Program {
@@ -1391,6 +1448,7 @@ impl Program {
             meter_beats: parse_meter(src),
             accel: parse_accel(src),
             tempo_map: parse_tempo_map(src),
+            groove: parse_groove(src),
         }
     }
 
@@ -1460,7 +1518,7 @@ impl Program {
         let cur_key = sec_now
             .and_then(|s| self.key_map.iter().find(|(n, _)| n == s).map(|(_, k)| k))
             .or(self.key.as_ref());
-        schedule_bar_seeded(&active, cur_key, bar, self.seed)
+        sched_prog(&active, cur_key, &[], bar, self.seed, &self.groove)
     }
 }
 
@@ -2263,6 +2321,41 @@ mod tests {
         assert_eq!(p2.len_bars(), 42);
         assert_eq!(p2.bar_bpm(0), 132.0);
         assert_eq!(p2.bar_bpm(41), 150.0);
+    }
+
+    #[test]
+    fn swing_offsets_odd_steps() {
+        // swing 50 -> odd 16ths land a half-step late; even steps stay put.
+        let v = parse("hat: x x x x | swing 50");
+        assert_eq!(v[0].swing, 0.5);
+        let ph: Vec<f32> = schedule_bar(&v, 0).iter().map(|e| e.phase).collect();
+        let want = [0.0, 0.375, 0.5, 0.875];
+        for (a, b) in ph.iter().zip(want.iter()) { assert!((a - b).abs() < 1e-6, "{a} vs {b}"); }
+    }
+
+    #[test]
+    fn nudge_shifts_whole_voice() {
+        // shift 0.2 -> every hit slides 0.2 of a step later (0.2/n of the bar).
+        let v = parse("bass: x x | shift 0.2");
+        assert_eq!(v[0].nudge, 0.2);
+        let ph: Vec<f32> = schedule_bar(&v, 0).iter().map(|e| e.phase).collect();
+        assert!((ph[0] - 0.1).abs() < 1e-6);
+        assert!((ph[1] - 0.6).abs() < 1e-6);
+        // a bare voice (no shift) is untouched
+        let v2 = parse("bass: x x");
+        let ph2: Vec<f32> = schedule_bar(&v2, 0).iter().map(|e| e.phase).collect();
+        assert!((ph2[0] - 0.0).abs() < 1e-6 && (ph2[1] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn groove_template_applies_per_step() {
+        assert_eq!(parse_groove("groove: mpc"), vec![0.0, 0.07, 0.0, 0.07, 0.0, 0.07, 0.0, 0.07]);
+        assert!(parse_groove("groove: nope").is_empty());
+        let p = Program::parse("groove: mpc\nhat: x x x x");
+        assert_eq!(p.groove, vec![0.0, 0.07, 0.0, 0.07, 0.0, 0.07, 0.0, 0.07]);
+        let ph: Vec<f32> = p.schedule_bar(0).iter().map(|e| e.phase).collect();
+        let want = [0.0, 0.25 + 0.07 / 4.0, 0.5, 0.75 + 0.07 / 4.0];
+        for (a, b) in ph.iter().zip(want.iter()) { assert!((a - b).abs() < 1e-6, "{a} vs {b}"); }
     }
 
     #[test]
