@@ -745,6 +745,12 @@ pub fn midi_to_freq(midi: i32) -> f32 {
     440.0 * 2f32.powf((midi as f32 - 69.0) / 12.0)
 }
 
+/// Fractional MIDI → Hz. Same formula, but accepts microtonal pitches (e.g. a
+/// quarter-tone is midi 60.5). Lets custom numeric scales sound exactly.
+pub fn midi_f_to_freq(midi: f64) -> f32 {
+    440.0 * 2f32.powf((midi as f32 - 69.0) / 12.0)
+}
+
 /// Microtuning systems (mirrors the web engine's `tune:` directive).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tuning {
@@ -807,12 +813,14 @@ pub fn degree_freq(midi: i32, interval_from_tonic: i32, tuning: Tuning) -> f32 {
 
 /// A declared tonality: a tonic pitch-class plus a scale (intervals from the
 /// tonic, within one octave) and the reference octave for degree 1.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Key {
     /// Tonic pitch class, 0..=11 with c=0.
     pub tonic: i32,
     /// Scale intervals in semitones from the tonic, e.g. major = [0,2,4,5,7,9,11].
-    pub scale: Vec<i32>,
+    /// Stored as f64 so custom numeric scales can be microtonal, e.g.
+    /// `key: d 0 1.5 3 4 6 7.5 9 10` (quarter-tones). Named scales are integers.
+    pub scale: Vec<f64>,
     /// Octave that degree 1 sounds in (c in this octave = degree 1 of a C key).
     pub octave: i32,
 }
@@ -937,6 +945,7 @@ pub fn parse_key_map(src: &str) -> Vec<(String, Key)> {
 pub fn parse_key(src: &str) -> Option<Key> {
     let mut tonic: Option<i32> = None;
     let mut scale_name: Option<String> = None;
+    let mut scale_nums: Option<Vec<f64>> = None; // custom numeric (possibly microtonal) scale
 
     for raw in src.lines() {
         let line = raw.trim();
@@ -944,24 +953,39 @@ pub fn parse_key(src: &str) -> Option<Key> {
         let Some(colon) = line.find(':') else { continue };
         let name = line[..colon].trim().to_lowercase();
         let rest = line[colon + 1..].trim().to_lowercase();
-        let mut words = rest.split_whitespace();
+        let mut words = rest.split_whitespace().peekable();
         match name.as_str() {
             "key" => {
                 if let Some(t) = words.next().and_then(tonic_pc) { tonic = Some(t); }
-                if let Some(s) = words.next() { scale_name = Some(s.to_string()); }
+                // `key: c 0 2 3.5 5 ...` -> custom numeric scale (microtonal allowed)
+                if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
+                    scale_nums = Some(words.filter_map(|w| w.parse::<f64>().ok()).collect());
+                } else if let Some(s) = words.next() {
+                    scale_name = Some(s.to_string());
+                }
             }
             "scale" => {
-                if let Some(s) = words.next() { scale_name = Some(s.to_string()); }
+                if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
+                    scale_nums = Some(words.filter_map(|w| w.parse::<f64>().ok()).collect());
+                } else if let Some(s) = words.next() {
+                    scale_name = Some(s.to_string());
+                }
             }
             _ => {}
         }
     }
 
-    if tonic.is_none() && scale_name.is_none() { return None; }
-    let scale = scale_name
-        .as_deref()
-        .and_then(scale_intervals)
-        .unwrap_or_else(|| scale_intervals("major").unwrap());
+    if tonic.is_none() && scale_name.is_none() && scale_nums.is_none() { return None; }
+    let scale: Vec<f64> = match scale_nums {
+        Some(nums) if !nums.is_empty() => nums,
+        _ => scale_name
+            .as_deref()
+            .and_then(scale_intervals)
+            .unwrap_or_else(|| scale_intervals("major").unwrap())
+            .into_iter()
+            .map(|x| x as f64)
+            .collect(),
+    };
     Some(Key { tonic: tonic.unwrap_or(0), scale, octave: DEFAULT_OCTAVE })
 }
 
@@ -984,7 +1008,7 @@ fn is_degree(token: &str) -> bool {
 /// semitone (e.g. `7#` is the raised 7th — the harmonic-minor leading tone).
 /// Degrees beyond the scale length wrap up an octave (so `6` in a 5-note
 /// pentatonic = degree 1, one octave higher).
-fn degree_to_midi(token: &str, key: &Key) -> Option<i32> {
+fn degree_to_midi(token: &str, key: &Key) -> Option<f64> {
     let mut chars = token.chars().peekable();
     let d = chars.next()?.to_digit(10)? as i32; // 1..7
     let acc = match chars.peek() {
@@ -1000,9 +1024,9 @@ fn degree_to_midi(token: &str, key: &Key) -> Option<i32> {
     if len == 0 { return None; }
     let idx = d - 1;
     let wrap = idx.div_euclid(len);
-    let step = key.scale[idx.rem_euclid(len) as usize];
+    let step = key.scale[idx.rem_euclid(len) as usize]; // f64: may be a quarter-tone
     let octave = key.octave + oct_marks + wrap;
-    Some(12 * (octave + 1) + key.tonic + step + acc)
+    Some((12 * (octave + 1) + key.tonic + acc) as f64 + step)
 }
 
 /// Resolve a token to a frequency: a scale degree if a key is given and the
@@ -1010,7 +1034,7 @@ fn degree_to_midi(token: &str, key: &Key) -> Option<i32> {
 pub fn token_to_freq(token: &str, key: Option<&Key>) -> Option<f32> {
     if let Some(k) = key {
         if is_degree(token) {
-            return degree_to_midi(token, k).map(midi_to_freq);
+            return degree_to_midi(token, k).map(midi_f_to_freq);
         }
     }
     note_to_freq(token)
@@ -1382,7 +1406,7 @@ fn resolve_prog(tok: &str, prog: &[String], bar: i64, key: Option<&Key>, octave:
 fn scale_note_midi(key: &Key, idx: i32) -> i32 {
     let len = key.scale.len() as i32;
     let wrap = idx.div_euclid(len);
-    let step = key.scale[idx.rem_euclid(len) as usize];
+    let step = key.scale[idx.rem_euclid(len) as usize].round() as i32; // chords snap to 12-TET
     12 * (key.octave + wrap + 1) + key.tonic + step
 }
 
@@ -1402,7 +1426,7 @@ fn resolve_token(tok: &str, is_drum: bool, octave: i32, key: Option<&Key>) -> Ve
     if is_drum { return vec![tok.to_string()]; }
     if let Some(k) = key {
         if is_degree(tok) {
-            return vec![degree_to_midi(tok, k).map(midi_to_name).unwrap_or_else(|| tok.to_string())];
+            return vec![degree_to_midi(tok, k).map(|m| midi_to_name(m.round() as i32)).unwrap_or_else(|| tok.to_string())];
         }
         if let Some((deg, seventh)) = parse_roman(tok) {
             return diatonic_chord(k, deg, seventh).into_iter().map(midi_to_name).collect();
@@ -1417,6 +1441,11 @@ fn resolve_token(tok: &str, is_drum: bool, octave: i32, key: Option<&Key>) -> Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A named scale as f64 (Key.scale is now f64 to allow microtonal scales).
+    fn fscale(name: &str) -> Vec<f64> {
+        scale_intervals(name).unwrap().into_iter().map(|x| x as f64).collect()
+    }
 
     #[test]
     fn parses_drum_and_melody() {
@@ -1638,17 +1667,38 @@ mod tests {
     fn parses_key_with_mode() {
         let k = parse_key("key: c minor").unwrap();
         assert_eq!(k.tonic, 0);
-        assert_eq!(k.scale, scale_intervals("minor").unwrap());
+        assert_eq!(k.scale, fscale("minor"));
     }
 
     #[test]
     fn key_defaults_to_major_and_scale_directive_overrides() {
         let k = parse_key("key: a").unwrap();
         assert_eq!(k.tonic, 9);
-        assert_eq!(k.scale, scale_intervals("major").unwrap());
+        assert_eq!(k.scale, fscale("major"));
         let k2 = parse_key("key: d\nscale: dorian").unwrap();
         assert_eq!(k2.tonic, 2);
-        assert_eq!(k2.scale, scale_intervals("dorian").unwrap());
+        assert_eq!(k2.scale, fscale("dorian"));
+    }
+
+    #[test]
+    fn parses_custom_microtonal_scale() {
+        // The AFX∞ scale: quarter-tones in d. tonic=d, 8 fractional steps.
+        let k = parse_key("key: d 0 1.5 3 4 6 7.5 9 10").unwrap();
+        assert_eq!(k.tonic, 2);
+        assert_eq!(k.scale, vec![0.0, 1.5, 3.0, 4.0, 6.0, 7.5, 9.0, 10.0]);
+        // Degree 1 lands on the tonic exactly (d3 = midi 50).
+        let f1 = token_to_freq("1", Some(&k)).unwrap();
+        assert!((f1 - midi_f_to_freq(50.0)).abs() < 1e-3);
+        // Degree 2 is a QUARTER-TONE up (step 1.5): midi 51.5, between e and eb.
+        let f2 = token_to_freq("2", Some(&k)).unwrap();
+        assert!((f2 - midi_f_to_freq(51.5)).abs() < 1e-3);
+        // It really is microtonal: not equal to any 12-TET semitone.
+        assert!((f2 - midi_to_freq(51)).abs() > 1.0);
+        assert!((f2 - midi_to_freq(52)).abs() > 1.0);
+        // `scale:`-only form also accepts numbers (tonic defaults to c).
+        let k3 = parse_key("scale: 0 1 4 6 7.5 9 11").unwrap();
+        assert_eq!(k3.tonic, 0);
+        assert_eq!(k3.scale.len(), 7);
     }
 
     #[test]
