@@ -240,7 +240,7 @@ pad: Cm7 . . . Ab . . . | saw | lp 800 q 6 | env 0.4 0.3 0.7 1.2 | gain 0.16
 
 | Écriture | Effet |
 |---|---|
-| `| lfo cutoff\|pitch\|gain RATE DEPTH` | LFO (mouvement, vibrato, trémolo) |
+| `| lfo cutoff\|pitch\|gain\|pan\|reso RATE DEPTH [forme]` | LFO (forme : sine/tri/saw/square — wobble, vibrato, trémolo, auto-pan) |
 | `| lp 300..6000` (`| over N`) | **rampe** : un param glisse de A à B (filtre qui s'ouvre, riser) |
 | `| pan -1..1` `| drive 0..0.6` | n'importe quel param `A..B` évolue sur la section |
 | `| lp sine 0.5 300 4000` | **signal** : param qui ondule — WAVE(`sine saw tri square rand`) RATE MIN MAX |
