@@ -1,0 +1,57 @@
+# ================================================================
+#  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
+#  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
+#  est une SECONDE NEUTRE (150 cents) — ni majeure ni mineure.
+#  C'est LE son du Proche-Orient (oud, ney, qanûn) qu'on n'entend
+#  jamais sur un clavier tempéré occidental.
+#
+#  Forme : taqsim (impro libre sur bourdon) -> thème -> groove
+#  (rythme maqsum) -> climax -> retour au bourdon.
+#
+#  > RUN. Écoute le 2e degré « entre les touches ». Pas de tune: ici :
+#    ce sont les intervalles de la gamme qui portent le microtonal.
+#  > Change key: d rast (3e + 7e neutres) ou d saba ou d hijaz.
+# ================================================================
+
+title:  TAQSIM
+bpm:    96
+key:    d bayati           # maqâm : 2e degré = seconde neutre (quart de ton)
+feel:   24
+duck:   0
+warmth: 0.4
+scene:  guilloche
+film:   square
+song:   taqsim*2 theme*4 groove*8 climax*4 out*2
+
+# ---------- BOURDON (du début à la fin) : tonique + quinte ----------
+drone:  1 . . . . . . . . . . . . . . . ; 5, . . . . . . . . . . . . . . . | bow | unison 2 | lp 1400 | reverb 0.7 | gate 3 | gain 0.1 | hue 30
+
+# ---------- NEY (flûte de roseau) : la voix principale, souple ----------
+# slide = glissando ; reed = anche/roseau ; respire sur les silences
+ney:    1 . 2 3 . 4 3 . 2 . 1 . 7, . 1 . | reed | slide | lp 2000 | reverb 0.5 | delay 0.25 | gate 0.7 | gain 0.12 | hue 150 | in taqsim theme groove climax out
+ney@climax: 5 . 6 5 4 . 3 4 5 . 4 3 2 . 1 . | reed | slide | lp 2400 | reverb 0.5 | delay 0.3 | gate 0.6 | gain 0.13 | hue 150
+
+# ---------- OUD (luth pincé) : hétérophonie + trilles (ratchets) ----------
+oud@theme:  1 2 3 2 1 7, 1 2 3 4 3*3 2 1 . . . | pluck 0.7 | delay 0.2 | reverb 0.4 | gate 0.5 | gain 0.12 | hue 40
+oud@groove: 1 . 1 2 3 . 3 2 1 . 4 3 2*3 1 . . | pluck 0.7 | delay 0.2 | reverb 0.4 | gate 0.5 | gain 0.12 | hue 40
+oud@climax: 1 2 3 4 5 4 3 2 1' 7 6 5 4 3 2 1 | pluck 0.75 | delay 0.25 | reverb 0.4 | gate 0.5 | gain 0.13 | hue 40
+
+# ---------- QANÛN (cithare) : tremolo scintillant au climax ----------
+qanun@climax: 1*2 3*2 5*2 1'*2 5*2 3*2 5*2 6*2 | pluck 0.8 | double 0.3 | delay 0.3 | reverb 0.5 | gate 0.4 | gain 0.08 | pan 0.3 | hue 60
+
+# ---------- PERCUSSIONS (rythme maqsum) : entrent au groove ----------
+# maqsum : Doum . tek . tek Doum . tek  (D = grave, T = aigu)
+darbuka: x . . . x? . x . x . . . x . x? . | sample tabla | gain 0.4 | in groove climax
+riq:     . . x . . . x . . x x . . . x . | sample perc | gain 0.22 | swing 56 | pan -0.25 | in groove climax
+def:     x . . . . . . . x . . . . . . . | sample bd | gain 0.3 | comp 0.3 | in groove climax
+
+# ---------- TANBURA microtonale (nappe) : couleur au climax ----------
+tanbura@climax: 1 . . . 4 . . . 5 . . . 1' . . . | saw | unison 3 | vowel a | lp 1300 | reverb 0.7 | gate 1.6 | gain 0.06 | hue 300
+
+# ----------------------------------------------------------------
+#  À essayer (change juste la key, tout suit) :
+#   • d rast   -> 3e ET 7e neutres (le maqâm « droit », majeur-neutre)
+#   • d saba   -> couleur triste, 4e abaissée
+#   • d hijaz  -> seconde augmentée (le « son andalou/klezmer »)
+#   • d sikah  -> commence sur un quart de ton (très flottant)
+# ----------------------------------------------------------------
