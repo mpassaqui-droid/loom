@@ -1,0 +1,16 @@
+# ===== HISTOIRE 19 — BOOM-BAP (New York, ~1993, DJ Premier / J Dilla) =====
+# Le cœur du hip-hop : des drums poussiéreux et swingués, du vinyle, un accord
+# jazz qui boucle. Tout est dans le swing du charley et le creux du sample.
+title:  Boom Bap
+bpm:    90
+key:    f minor
+feel:   22
+scene:  matrix
+song:   a*8 b*8
+kick:  x . . . . . x . . . x . . . . . | sample bd | gain 0.55 | comp 0.4
+snare: . . . . x . . . . . . . x . . . | sample sd | reverb 0.2 | gain 0.42
+hat:   x . x x . x x . x . x x . x x . | sample hh | swing 60 | degrade 12 | gain 0.12
+keys:  Fm9 . . . . . . . Bbm7 . . . . . . . | wt warm | lp 1600 | wow 0.2 | env 0.02 0.2 0.5 0.4 | reverb 0.3 | gain 0.12
+bass:  1 . . . 1 . . 5, . . 1 . 4, . . . | sine | oct 2 | sub 0.4 | gain 0.18
+vinyl: x . . . . . . . . . . . . . . . | sine | noise 0.5 | hp 1500 | gain 0.03
+horn@b: 1' . . 7 . . 5 . . . 4 . . . . . | sample sax | lp 2200 | reverb 0.3 | gain 0.14

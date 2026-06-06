@@ -1,0 +1,15 @@
+# ===== HISTOIRE 24 — GQOM (Durban, Afrique du Sud, ~2012) =====
+# Un 4/4 cassé, des percussions sombres et minimales, beaucoup d'espace,
+# une transe lourde. La house sud-africaine dépouillée jusqu'à l'os.
+title:  Gqom
+bpm:    124
+key:    a minor
+duck:   35
+scene:  voronoi
+song:   a*8 b*8
+kick:  x . . x . . x . . x . . x . x . | sample bd | comp 0.4 | gain 0.55
+clap:  . . . . . . . . x . . . . . . . | sample cp | gain 0.3
+perc:  . . x . x . . x . . x . x . . . | sample perc | pan 0.3 | gain 0.2
+tom:   . . . . . . . . . . . . x . x . | sample tom | gain 0.22
+sub:   1 . . . . . . . 1 . . . . . . . | sine | oct 1 | sub 0.6 | gain 0.28
+chant@b: 1 . . . 1 . 7, . 1 . . . 5, . . . | saw | unison 2 | vowel a | lp 1100 | reverb 0.5 | gain 0.08

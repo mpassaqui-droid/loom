@@ -2534,6 +2534,92 @@ click: x?60 . x?30 x?80 . x?40 . x?70 x?20 . x?50 . x?80 . x?30 x?60 | sample gl
 grain: 1 . . . 5 . . . 3 . . . 1' . . . | sine | grain 0.7 | redux 4 | reverb 0.6 | gate 1.4 | gain 0.08
 skip:  {1 3 5}*2 . {5 1'} . {3 5}*3 . {1 5}*2 . | tri | redux 6 | crush 3 | pan 0.3 | gain 0.07
 pad:   Cmaj9 . . . . . . . . . . . . . . . | saw | unison 4 | lp 700 | env 1 0.6 0.7 2 | reverb 0.8 | gain 0.06`;
+  PRESETS.boombap=`# ===== HISTOIRE 19 — BOOM-BAP (New York, ~1993, DJ Premier / J Dilla) =====
+# Le cœur du hip-hop : des drums poussiéreux et swingués, du vinyle, un accord
+# jazz qui boucle. Tout est dans le swing du charley et le creux du sample.
+title:  Boom Bap
+bpm:    90
+key:    f minor
+feel:   22
+scene:  matrix
+song:   a*8 b*8
+kick:  x . . . . . x . . . x . . . . . | sample bd | gain 0.55 | comp 0.4
+snare: . . . . x . . . . . . . x . . . | sample sd | reverb 0.2 | gain 0.42
+hat:   x . x x . x x . x . x x . x x . | sample hh | swing 60 | degrade 12 | gain 0.12
+keys:  Fm9 . . . . . . . Bbm7 . . . . . . . | wt warm | lp 1600 | wow 0.2 | env 0.02 0.2 0.5 0.4 | reverb 0.3 | gain 0.12
+bass:  1 . . . 1 . . 5, . . 1 . 4, . . . | sine | oct 2 | sub 0.4 | gain 0.18
+vinyl: x . . . . . . . . . . . . . . . | sine | noise 0.5 | hp 1500 | gain 0.03
+horn@b: 1' . . 7 . . 5 . . . 4 . . . . . | sample sax | lp 2200 | reverb 0.3 | gain 0.14`;
+  PRESETS.trap=`# ===== HISTOIRE 20 — TRAP (Atlanta, ~2003-12, T.I. / Lex Luger) =====
+# 808 glissante (bend), charley en triolets et roulements ([x x x]), minimalisme
+# sombre et spacieux. La grammaire rythmique dominante du hip-hop moderne.
+title:  Trap
+bpm:    140
+key:    c minor
+duck:   25
+scene:  lightning
+song:   intro*2 main*12 out*2
+kick:  x . . . . . x . . . . . . . . . | sample bd | gain 0.5 | in main out
+snare: . . . . . . . . x . . . . . . . | sample sd | gain 0.4 | in main out
+hat:   x x x x x x [x x] x x x [x x x] x x x | sample hh | gain 0.1 | in main out
+b808:  1 . . . . . 1 . 6, . . . 4, . 5, . | sine | oct 1 | bend -12 0.08 | sub 0.5 | env 0.005 0.6 0.2 0.5 | gain 0.3 | in main out
+lead@main: . . 1' . . . 7 . . . 5 . . . 4 . | bell | reverb 0.5 | delay 0.3 | gain 0.1`;
+  PRESETS.dubstep=`# ===== HISTOIRE 21 — DUBSTEP (Londres, ~2006, Skream / Croydon) =====
+# 140 bpm en DEMI-TEMPS, un sub énorme, et le WOBBLE : un LFO sur le filtre qui
+# fait « parler » la basse. Descendant direct du dub et du 2-step.
+title:  Dubstep
+bpm:    140
+key:    e minor
+duck:   30
+scene:  faraday
+song:   intro*2 main*12 out*2
+kick:  x . . . . . . . . . . . . . . . | sample bd | gain 0.55 | in main out
+snare: . . . . . . . . x . . . . . . . | sample sd | reverb 0.3 | gain 0.45 | in main out
+hat:   . . x . . . x . . . x . . . x . | sample hh | gain 0.1 | in main out
+sub:   1 . . . . . . . 1 . . . . . . . | sine | oct 1 | sub 0.7 | gain 0.3 | in main out
+wob:   1 1 1 1 5, 5, 5, 5, 6, 6, 6, 6, 4, 4, 4, 4, | saw | oct 2 | unison 3 | detune 16 | lp 500 | lfo cutoff 2 0.85 | drive 0.4 | gain 0.13 | in main`;
+  PRESETS.breakcore=`# ===== HISTOIRE 22 — BREAKCORE (~2000, Venetian Snares) =====
+# L'amen en CHAOS à haute vitesse, ratchets fous, sous-séquences imbriquées.
+# La virtuosité du breakbeat poussée au bord de la rupture.
+title:  Breakcore
+bpm:    180
+key:    d minor
+seed:   11
+scene:  warp
+song:   a*8
+break:  1 [2 3] 1 2*3 3 [1 2] 1' 2 [3 3 1] 2 1*4 [2 1] 3 . | sample amen | redux 3 | gain 0.3
+break2: {1 2 3}*2 1 [2 1] {3 1'}*3 2 . | sample amencut | crush 4 | pan 0.3 | gain 0.2
+sub:    1 . . 1 . 5, . . 1 . 4, . . 6, . . | sine | oct 1 | sub 0.6 | gain 0.26
+stab:   . . Dm . . . . . . . A . . . . . | saw | unison 3 | lp 1700 | crush 5 | gain 0.08`;
+  PRESETS.hyperpop=`# ===== HISTOIRE 23 — HYPERPOP (~2018, 100 gecs / PC Music) =====
+# Supersaw saturée, voix pitchée, bitcrush à fond, joie criarde et bubblegum.
+# La pop poussée dans le rouge, assumée et maximaliste.
+title:  Hyperpop
+bpm:    160
+key:    e major
+duck:   30
+scene:  kaleido
+song:   a*8 b*8
+kick:  x . . . x . . . x . . . x . . . | sample bd | gain 0.5
+clap:  . . . . x . . . . . . . x . . . | sample cp | crush 6 | gain 0.35
+supr:  1 . 3 . 5 . 1' . 6 . 5 . 3 . 2 . | saw | supersaw | crush 5 | lp 3000 | drive 0.4 | gain 0.1
+bass:  1 . 1 . 6, . 6, . 4, . 4, . 5, . 5, . | square | oct 2 | drive 0.4 | gain 0.14
+vox@b: 1' 1' . 7 . 5 . . 3' . . 5 . . 1' . | sine | double 0.5 | crush 4 | delay 0.2 | reverb 0.3 | gain 0.1`;
+  PRESETS.gqom=`# ===== HISTOIRE 24 — GQOM (Durban, Afrique du Sud, ~2012) =====
+# Un 4/4 cassé, des percussions sombres et minimales, beaucoup d'espace,
+# une transe lourde. La house sud-africaine dépouillée jusqu'à l'os.
+title:  Gqom
+bpm:    124
+key:    a minor
+duck:   35
+scene:  voronoi
+song:   a*8 b*8
+kick:  x . . x . . x . . x . . x . x . | sample bd | comp 0.4 | gain 0.55
+clap:  . . . . . . . . x . . . . . . . | sample cp | gain 0.3
+perc:  . . x . x . . x . . x . x . . . | sample perc | pan 0.3 | gain 0.2
+tom:   . . . . . . . . . . . . x . x . | sample tom | gain 0.22
+sub:   1 . . . . . . . 1 . . . . . . . | sine | oct 1 | sub 0.6 | gain 0.28
+chant@b: 1 . . . 1 . 7, . 1 . . . 5, . . . | saw | unison 2 | vowel a | lp 1100 | reverb 0.5 | gain 0.08`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -3160,7 +3246,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 # ================================================================`;
   const PRESET_GROUPS=[
     ["★ Vitrines",["mixtape","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
-    ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch"]],
+    ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto","signals"]],

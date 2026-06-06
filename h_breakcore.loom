@@ -1,0 +1,13 @@
+# ===== HISTOIRE 22 — BREAKCORE (~2000, Venetian Snares) =====
+# L'amen en CHAOS à haute vitesse, ratchets fous, sous-séquences imbriquées.
+# La virtuosité du breakbeat poussée au bord de la rupture.
+title:  Breakcore
+bpm:    180
+key:    d minor
+seed:   11
+scene:  warp
+song:   a*8
+break:  1 [2 3] 1 2*3 3 [1 2] 1' 2 [3 3 1] 2 1*4 [2 1] 3 . | sample amen | redux 3 | gain 0.3
+break2: {1 2 3}*2 1 [2 1] {3 1'}*3 2 . | sample amencut | crush 4 | pan 0.3 | gain 0.2
+sub:    1 . . 1 . 5, . . 1 . 4, . . 6, . . | sine | oct 1 | sub 0.6 | gain 0.26
+stab:   . . Dm . . . . . . . A . . . . . | saw | unison 3 | lp 1700 | crush 5 | gain 0.08

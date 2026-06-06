@@ -1,0 +1,14 @@
+# ===== HISTOIRE 20 — TRAP (Atlanta, ~2003-12, T.I. / Lex Luger) =====
+# 808 glissante (bend), charley en triolets et roulements ([x x x]), minimalisme
+# sombre et spacieux. La grammaire rythmique dominante du hip-hop moderne.
+title:  Trap
+bpm:    140
+key:    c minor
+duck:   25
+scene:  lightning
+song:   intro*2 main*12 out*2
+kick:  x . . . . . x . . . . . . . . . | sample bd | gain 0.5 | in main out
+snare: . . . . . . . . x . . . . . . . | sample sd | gain 0.4 | in main out
+hat:   x x x x x x [x x] x x x [x x x] x x x | sample hh | gain 0.1 | in main out
+b808:  1 . . . . . 1 . 6, . . . 4, . 5, . | sine | oct 1 | bend -12 0.08 | sub 0.5 | env 0.005 0.6 0.2 0.5 | gain 0.3 | in main out
+lead@main: . . 1' . . . 7 . . . 5 . . . 4 . | bell | reverb 0.5 | delay 0.3 | gain 0.1
