@@ -292,6 +292,27 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       for(let i=0;i<len;i++){const x=i/len;d[i]=(Math.random()*2-1)*Math.pow(1-x,decay)*(0.6+0.4*Math.sin(x*40+ch));}
       [0.007,0.013,0.021,0.031,0.043].forEach((tap,k)=>{const idx=Math.floor(tap*r);if(idx<len)d[idx]+=(0.55-0.09*k)*(ch?-1:1);});}
     return b;}
+  // convolution-reverb impulse responses, synthesized per space (no files). Cached per ctx.
+  // | ir hall|room|plate|spring|cathedral [mix] — a true convolver insert on the voice.
+  function irBuffer(type){
+    if(!ctx||!ctx.createBuffer)return null;ctx._irCache=ctx._irCache||{};
+    if(ctx._irCache[type])return ctx._irCache[type];
+    const r=ctx.sampleRate;let sec,decay,bright,spring=false;
+    switch(type){
+      case "room":      sec=0.5; decay=3.6; bright=4200; break;
+      case "plate":     sec=1.9; decay=2.1; bright=7200; break;
+      case "spring":    sec=1.7; decay=2.6; bright=2800; spring=true; break;
+      case "cathedral": sec=5.2; decay=1.5; bright=2400; break;
+      default:          sec=2.8; decay=2.0; bright=3400; break;  // hall
+    }
+    const len=Math.max(1,Math.floor(r*sec)),b=ctx.createBuffer(2,len,r),a=Math.exp(-2*Math.PI*bright/r);
+    for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch);let lp=0;
+      for(let i=0;i<len;i++){const x=i/len;let n=Math.random()*2-1;lp=n*(1-a)+lp*a;n=lp;  // damped noise tail
+        let env=Math.pow(1-x,decay);
+        if(spring){const chirp=Math.sin(2*Math.PI*(1200+9000*Math.pow(x,1.5))*i/r);n=0.5*n+0.5*chirp;env*=0.7+0.3*Math.sin(x*120+ch);}  // dispersive chirp + flutter
+        d[i]=n*env*(0.6+0.4*Math.sin(x*37+ch*1.6));}
+      [0.005,0.011,0.019,0.029,0.041,0.057].forEach((tap,k)=>{const idx=Math.floor(tap*r);if(idx<len)d[idx]+=(0.5-0.06*k)*(ch?-1:1);});}  // early reflections
+    ctx._irCache[type]=b;return b;}
   // build the whole audio graph into the current `ctx` (reused for offline render)
   function buildGraph(){
     masterSat=null;masterWLim=null;  // fresh per graph (live vs offline contexts)
@@ -810,6 +831,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const pn=ctx.createStereoPanner(),pg=ctx.createGain();pg.gain.value=0.95;lo.connect(pg);pg.connect(pn.pan);
       const dg=ctx.createGain();dg.gain.value=0.7;const dgo=ctx.createGain();dgo.gain.value=0.3;lo.connect(dgo);dgo.connect(dg.gain);
       out.connect(pn);pn.connect(dg);out=dg;mods.push(lo);}
+    // ir: convolution-reverb INSERT with a synthesized impulse of a real space (wet/dry mix)
+    if(v.ir&&ctx.createConvolver){const irb=irBuffer(v.ir);if(irb){try{
+      const cv2=ctx.createConvolver();cv2.buffer=irb;
+      const wetA=Math.max(0,Math.min(1,v.irmix==null?0.35:v.irmix));
+      const wet=ctx.createGain();wet.gain.value=wetA;const dry=ctx.createGain();dry.gain.value=1-wetA;const sum=ctx.createGain();
+      out.connect(dry);dry.connect(sum);out.connect(cv2);cv2.connect(wet);wet.connect(sum);out=sum;}catch(_){}}}
     out.connect(bus);connectFx(out,v);
     // chorus: two modulated delay voices panned L/R = lush stereo width
     if(v.chorus&&ctx.createStereoPanner){const wet=Math.max(0,Math.min(1,v.chorus));
@@ -1049,7 +1076,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1071,6 +1098,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="root")root=p[1]||null;
       else if(p[0]==="reverb"||p[0]==="room")reverb=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
+      else if(p[0]==="ir"){ir=p[1]||"hall";const mx=parseFloat(p[2]);if(!isNaN(mx))irmix=Math.max(0,Math.min(1,mx));}
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
       else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
       else if(p[0]==="fm")fm={ratio:Math.max(0.1,Math.min(16,parseFloat(p[1])||2)),index:Math.max(0,Math.min(12,parseFloat(p[2])!=null&&!isNaN(parseFloat(p[2]))?parseFloat(p[2]):3))};
@@ -1122,7 +1150,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -2730,6 +2758,47 @@ leadf@future: . . 1' . . . 7 . . . 5 . . . 4 . | bell | reverb 0.5 | delay 0.3 |
 #  Change l'ordre des sections dans song: pour réécrire l'histoire.
 #  Ajoute tes propres époques avec voix@nom + tempo: nom BPM.
 # ----------------------------------------------------------------`;
+  PRESETS.spaces=`# ================================================================
+#  LOOM — « SPACES » : la réverbe à CONVOLUTION (nouveau dans le moteur).
+#  | ir <espace> [mix] pose un vrai espace acoustique sur une voix —
+#  un convolveur dont l'impulsion est SYNTHÉTISÉE (aucun fichier).
+#  Cinq espaces : hall · room · plate · spring · cathedral.
+#
+#  > RUN, puis SOLO (S) chaque voix pour entendre son espace.
+#  > Change l'espace (ir plate -> ir cathedral) ou le mix (0..1).
+# ================================================================
+
+title:  Spaces
+bpm:    84
+key:    a minor
+prog:   Am F C G
+tune:   just
+scene:  ripple
+song:   a*8
+
+# hall : grande salle de concert (l'espace par défaut, ample et lisse)
+pad:    ^ . . . . . . . . . . . . . . . | saw | unison 4 | lp 1400 | ir hall 0.4 | env 0.4 0.3 0.7 1.5 | gate 1.8 | gain 0.08 | hue 200
+
+# plate : réverbe à plaque (studio, brillante et dense — sur la harpe)
+harp:   ^1 ^2 ^3 ^1' ^2 ^3 ^2 ^1 | pluck 0.75 | ir plate 0.5 | gate 0.6 | gain 0.1 | hue 40
+
+# cathedral : nef immense (sur les cloches, très long)
+bell:   ^1' . . . . . . . ^5 . . . . . . . | bell | ir cathedral 0.55 | gain 0.09 | pan -0.3 | hue 60
+
+# spring : réverbe à ressort (ampli vintage / dub — sur un lead boisé)
+lead:   . . ^3 . . . ^2 . . . ^1 . . . 7, . | reed | slide | ir spring 0.45 | delay 0.2 | gain 0.09 | pan 0.3 | hue 150
+
+# room : petite pièce (sur la batterie, court et serré)
+kick:   x . . . x . . . x . . . x . . . | sample bd | ir room 0.3 | gain 0.4 | comp 0.4
+snare:  . . . . x . . . . . . . x . . . | sample sd | ir room 0.35 | gain 0.3
+
+# basse au sec (sans espace : elle reste devant)
+bass:   ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | sine | oct 2 | sub 0.5 | gain 0.16 | hue 30
+
+# ----------------------------------------------------------------
+#  Astuce : ir = INSERT par voix (≠ reverb N qui est un send global).
+#  spring a ce « boing » métallique ; cathedral peut durer 5 secondes.
+# ----------------------------------------------------------------`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -3355,7 +3424,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mixtape","evolution","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mixtape","evolution","spaces","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
@@ -3420,7 +3489,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     {t:"32 · Effets lo-fi & espace",d:"crush (bitcrush IDM), redux (lo-fi numérique), chorus/phaser (largeur), comp (punch).",c:"key:  a minor\nstab: Am . . . F . . . | saw | unison 3 | crush 5 | chorus 0.4 | gain 0.12"},
     {t:"33 · Morceaux longs (@section)",d:"nom@section: donne un motif différent par section -> le morceau évolue dans le temps.",c:"song: a*4 b*4\nkey:  a minor\nbass: 1 . 5, . | sine | oct 2 | gain 0.3\nbass@b: 1 3 5 3 1 5 3 1 | saw | oct 2 | drive 0.3 | gain 0.16"},
     {t:"34 · Accordage (tune)",d:"tune change l'intonation : just (ratios purs), pyth (Pythagore), 19edo (19 notes par octave)...",c:"key:  c major\ntune: just\nkeys: I . IV . V . I . | sine | gain 0.2"},
-    {t:"35 · Samples du monde",d:"Des sons échantillonnés repitchés sur les degrés + percussions du monde.",c:"key:   c minor\ntabla: e(7,16) | sample tabla | gain 0.4\nsitar: 1 . 2 3 . 4 5 . | sample sitar | gain 0.4"}
+    {t:"35 · Samples du monde",d:"Des sons échantillonnés repitchés sur les degrés + percussions du monde.",c:"key:   c minor\ntabla: e(7,16) | sample tabla | gain 0.4\nsitar: 1 . 2 3 . 4 5 . | sample sitar | gain 0.4"},
+    {t:"36 · Réverbe à convolution (espaces)",d:"| ir pose un VRAI espace acoustique sur une voix : hall room plate spring cathedral (+ mix 0-1). Plus réaliste que reverb N.",c:"key:  a minor\nprog: Am F C G\npad:  ^ . . . | saw | unison 3 | ir hall 0.4 | gain 0.1\nharp: 1 2 3 5 3 2 | pluck 0.7 | ir plate 0.5 | gain 0.12\nbell: 1' . . . 5 . . . | bell | ir cathedral 0.5 | gain 0.1"}
   ];
   // course lessons are wired below, in the unified APPRENDRE panel
 
@@ -3520,6 +3590,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Signaux","| lp sine 0.5 300 4000","un param ondule : WAVE(sine saw tri square rand) RATE(cycles/mesure) MIN MAX"],
     ["Effets & mix","| pan P","panoramique (-1 gauche … 1 droite)"],
     ["Effets & mix","| reverb N   | delay N","sends d'effet par voix (0-1)"],
+    ["Effets & mix","| ir hall|room|plate|spring|cathedral [mix]","réverbe à CONVOLUTION : un espace réel synthétisé, en insert par voix (mix 0-1, déf. 0.35)"],
     ["Effets & mix","| eq L M H","EQ 3 bandes par voix en dB (grave/médium/aigu)"],
     ["Effets & mix","| chorus N","chorus stéréo (0-1) — élargit/épaissit (nappes, leads)"],
     ["Effets & mix","| crush BITS","bitcrush 1-8 : grain lo-fi / IDM (plus bas = plus sale)"],
@@ -3730,6 +3801,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Chorus / width: chorus N (0-1) thickens and widens a voice with modulated stereo delays — lovely on pads, keys and leads, e.g. pad: ... | chorus 0.6. Phaser: | phaser N (0-1) sweeps a chain of all-pass notches with an LFO for the classic psychedelic whoosh — pads, leads, even hats. Per-voice compression: | comp N (0-1) tames transients and adds punch/glue — great on bass, drums, busy pads.",
     "- Per-voice EQ: eq LOW MID HIGH shapes a voice's tone in dB (low shelf ~180Hz, mid peak ~1.2kHz, high shelf ~5kHz). e.g. bass: ... | eq 3 -2 -4 (more lows, less highs), hat: ... | eq -6 0 3 (thinner, brighter). Great for sitting voices in the mix.",
     "- Per-voice space: reverb N adds that voice to the reverb (N 0-1, depth/room), delay N adds an echo send (N 0-1). e.g. lead: 1 . 3 . | delay 0.4 | reverb 0.3 , snare: . . x . | reverb 0.5. Use sparingly on a few voices for depth. (The global SPACE/ECHO knobs still apply to everything.)",
+    "- Convolution reverb: ir SPACE [MIX] puts a real-sounding acoustic SPACE on a voice (a true convolver with a synthesized impulse response), as a per-voice insert. SPACE = hall | room | plate | spring | cathedral; MIX 0-1 (default 0.35). e.g. pad: ^ . . . | saw | ir hall 0.4 , gtr: 1 . 3 . | pluck 0.6 | ir spring , choir: ^ . . . | bow | ir cathedral 0.5. Richer/realer than reverb N; plate = bright dense studio, spring = vintage amp/dub, cathedral = huge. Use on a lead/pad, not everything.",
     "- Stereo: pan P places a voice in the stereo field, P from -1 (left) to 1 (right), e.g. hat: ... | pan -0.4 , arp: ... | pan 0.5. Spread voices for width. (The master bus runs through a gentle compressor/limiter for studio glue.)",
     "- Continuous signals (LFO on any param): write a parameter as a SIGNAL: WAVE RATE MIN MAX, where WAVE is sine|saw|tri|square|rand and RATE is cycles per bar. e.g. | lp sine 0.5 300 4000 (filter wobbles between 300-4000Hz over 2 bars), | pan sine 1 -1 1 (auto-pan), | drive tri 0.25 0 0.6 (rising/falling grit), | lp rand 4 400 3000 (random sample-and-hold filter). Works on lp/hp, drive, pan. Tempo-synced and seeded.",
     "- Automation (movement over time): write a parameter as A..B to sweep it, e.g. | lp 300..6000 opens the filter, | drive 0..0.6 grows the grit, | pan -1..1 sweeps across. The sweep spans the current section (or | over N bars). Perfect for builds/risers and evolving long tracks — use it on the build section of a song.",

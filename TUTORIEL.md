@@ -249,6 +249,7 @@ acid:  1 5, 1' 5 4 1 5 3 | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | gain 0.
 | `| gain N` | volume (0–1) |
 | `| pan P` | panoramique (-1 gauche … 1 droite) |
 | `| reverb N` `| delay N` | sends d'écho/réverbe (0–1) |
+| `| ir hall\|room\|plate\|spring\|cathedral [mix]` | **réverbe à convolution** : un espace acoustique réel, en insert par voix |
 | `| eq L M H` | EQ 3 bandes en dB (grave/médium/aigu) |
 | `| chorus N` `| phaser N` | élargissement / balayage psyché |
 | `| comp N` | compression (punch & glue) |

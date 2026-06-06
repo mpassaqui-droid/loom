@@ -1,0 +1,41 @@
+# ================================================================
+#  LOOM — « SPACES » : la réverbe à CONVOLUTION (nouveau dans le moteur).
+#  | ir <espace> [mix] pose un vrai espace acoustique sur une voix —
+#  un convolveur dont l'impulsion est SYNTHÉTISÉE (aucun fichier).
+#  Cinq espaces : hall · room · plate · spring · cathedral.
+#
+#  > RUN, puis SOLO (S) chaque voix pour entendre son espace.
+#  > Change l'espace (ir plate -> ir cathedral) ou le mix (0..1).
+# ================================================================
+
+title:  Spaces
+bpm:    84
+key:    a minor
+prog:   Am F C G
+tune:   just
+scene:  ripple
+song:   a*8
+
+# hall : grande salle de concert (l'espace par défaut, ample et lisse)
+pad:    ^ . . . . . . . . . . . . . . . | saw | unison 4 | lp 1400 | ir hall 0.4 | env 0.4 0.3 0.7 1.5 | gate 1.8 | gain 0.08 | hue 200
+
+# plate : réverbe à plaque (studio, brillante et dense — sur la harpe)
+harp:   ^1 ^2 ^3 ^1' ^2 ^3 ^2 ^1 | pluck 0.75 | ir plate 0.5 | gate 0.6 | gain 0.1 | hue 40
+
+# cathedral : nef immense (sur les cloches, très long)
+bell:   ^1' . . . . . . . ^5 . . . . . . . | bell | ir cathedral 0.55 | gain 0.09 | pan -0.3 | hue 60
+
+# spring : réverbe à ressort (ampli vintage / dub — sur un lead boisé)
+lead:   . . ^3 . . . ^2 . . . ^1 . . . 7, . | reed | slide | ir spring 0.45 | delay 0.2 | gain 0.09 | pan 0.3 | hue 150
+
+# room : petite pièce (sur la batterie, court et serré)
+kick:   x . . . x . . . x . . . x . . . | sample bd | ir room 0.3 | gain 0.4 | comp 0.4
+snare:  . . . . x . . . . . . . x . . . | sample sd | ir room 0.35 | gain 0.3
+
+# basse au sec (sans espace : elle reste devant)
+bass:   ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | sine | oct 2 | sub 0.5 | gain 0.16 | hue 30
+
+# ----------------------------------------------------------------
+#  Astuce : ir = INSERT par voix (≠ reverb N qui est un send global).
+#  spring a ce « boing » métallique ; cathedral peut durer 5 secondes.
+# ----------------------------------------------------------------
