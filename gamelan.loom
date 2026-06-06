@@ -1,0 +1,63 @@
+# ================================================================
+#  LOOM — « GAMELAN » : Bali/Java, échelle SLENDRO.
+#  Slendro = [0, 2, 5, 7, 10] : une pentatonique NON tempérée, aux
+#  écarts presque égaux — étrange et planante pour l'oreille occidentale.
+#  Les métallophones sont en synthèse MODALE (| bell) = métal frappé.
+#
+#  Trois idées propres au gamelan, toutes ici :
+#   • COLOTOMIE : le gong marque la fin du grand cycle ; kempul/kenong
+#     ponctuent à l'intérieur.
+#   • BALUNGAN : la mélodie-squelette (saron), doublée à l'octave (peking).
+#   • KOTEKAN : deux voix (polos/sangsih) qui S'IMBRIQUENT en un trait
+#     rapide qu'aucune ne joue seule.
+#   • OMBAK : les paires sont légèrement désaccordées (| detune) -> ça
+#     « respire » (battements), la signature scintillante du gamelan.
+#
+#  > RUN. Le gong tombe toutes les 2 mesures (le « gongan »).
+#  > Change key: c pelog -> l'autre grande échelle (avec demi-tons).
+# ================================================================
+
+title:  GAMELAN
+bpm:    112
+key:    c slendro
+feel:   16
+duck:   0
+warmth: 0.35
+scene:  metatron
+film:   square
+song:   intro*2 theme*8 ramai*8 out*2
+
+# ---------- COLOTOMIE : la charpente temporelle ----------
+# gong ageng : la plus grave, tombe sur le 1 du gongan (toutes les 2 mes.)
+gong:    1 . . . . . . . . . . . . . . . | bell | oct 1 | detune 3 | reverb 0.8 | gate 4 | gain 0.16 | hue 30
+# kempul : ponctuation grave à mi-cycle
+kempul:  . . . . . . . . 5, . . . . . . . | bell | oct 1 | detune 4 | reverb 0.7 | gate 2.5 | gain 0.1 | hue 40 | in theme ramai out
+# kenong : ponctue chaque quart
+kenong:  . . . 1 . . . 5 . . . 1 . . . 5, | bell | oct 2 | detune 4 | reverb 0.6 | gate 1.2 | gain 0.09 | hue 50 | in theme ramai out
+
+# ---------- BALUNGAN : la mélodie-squelette ----------
+saron:   2 3 5 3 2 1 2 3 5 3 2 1 3, 5, 2 1 | bell | detune 6 | reverb 0.4 | gate 0.7 | gain 0.12 | hue 60 | in theme ramai out
+# peking : double le saron une octave au-dessus, deux fois plus vite
+peking@ramai: [2 3] [5 3] [2 1] [2 3] [5 3] [2 1] [3, 5,] [2 1] | bell | oct 3 | detune 7 | reverb 0.4 | gate 0.4 | gain 0.07 | hue 70
+
+# ---------- KOTEKAN : polos + sangsih s'imbriquent ----------
+polos@ramai:  1 . 2 . 3 . 5 . 1' . 5 . 3 . 2 . | bell | detune 6 | reverb 0.4 | gate 0.4 | gain 0.07 | pan -0.3 | hue 180
+sangsih@ramai: . 5 . 3 . 2 . 1 . 3 . 2 . 5 . 1 | bell | detune 8 | reverb 0.4 | gate 0.4 | gain 0.07 | pan 0.3 | hue 280
+
+# ---------- GENDER : nappe douce de métallophone (du début à la fin) ----------
+gender:  1 . . . 5, . . . 2 . . . 1 . . . | bell | oct 2 | detune 5 | reverb 0.7 | gate 1.6 | gain 0.07 | pan -0.2 | hue 300 | in intro theme ramai out
+
+# ---------- SULING : flûte de bambou ornementale ----------
+suling@theme: . . . . 5 . 3 . . . 2 . 1 . 2 . | reed | slide | lp 2400 | reverb 0.5 | delay 0.2 | gate 0.6 | gain 0.08 | hue 150
+suling@ramai: 5 . 3 5 . 3 2 . 1 . 2 3 5 . 3 . | reed | slide | lp 2600 | reverb 0.5 | delay 0.2 | gate 0.5 | gain 0.09 | hue 150
+
+# ---------- KENDANG : tambour à main (meneur) ----------
+kendang@ramai: x . x? . . x . x x . x? . x . . x | sample tabla | gain 0.32
+kendang2@ramai: . . . x . . x . . . . x . . x . | sample perc | gain 0.2 | pan 0.25
+
+# ----------------------------------------------------------------
+#  À essayer :
+#   • key: c pelog -> l'autre échelle (heptatonique, avec demi-tons)
+#   • monte detune (6 -> 12) : le « ombak » bat plus fort, plus vivant
+#   • slow le tempo (bpm: 80) pour un gamelan méditatif de temple
+# ----------------------------------------------------------------
