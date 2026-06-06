@@ -5281,6 +5281,13 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   $("songList").addEventListener("change",e=>{if(e.target.value)loadSong();});
   refreshSongs();
   $("sampFiles").addEventListener("change",e=>{addCustomFiles(e.target.files);e.target.value="";});
+  // drag & drop: audio files -> custom samples ; a .loom file -> load into the editor
+  document.addEventListener("dragover",e=>{if(e.dataTransfer&&[...(e.dataTransfer.types||[])].includes("Files"))e.preventDefault();});
+  document.addEventListener("drop",e=>{const fl=e.dataTransfer&&e.dataTransfer.files;if(!fl||!fl.length)return;e.preventDefault();
+    const aud=[...fl].filter(f=>/audio/i.test(f.type)||/\.(wav|mp3|ogg|m4a|aac|flac|aif|aiff)$/i.test(f.name));
+    if(aud.length){addCustomFiles(aud);return;}
+    const tf=[...fl].find(f=>/\.loom$|\.txt$|text/i.test(f.name+f.type));
+    if(tf){const r=new FileReader();r.onload=()=>{editor.value=String(r.result||"");run();log("[ fichier ] « "+tf.name+" » chargé","ai");};r.readAsText(tf);}});
   $("clearSamples").addEventListener("click",clearCustomSamples);
   idbLoadAll();
   function bind(id,vid,fn){$(id).addEventListener("input",e=>{$(vid).textContent=e.target.value;fn&&fn(e.target.value);});}
