@@ -206,6 +206,7 @@ arp:  1 2 3 5 | jux add 2 | pluck 0.7 | gain 0.12
 
 ### Couches & corps
 `| sub N` (sub-octave, basses) · `| double N` (octave au-dessus, brillance) ·
+`| harmonize N` (harmonie parallèle à N demi-tons : 7=quinte, 4=tierce) ·
 `| noise N` (souffle/air) · `| semi N` (transpose la voix de N demi-tons)
 
 ```

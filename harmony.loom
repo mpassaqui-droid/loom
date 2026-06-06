@@ -1,0 +1,38 @@
+# ================================================================
+#  LOOM — « HARMONY » : harmonisation parallèle + progressions auto.
+#   • | harmonize N   -> couche d'harmonie à N demi-tons (power chords, tierces)
+#   • prog: auto …    -> cinematic / lofi / edm / house / random
+#   • scenes          -> starsphere · tiles
+#
+#  > RUN. Change « auto cinematic » en « auto random » et re-RUN :
+#    une nouvelle harmonie à chaque fois.
+# ================================================================
+
+title:  Harmony
+bpm:    120
+key:    a minor
+prog:   auto cinematic
+duck:   28
+warmth: 0.45
+scene:  starsphere
+song:   intro*2 main*12 out*2
+
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.5 | comp 0.4 | in main out
+clap:   . . . . x . . . . . . . x . . . | sample cp | gain 0.32 | in main
+
+# riff en POWER CHORDS (quinte + octave parallèles)
+riff:   1 . 1 . 5, . 1 . 4, . 1 . 6, . 5, . | saw | oct 2 | harmonize 7 | drive 0.35 | lp 1600 | gate 0.5 | gain 0.12 | hue 0 | in main out
+
+# nappe qui suit la prog, voice-leading + large
+pad:    ^ . . . . . . . . . . . . . . . | saw | unison 4 | voicing lead | haas 0.5 | lp 1300 | env 0.4 0.3 0.7 1.5 | reverb 0.6 | gate 1.8 | gain 0.08 | hue 270
+
+# lead doublé en tierce parallèle (doux)
+lead:   ^1' . ^7 . ^5 . ^3 . | pluck 0.7 | harmonize 4 0.4 | delay 0.3 | reverb 0.4 | gate 0.6 | gain 0.09 | hue 200 | in main
+
+# basse
+bass:   ^1 . . . 5, . ^1 . | sine | oct 2 | sub 0.5 | gain 0.16 | in main out
+
+# ----------------------------------------------------------------
+#  Essaie : harmonize 12 (octave) · harmonize -12 (octave basse) ·
+#  prog: auto random · scene: tiles.
+# ----------------------------------------------------------------
