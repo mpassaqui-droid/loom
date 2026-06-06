@@ -266,6 +266,8 @@ pub fn parse(src: &str) -> Vec<Voice> {
             Some((b, s)) => (b.to_string(), Some(s.to_string())),
             None => (full, None),
         };
+        // skip directive@section lines too (e.g. key@chorus, scene@drop) — not voices
+        if DIRECTIVES.contains(&name.as_str()) { continue; }
         let rest = &line[colon + 1..];
         let mut segs = rest.split('|').map(|s| s.trim());
 
@@ -910,6 +912,23 @@ pub fn scale_intervals(name: &str) -> Option<Vec<i32>> {
     Some(s)
 }
 
+/// Parse `key@SECTION: <tonic> <scale>` lines into a (section, Key) map (modulation).
+pub fn parse_key_map(src: &str) -> Vec<(String, Key)> {
+    let mut out = Vec::new();
+    for raw in src.lines() {
+        let line = raw.trim();
+        let Some(colon) = line.find(':') else { continue };
+        let head = line[..colon].trim().to_lowercase();
+        if let Some(sec) = head.strip_prefix("key@") {
+            let rest = line[colon + 1..].trim();
+            if let Some(k) = parse_key(&format!("key: {}", rest)) {
+                out.push((sec.trim().to_string(), k));
+            }
+        }
+    }
+    out
+}
+
 /// Read the `key:` / `scale:` directives from a program. Returns None if the
 /// program declares no key (degrees then simply don't resolve, as before).
 ///
@@ -1244,6 +1263,8 @@ pub struct Program {
     pub key: Option<Key>,
     pub seed: u64,
     pub song: Vec<(String, u32)>,
+    /// `key@section:` modulation map — a section plays in its own key.
+    pub key_map: Vec<(String, Key)>,
 }
 
 impl Program {
@@ -1253,6 +1274,7 @@ impl Program {
             key: parse_key(src),
             seed: parse_seed(src),
             song: parse_song(src),
+            key_map: parse_key_map(src),
         }
     }
 
@@ -1291,7 +1313,12 @@ impl Program {
             }
             out
         };
-        schedule_bar_seeded(&active, self.key.as_ref(), bar, self.seed)
+        // modulation: if this section has a key@section, resolve in that key
+        let sec_now = section_at_bar(&self.song, bar);
+        let cur_key = sec_now
+            .and_then(|s| self.key_map.iter().find(|(n, _)| n == s).map(|(_, k)| k))
+            .or(self.key.as_ref());
+        schedule_bar_seeded(&active, cur_key, bar, self.seed)
     }
 }
 
@@ -2024,6 +2051,16 @@ mod tests {
         assert_eq!(expand_euclid(vec!["bin(173)".into()]).join(""), "x.x.xx.x");
         // perlin uses sin() -> assert length only (degree may differ by a ULP across runtimes)
         assert_eq!(expand_perlin_token("perlin(12)", 5).unwrap().len(), 12);
+    }
+
+    #[test]
+    fn modulation_key_at_section() {
+        // verse in A minor, chorus modulates to C minor — degree 1 follows the section's key
+        let p = Program::parse("song: verse*1 chorus*1\nkey: a minor\nkey@chorus: c minor\nlead: 1 . . .");
+        let v0 = p.schedule_bar(0); // verse -> A
+        let v1 = p.schedule_bar(1); // chorus -> C
+        assert_eq!(v0[0].token, "a3");
+        assert_eq!(v1[0].token, "c3");
     }
 
     #[test]
