@@ -1912,10 +1912,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     c.fillText("scène: "+sceneMode+" (N)  ·  code (C)  ·  bar "+barCount+"  ·  ÉCHAP pour sortir",cx,H-34);
     if(filming&&showCode)drawSceneCode(c,W,H,fg,cyn,am,dim,bg);
     if(filmCountdown>0){c.save();c.textAlign="center";c.textBaseline="middle";c.fillStyle=hexA(fg,0.9);c.shadowColor=fg;c.shadowBlur=24;c.font="bold "+Math.round(Math.min(W,H)*0.3)+"px 'Press Start 2P',monospace";c.fillText(String(filmCountdown),cx,cy);c.restore();}
-    // film format: crop-fill the stage into the vertical/square offscreen that's being captured
-    if(filming&&filmCv&&filmCtx2){const fW=filmCv.width,fH=filmCv.height,ar=fW/fH;let cw2,ch2;
-      if(W/H>ar){ch2=H;cw2=H*ar;}else{cw2=W;ch2=W/ar;}
-      filmCtx2.drawImage(cv,(W-cw2)/2,(H-ch2)/2,cw2,ch2,0,0,fW,fH);}}  // code+countdown+format on canvas
+    // film: crop-fill into the vertical/square offscreen, then watermark the captured surface
+    if(filming){
+      const wm=(g,W2,H2)=>{g.save();g.globalAlpha=0.45;g.fillStyle=fg;g.textAlign="right";g.textBaseline="bottom";
+        g.shadowColor="rgba(0,0,0,0.8)";g.shadowBlur=6;g.font="bold "+Math.round(Math.min(W2,H2)*0.04)+"px ui-monospace,monospace";
+        g.fillText("◢ loom",W2-W2*0.03,H2-H2*0.03);g.restore();};
+      if(filmCv&&filmCtx2){const fW=filmCv.width,fH=filmCv.height,ar=fW/fH;let cw2,ch2;
+        if(W/H>ar){ch2=H;cw2=H*ar;}else{cw2=W;ch2=W/ar;}
+        filmCtx2.drawImage(cv,(W-cw2)/2,(H-ch2)/2,cw2,ch2,0,0,fW,fH);wm(filmCtx2,fW,fH);}
+      else wm(c,W,H);
+    }}  // code+countdown+format+watermark on canvas
   // draw the code (shadowed text + active-token box) directly on the stage canvas (for FILM capture)
   function drawSceneCode(c,W,H,fg,cyn,am,dim,bg){
     if(!codeView.length)return;
