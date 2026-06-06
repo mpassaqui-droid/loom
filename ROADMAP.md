@@ -36,7 +36,13 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - **App** : **✨ GÉNÉRER**, **IA (VIBE) gratuite sans clé** + chips, **linter**,
   **autocomplétion** (Tab), raccourcis, **menu de langues** (11 + 100+),
   thèmes, **mobile**, 56 leçons, référence, tutoriel.
-- **Rust** : `loom-core` (parseur/scheduler testé) — **en retard** sur le moteur JS.
+- **Rust** : `loom-core` (parseur/scheduler, **71 tests**, parité bit-à-bit avec le
+  moteur JS) — couvre notes/degrés, gammes nommées **+ gammes numériques
+  microtonales** (`key: d 0 1.5 3 …` quarts de ton), 7 accordages, accords, 17
+  générateurs, ~16 verbes (RNG identique), structure (`song`/`@section`/`in`),
+  **modulation `key@section`** et **timeline tempo** (`bpm`/`meter` 7/8/`accel`/tempo
+  par section : `bar_bpm`/`bar_seconds`). Reste à porter : groove/swing par voix,
+  les effets/synthèse, puis **compiler en WASM** et brancher le web dessus.
 
 ---
 
