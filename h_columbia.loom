@@ -1,0 +1,11 @@
+# ===== HISTOIRE 3/10 — COLUMBIA-PRINCETON (New York, RCA Mark II, 1957) =====
+# Milton Babbitt & le sérialisme total : une SÉRIE de 12 hauteurs (dodécaphonisme)
+# traitée de façon pointilliste. Le premier grand synthétiseur programmable.
+title:  Mark II
+bpm:    96
+key:    c chromatic
+scene:  tracker
+# une série dodécaphonique (12 hauteurs) + sa quasi-rétrograde, pointilliste
+row:  1 7 4 10 2 9 . 6 12 3 . 11 5 8 . . | pulse | env 0.005 0.08 0 0.1 | gain 0.13 | pan -0.2
+row2: . 6 . 12 . 3 11 . 5 . 8 . 1 7 4 . | tri | env 0.005 0.1 0 0.12 | semi 12 | pan 0.3 | gain 0.1
+perc: . x . . x . . x . . . x . x . . | sample rim | gain 0.18

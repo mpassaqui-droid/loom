@@ -1,0 +1,14 @@
+# ===== HISTOIRE 2/10 — ELEKTRONISCHE MUSIK (Cologne/WDR, 1954) =====
+# Karlheinz Stockhausen : à l'opposé de Paris, tout est SYNTHÉTISÉ — des
+# sinus purs additionnés, et la MODULATION EN ANNEAU (ring) de « Mantra ».
+title:  Köln
+bpm:    70
+key:    c chromatic
+tune:   just
+scene:  lissajous
+song:   a*4 b*4
+# tons sinus additifs, chacun passé en ring mod (timbre métallique)
+t1:  1 . . . 8 . . . 5 . . . 11 . . . | sine | ring 110 | env 0.01 0.4 0.3 0.6 | reverb 0.6 | gain 0.12
+t2:  . . 4 . . . 11 . . . 2 . . . 7 . | sine | ring 277 | env 0.01 0.3 0.3 0.5 | reverb 0.6 | pan 0.3 | gain 0.1
+t3@b: 1 4 8 11 5 2 7 10 | sine | fm 2 1 | reverb 0.7 | pan -0.3 | gain 0.09
+imp: . . . . x . . . . . . . x . . . | sine | bend -20 0.1 | gain 0.14

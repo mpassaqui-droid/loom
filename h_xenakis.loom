@@ -1,0 +1,13 @@
+# ===== HISTOIRE 8/10 — STOCHASTIQUE / XENAKIS (1958-70) =====
+# Iannis Xenakis (architecte + compositeur) : la musique comme NUAGES de sons
+# régis par les probabilités, et des GLISSANDI de masse (« Metastaseis »).
+title:  Stochastic
+bpm:    120
+key:    c chromatic
+seed:   9
+scene:  chladni
+song:   a*8
+cloud:  x?70 x?40 x?80 x?30 x?60 x?50 x?70 x?40 x?80 x?30 x?60 x?50 x?70 x?40 x?60 x?50 | sine | grain 0.7 | bend 12 0.2 | reverb 0.6 | gain 0.08
+cloud2: {1 5 8 11 3} . {2 7 12 4} . {6 9 1' 10} . {5 8 3 11} . | tri | grain 0.6 | reverb 0.6 | pan 0.3 | gain 0.07
+gliss:  1 . . . . . . . 12 . . . . . . . | saw | unison 4 | bend -24 0.5 | lp 1400 | pan -0.3 | gain 0.08
+hit:    x . . x . . x? . . x . x? . . x . | sample metal | crush 4 | gain 0.14

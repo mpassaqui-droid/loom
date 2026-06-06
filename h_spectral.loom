@@ -1,0 +1,16 @@
+# ===== HISTOIRE 7/10 — SPECTRAL (IRCAM, Paris, 1975) =====
+# Gérard Grisey « Partiels », Tristan Murail : on compose avec le SPECTRE lui-même —
+# la série harmonique dépliée, qui glisse lentement du pur vers l'inharmonique.
+title:  Partiels
+bpm:    60
+key:    c major
+scale:  overtone
+tune:   just
+scene:  spectro
+song:   a*8 b*8
+f1: 1 . . . . . . . . . . . . . . . | sine | env 2 1 0.8 4 | reverb 0.7 | gate 3 | gain 0.12
+f2: 5 . . . . . . . . . . . . . . . | sine | env 2.4 1 0.7 4 | reverb 0.7 | gate 3 | gain 0.08
+f3: 1' . . . . . . . . . . . . . . . | sine | env 2.8 1 0.6 4 | reverb 0.7 | gate 3 | gain 0.06
+f4@b: 3' . . . . . . . . . . . . . . . | sine | ring 0.5 | reverb 0.8 | gate 3 | gain 0.05
+f5@b: 7 . . . . . . . . . . . . . . . | tri | fm 3 1 | reverb 0.8 | gate 3 | gain 0.05
+swell: 1 . . . . . . . | saw | unison 4 | vowel a | lp 400..3000 | over 8 | reverb 0.8 | gate 2 | gain 0.06

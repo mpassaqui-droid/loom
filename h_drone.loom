@@ -1,0 +1,13 @@
+# ===== HISTOIRE 9/10 — DRONE & JUSTE INTONATION (1964→) =====
+# La Monte Young « The Well-Tuned Piano », Éliane Radigue : des accords TENUS
+# en intonation juste, dont les battements deviennent la musique. Le temps suspendu.
+title:  Well-Tuned
+bpm:    60
+key:    c major
+tune:   just
+scene:  string
+song:   a*16
+sa:   1 . . . . . . . . . . . . . . . | saw | unison 3 | detune 4 | lp 900 | env 3 1 0.9 5 | reverb 0.8 | gate 4 | gain 0.09
+pa:   5 . . . . . . . . . . . . . . . | saw | unison 3 | detune 5 | lp 900 | env 3.5 1 0.9 5 | reverb 0.8 | gate 4 | gain 0.07
+ga:   3 . . . . . . . . . . . . . . . | sine | env 4 1 0.9 5 | reverb 0.8 | gate 4 | gain 0.06
+high: 1' . . . . . . . . . . . . . . . | sine | wow 0.15 | reverb 0.9 | gate 4 | gain 0.04

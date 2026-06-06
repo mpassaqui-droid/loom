@@ -1,0 +1,16 @@
+# ===== HISTOIRE 1/10 — MUSIQUE CONCRÈTE (Paris, GRM, 1948) =====
+# Pierre Schaeffer & Pierre Henry : on compose avec des SONS ENREGISTRÉS
+# (objets, voix, bruits) qu'on retourne, ralentit, met en boucle, gratte.
+# Ici : aucune note — uniquement des samples manipulés (rev, redux, grain, crush).
+title:  Concrète
+bpm:    56
+warmth: 0.4
+scene:  warp
+song:   tours*8
+fer:    x . x . x x . x x x . x x . x x | sample metal | redux 4 | crush 5 | gain 0.24
+cloche: . . x . . . . . x . . . . . . . | sample bottle | rev | reverb 0.6 | delay 0.4 | gain 0.2
+souffle:x . . . x . . . x . . . x . . . | sample breath | grain 0.7 | reverb 0.7 | gain 0.16
+boucle: x . . . x . . . | sample amen | rev | redux 5 | gain 0.18
+voix:   . . x . . . . . . . . . x . . . | sample vox | grain 0.6 | reverb 0.6 | delay 0.5 | pan -0.3 | gain 0.16
+bois:   x . . x . . x . . x . . x . . . | sample wood | crush 4 | pan 0.3 | gain 0.18
+verre:  . . . . . . x . . . . . . . x . | sample glass | reverb 0.5 | gain 0.16

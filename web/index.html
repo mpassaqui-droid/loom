@@ -2255,6 +2255,144 @@ tabla2@jhala: x . x . x . x . x . x . x . x . | sample tabla | gain 0.22 | pan -
 #   • c todi   -> très grave et tendu (komal Re Ga Dha, tivra Ma)
 #   • c bhairav + bpm: 60 -> un alap plus méditatif encore
 # ----------------------------------------------------------------`;
+  PRESETS.concrete=`# ===== HISTOIRE 1/10 — MUSIQUE CONCRÈTE (Paris, GRM, 1948) =====
+# Pierre Schaeffer & Pierre Henry : on compose avec des SONS ENREGISTRÉS
+# (objets, voix, bruits) qu'on retourne, ralentit, met en boucle, gratte.
+# Ici : aucune note — uniquement des samples manipulés (rev, redux, grain, crush).
+title:  Concrète
+bpm:    56
+warmth: 0.4
+scene:  warp
+song:   tours*8
+fer:    x . x . x x . x x x . x x . x x | sample metal | redux 4 | crush 5 | gain 0.24
+cloche: . . x . . . . . x . . . . . . . | sample bottle | rev | reverb 0.6 | delay 0.4 | gain 0.2
+souffle:x . . . x . . . x . . . x . . . | sample breath | grain 0.7 | reverb 0.7 | gain 0.16
+boucle: x . . . x . . . | sample amen | rev | redux 5 | gain 0.18
+voix:   . . x . . . . . . . . . x . . . | sample vox | grain 0.6 | reverb 0.6 | delay 0.5 | pan -0.3 | gain 0.16
+bois:   x . . x . . x . . x . . x . . . | sample wood | crush 4 | pan 0.3 | gain 0.18
+verre:  . . . . . . x . . . . . . . x . | sample glass | reverb 0.5 | gain 0.16`;
+  PRESETS.cologne=`# ===== HISTOIRE 2/10 — ELEKTRONISCHE MUSIK (Cologne/WDR, 1954) =====
+# Karlheinz Stockhausen : à l'opposé de Paris, tout est SYNTHÉTISÉ — des
+# sinus purs additionnés, et la MODULATION EN ANNEAU (ring) de « Mantra ».
+title:  Köln
+bpm:    70
+key:    c chromatic
+tune:   just
+scene:  lissajous
+song:   a*4 b*4
+# tons sinus additifs, chacun passé en ring mod (timbre métallique)
+t1:  1 . . . 8 . . . 5 . . . 11 . . . | sine | ring 110 | env 0.01 0.4 0.3 0.6 | reverb 0.6 | gain 0.12
+t2:  . . 4 . . . 11 . . . 2 . . . 7 . | sine | ring 277 | env 0.01 0.3 0.3 0.5 | reverb 0.6 | pan 0.3 | gain 0.1
+t3@b: 1 4 8 11 5 2 7 10 | sine | fm 2 1 | reverb 0.7 | pan -0.3 | gain 0.09
+imp: . . . . x . . . . . . . x . . . | sine | bend -20 0.1 | gain 0.14`;
+  PRESETS.columbia=`# ===== HISTOIRE 3/10 — COLUMBIA-PRINCETON (New York, RCA Mark II, 1957) =====
+# Milton Babbitt & le sérialisme total : une SÉRIE de 12 hauteurs (dodécaphonisme)
+# traitée de façon pointilliste. Le premier grand synthétiseur programmable.
+title:  Mark II
+bpm:    96
+key:    c chromatic
+scene:  tracker
+# une série dodécaphonique (12 hauteurs) + sa quasi-rétrograde, pointilliste
+row:  1 7 4 10 2 9 . 6 12 3 . 11 5 8 . . | pulse | env 0.005 0.08 0 0.1 | gain 0.13 | pan -0.2
+row2: . 6 . 12 . 3 11 . 5 . 8 . 1 7 4 . | tri | env 0.005 0.1 0 0.12 | semi 12 | pan 0.3 | gain 0.1
+perc: . x . . x . . x . . . x . x . . | sample rim | gain 0.18`;
+  PRESETS.minimal=`# ===== HISTOIRE 4/10 — MINIMALISME (Californie/NY, 1964) =====
+# Terry Riley « In C », Steve Reich, Philip Glass : de courtes CELLULES répétées
+# qui s'additionnent et se décalent — le processus est la musique.
+title:  In Cells
+bpm:    150
+key:    c major
+seed:   3
+scene:  phyllo
+song:   a*4 b*4 c*4
+arp:   1 3 5 3 1 3 5 3 | pluck 0.7 | delay 0.3 | reverb 0.4 | gain 0.12
+arp2:  5 1' 3' 1' 5 1' 3' 1' | pluck 0.7 | reverb 0.4 | pan 0.3 | gain 0.1 | in b c
+arp3@c: 2 4 6 4 7 5 3 5 | pluck 0.7 | reverb 0.4 | pan -0.3 | gain 0.1
+pulse: 1 1 1 1 1 1 1 1 | sine | oct 2 | gate 0.2 | gain 0.1
+voix@c: 1' . . . 7 . . . 5 . . . 3 . . . | sine | vowel o | reverb 0.6 | gate 1.4 | gain 0.07`;
+  PRESETS.buchla=`# ===== HISTOIRE 5/10 — WEST COAST / BUCHLA (San Francisco, 1967) =====
+# Morton Subotnick « Silver Apples of the Moon », sur Buchla 100 : pas de clavier,
+# un SÉQUENCEUR, des tensions aléatoires et le WAVEFOLDING (synthèse West-coast).
+title:  Silver Apples
+bpm:    120
+key:    c minor
+seed:   12
+scene:  clifford
+song:   a*8 b*8
+seq:    1 . 5, 3 . 1' 5 . 3 4 . 1 5, . 3 . | tri | fold 0..0.9 | over 8 | lp 1200 | gate 0.4 | gain 0.13
+seq2@b: {1 3 5} . {5, 1} . {3 5 1'} . {1 5} . | square | fold 0.5 | sync 3 | lp 1600 | gain 0.1 | pan 0.3
+loper:  x . . x . x . . x . . x . x . . | sample bleep | crush 4 | gain 0.12
+env:    1 . . . . . . . | sine | bend 24 0.4 | grain 0.6 | reverb 0.7 | gain 0.1`;
+  PRESETS.berlin=`# ===== HISTOIRE 6/10 — BERLIN SCHOOL (Allemagne, 1974) =====
+# Tangerine Dream « Phaedra », Klaus Schulze : la musique du SÉQUENCEUR —
+# une boucle de 16 pas hypnotique, un filtre qui s'ouvre, des nappes immenses.
+title:  Phaedra
+bpm:    132
+key:    e minor
+duck:   25
+scene:  tunnel
+song:   intro*4 main*12 out*4
+seq:   1 1 1' 1 5, 5, 1 5, 1 1 1' 1 6, 6, 5, 6, | saw | unison 2 | lp 600..2400 | over 8 | q 6 | fenv 0.4 | delay 0.3 | gate 0.5 | gain 0.13 | in main out
+seq2:  1 . 5 . 1' . 5 . | square | pwm 0.5 | lp 1800 | delay 0.4 | gate 0.4 | gain 0.08 | in main
+pad:   Em9 . . . Cmaj7 . . . | saw | unison 5 | detune 12 | lp 1100 | env 1.2 0.8 0.7 3 | reverb 0.7 | gain 0.09
+bass:  1 . . . 1 . . . | sine | oct 2 | sub 0.5 | gain 0.18 | in main out`;
+  PRESETS.spectral=`# ===== HISTOIRE 7/10 — SPECTRAL (IRCAM, Paris, 1975) =====
+# Gérard Grisey « Partiels », Tristan Murail : on compose avec le SPECTRE lui-même —
+# la série harmonique dépliée, qui glisse lentement du pur vers l'inharmonique.
+title:  Partiels
+bpm:    60
+key:    c major
+scale:  overtone
+tune:   just
+scene:  spectro
+song:   a*8 b*8
+f1: 1 . . . . . . . . . . . . . . . | sine | env 2 1 0.8 4 | reverb 0.7 | gate 3 | gain 0.12
+f2: 5 . . . . . . . . . . . . . . . | sine | env 2.4 1 0.7 4 | reverb 0.7 | gate 3 | gain 0.08
+f3: 1' . . . . . . . . . . . . . . . | sine | env 2.8 1 0.6 4 | reverb 0.7 | gate 3 | gain 0.06
+f4@b: 3' . . . . . . . . . . . . . . . | sine | ring 0.5 | reverb 0.8 | gate 3 | gain 0.05
+f5@b: 7 . . . . . . . . . . . . . . . | tri | fm 3 1 | reverb 0.8 | gate 3 | gain 0.05
+swell: 1 . . . . . . . | saw | unison 4 | vowel a | lp 400..3000 | over 8 | reverb 0.8 | gate 2 | gain 0.06`;
+  PRESETS.xenakis=`# ===== HISTOIRE 8/10 — STOCHASTIQUE / XENAKIS (1958-70) =====
+# Iannis Xenakis (architecte + compositeur) : la musique comme NUAGES de sons
+# régis par les probabilités, et des GLISSANDI de masse (« Metastaseis »).
+title:  Stochastic
+bpm:    120
+key:    c chromatic
+seed:   9
+scene:  chladni
+song:   a*8
+cloud:  x?70 x?40 x?80 x?30 x?60 x?50 x?70 x?40 x?80 x?30 x?60 x?50 x?70 x?40 x?60 x?50 | sine | grain 0.7 | bend 12 0.2 | reverb 0.6 | gain 0.08
+cloud2: {1 5 8 11 3} . {2 7 12 4} . {6 9 1' 10} . {5 8 3 11} . | tri | grain 0.6 | reverb 0.6 | pan 0.3 | gain 0.07
+gliss:  1 . . . . . . . 12 . . . . . . . | saw | unison 4 | bend -24 0.5 | lp 1400 | pan -0.3 | gain 0.08
+hit:    x . . x . . x? . . x . x? . . x . | sample metal | crush 4 | gain 0.14`;
+  PRESETS.drone=`# ===== HISTOIRE 9/10 — DRONE & JUSTE INTONATION (1964→) =====
+# La Monte Young « The Well-Tuned Piano », Éliane Radigue : des accords TENUS
+# en intonation juste, dont les battements deviennent la musique. Le temps suspendu.
+title:  Well-Tuned
+bpm:    60
+key:    c major
+tune:   just
+scene:  string
+song:   a*16
+sa:   1 . . . . . . . . . . . . . . . | saw | unison 3 | detune 4 | lp 900 | env 3 1 0.9 5 | reverb 0.8 | gate 4 | gain 0.09
+pa:   5 . . . . . . . . . . . . . . . | saw | unison 3 | detune 5 | lp 900 | env 3.5 1 0.9 5 | reverb 0.8 | gate 4 | gain 0.07
+ga:   3 . . . . . . . . . . . . . . . | sine | env 4 1 0.9 5 | reverb 0.8 | gate 4 | gain 0.06
+high: 1' . . . . . . . . . . . . . . . | sine | wow 0.15 | reverb 0.9 | gate 4 | gain 0.04`;
+  PRESETS.kraftwerk=`# ===== HISTOIRE 10/10 — DÜSSELDORF / KRAFTWERK (1974-78) =====
+# Kraftwerk : la synthèse devient POP. Séquence motorik, voix au VOCODEUR,
+# mélodies carrées — l'ADN de la techno, de l'electro et de la house à venir.
+title:  Roboter
+bpm:    128
+key:    a minor
+duck:   30
+scene:  network
+song:   intro*4 main*12 out*4
+motor:  1 1 1' 1 1 1 5, 1 1 1 1' 1 1 1 6, 1 | square | pwm 0.4 | lp 1400 | gate 0.4 | delay 0.25 | gain 0.12 | in main out
+bass:   1 . 1 . 5, . 1 . 1 . 1 . 6, . 5, . | saw | oct 2 | lp 700 | gate 0.5 | gain 0.15 | in main out
+melody: 1' . 7 . 5 . 3 . | square | lp 2000 | delay 0.3 | gate 0.5 | gain 0.1 | in main
+vox:    1 . 3 . 5 . 1' . | saw | unison 3 | vocode vox | reverb 0.3 | gain 0.1 | in main
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.4 | in main out
+clap:   . . . . x . . . . . . . x . . . | sample cp | gain 0.3 | in main`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -2881,6 +3019,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 # ================================================================`;
   const PRESET_GROUPS=[
     ["★ Vitrines",["mixtape","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto","signals"]],

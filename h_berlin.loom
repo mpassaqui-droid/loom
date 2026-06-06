@@ -1,0 +1,13 @@
+# ===== HISTOIRE 6/10 — BERLIN SCHOOL (Allemagne, 1974) =====
+# Tangerine Dream « Phaedra », Klaus Schulze : la musique du SÉQUENCEUR —
+# une boucle de 16 pas hypnotique, un filtre qui s'ouvre, des nappes immenses.
+title:  Phaedra
+bpm:    132
+key:    e minor
+duck:   25
+scene:  tunnel
+song:   intro*4 main*12 out*4
+seq:   1 1 1' 1 5, 5, 1 5, 1 1 1' 1 6, 6, 5, 6, | saw | unison 2 | lp 600..2400 | over 8 | q 6 | fenv 0.4 | delay 0.3 | gate 0.5 | gain 0.13 | in main out
+seq2:  1 . 5 . 1' . 5 . | square | pwm 0.5 | lp 1800 | delay 0.4 | gate 0.4 | gain 0.08 | in main
+pad:   Em9 . . . Cmaj7 . . . | saw | unison 5 | detune 12 | lp 1100 | env 1.2 0.8 0.7 3 | reverb 0.7 | gain 0.09
+bass:  1 . . . 1 . . . | sine | oct 2 | sub 0.5 | gain 0.18 | in main out
