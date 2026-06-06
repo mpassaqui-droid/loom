@@ -175,6 +175,16 @@
       <button class="go" id="micBtn" title="parler (dictée vocale)">&#127908;</button>
       <button class="go" id="vibeBtn">VIBE</button>
     </div>
+    <div class="vibe-row" id="aiChips" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+      <button class="tiny go" data-ai="ajoute une batterie qui groove">&#129345; + batterie</button>
+      <button class="tiny go" data-ai="ajoute une basse qui suit l'harmonie">&#127929; + basse</button>
+      <button class="tiny go" data-ai="ajoute une nappe douce en fond">&#127925; + nappe</button>
+      <button class="tiny go" data-ai="rends ce morceau plus triste et mélancolique">&#128542; + triste</button>
+      <button class="tiny go" data-ai="rends ce morceau plus énergique et rapide">&#9889; + énergie</button>
+      <button class="tiny go" data-ai="rends ce morceau plus exotique et oriental">&#127760; + exotique</button>
+      <button class="tiny go" data-ai="crée une variation de ce morceau en gardant l'esprit">&#127922; varier</button>
+      <button class="tiny go" data-ai="simplifie ce morceau, enlève le superflu">&#129529; simplifier</button>
+    </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
     <div class="opt">laisse la clé vide pour le cerveau gratuit &middot; &#127908; = parle, ça écrit et ça génère.</div>
   </div>
@@ -4831,6 +4841,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     if(scopeMode==="off")$("scope").style.boxShadow="none";
     log("[ scope ] "+(scopeMode==="wave"?"oscilloscope (onde)":scopeMode==="spectrum"?"spectre (fréquences)":"éteint"),"ai");});
   $("vibeBtn").addEventListener("click",vibe);
+  // AI quick-action chips: one tap -> a canned request sent to the (free) brain
+  {const chips=$("aiChips");if(chips)chips.addEventListener("click",e=>{const b=e.target.closest("[data-ai]");if(!b)return;
+    $("vibeIn").value=b.getAttribute("data-ai");vibe();});}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;
