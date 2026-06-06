@@ -1,0 +1,40 @@
+# ================================================================
+#  LOOM — « PULSE » : arrangement vivant + trance gate.
+#   • | chance N  -> chaque voix va et vient (variation d'arrangement)
+#   • | tgate N   -> nappe « pompée » en pulsations (trance/EDM)
+#   • scenes      -> comet · bubbles
+#
+#  > RUN et laisse tourner : les couches apparaissent/disparaissent,
+#    la nappe pulse. seed: 2 -> 3 = un autre arrangement.
+# ================================================================
+
+title:  Pulse
+bpm:    138
+key:    a minor
+prog:   auto edm
+seed:   2
+duck:   45
+warmth: 0.45
+scene:  comet
+song:   intro*4 main*16 break*4 main*16 out*4
+
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.5 | comp 0.4 | in main out
+clap:   . . . . x . . . . . . . x . . . | sample cp | gain 0.32 | in main
+oh:     . . x . . . x . . . x . . . x . | sample oh | gain 0.1 | chance 0.7 | in main
+perc:   . . . x . . . . . x . . . . x . | sample perc | chance 0.5 | pan 0.3 | gain 0.16 | in main
+
+# nappe pompée (trance gate) qui suit la prog
+pad:    ^ . . . . . . . . . . . . . . . | saw | unison 5 | tgate 16 | haas 0.5 | lp 1500 | env 0.02 0.2 0.7 0.5 | reverb 0.5 | gain 0.08 | hue 200
+
+# basse
+bass:   ^1 . ^1 . 5, . ^1 . ^1 . ^1 . 6, . 5, . | saw | oct 2 | lp 700 | drive 0.3 | gate 0.5 | gain 0.14 | in main out
+
+# pluck qui apparaît/disparaît
+arp:    ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 | pluck 0.7 | chance 0.6 | autopan 0.4 | delay 0.3 | reverb 0.3 | gate 0.5 | gain 0.08 | hue 50 | in main
+
+# fill rare
+fill:   . . . . . . . . . . . . x*2 x*4> x*8> . | sample sd | chance 0.4 | gain 0.3 | in main
+
+# ----------------------------------------------------------------
+#  Essaie : tgate 8 (plus lent) · chance 1 (toujours) · scene: bubbles.
+# ----------------------------------------------------------------

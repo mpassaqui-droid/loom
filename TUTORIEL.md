@@ -123,6 +123,7 @@ pad:  ^ . . . | saw | unison 4 | lp 1200 | gain 0.15
 | `x*8>` / `x*8<` | **roll** crescendo / decrescendo |
 | `1 _ _ 3` | **liaison** : `_` prolonge la note précédente (notes tenues / legato) |
 | `x?` / `x?70` | **probabilité** (~50 % / 70 %) |
+| `| chance N` | la **voix entière** ne joue que N % des mesures (arrangement) |
 | `{a b c}` | **aléatoire** : tire une alternative (reproductible via `seed`) |
 | `<a/b/c>` | **alternance** : une version par mesure |
 
@@ -269,6 +270,7 @@ acid:  1 5, 1' 5 4 1 5 3 | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | gain 0.
 | `| chorus N` `| phaser N` | élargissement / balayage psyché |
 | `| autopan RATE` | panoramique automatique (LFO gauche↔droite) |
 | `| haas N` | élargisseur stéréo (effet Haas) — image très large |
+| `| tgate N` | trance gate : hache le son en N pulsations par mesure |
 | `| comp N` | compression (punch & glue) |
 | `| drive X` | distorsion / chaleur |
 | `| crush BITS` | bitcrush 1–8 (lo-fi/IDM) |
