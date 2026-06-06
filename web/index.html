@@ -927,14 +927,17 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function tonicPc(w){const m=/^([a-gA-G])([#b]?)/.exec(w);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
     return((s%12)+12)%12;}
-  function parseKey(text){let tonic=null,scaleName=null;
+  function parseKey(text){let tonic=null,scaleSpec=null;
     for(let raw of text.split("\n")){const line=raw.trim();if(!line||line.startsWith("#"))continue;
       const i=line.indexOf(":");if(i===-1)continue;
       const name=line.slice(0,i).trim().toLowerCase();const words=line.slice(i+1).trim().toLowerCase().split(/\s+/).filter(Boolean);
-      if(name==="key"){const t=tonicPc(words[0]||"");if(t!==null)tonic=t;if(words[1])scaleName=words[1];}
-      else if(name==="scale"){if(words[0])scaleName=words[0];}}
-    if(tonic===null&&scaleName===null)return null;
-    const scale=SCALES[scaleName]||SCALES.major;
+      if(name==="key"){const t=tonicPc(words[0]||"");if(t!==null)tonic=t;if(words.length>1)scaleSpec=words.slice(1);}
+      else if(name==="scale"){if(words.length)scaleSpec=words.slice();}}
+    if(tonic===null&&scaleSpec===null)return null;
+    // custom scale: numeric semitone offsets, e.g. scale: 0 2 3 5 7 9 10  (microtonal ok: 0 1.5 3 5 7 8 10)
+    let scale=null;
+    if(scaleSpec){if(/^-?[\d.]+$/.test(scaleSpec[0])){const arr=scaleSpec.map(parseFloat).filter(x=>!isNaN(x));if(arr.length>=2)scale=arr;}if(!scale)scale=SCALES[scaleSpec[0]];}
+    scale=scale||SCALES.major;
     return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE};}
   function isDegree(tok){return /^[1-7][#b]?[',]*$/.test(tok);}
   // microtuning: cents deviation from equal temperament for each semitone interval from the tonic
@@ -1076,7 +1079,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1099,6 +1102,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="reverb"||p[0]==="room")reverb=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="ir"){ir=p[1]||"hall";const mx=parseFloat(p[2]);if(!isNaN(mx))irmix=Math.max(0,Math.min(1,mx));}
+      else if(p[0]==="voicing"||p[0]==="voice")voicing=p[1]||"open";
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
       else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
       else if(p[0]==="fm")fm={ratio:Math.max(0.1,Math.min(16,parseFloat(p[1])||2)),index:Math.max(0,Math.min(12,parseFloat(p[2])!=null&&!isNaN(parseFloat(p[2]))?parseFloat(p[2]):3))};
@@ -1150,7 +1154,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -1189,6 +1193,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(c==="sometimes"||c==="often"||c==="rarely"||c==="someby"){
       const P=c==="often"?0.75:c==="rarely"?0.25:c==="someby"?(parseFloat(p[1])||50)/100:0.5,skip=c==="someby"?2:1;
       return rng(seed,bar,c+":"+v,1)<P?applyOne(tokens,p.slice(skip).join(" "),bar):tokens;}
+    if(c==="markov"){if(tokens.length<2)return tokens;  // generate a same-length line from the pattern's own note->note transitions (seeded)
+      const trans={};for(let i=0;i<tokens.length;i++){const a=tokens[i],b=tokens[(i+1)%tokens.length];(trans[a]=trans[a]||[]).push(b);}
+      const out=[];let cur=tokens[0];
+      for(let i=0;i<tokens.length;i++){out.push(cur);const opts=trans[cur]||tokens;cur=opts[Math.floor(rng(seed,bar,"mk:"+v,i)*opts.length)%opts.length];}
+      return out;}
     return tokens;}
   // cellular automaton: ca(rule,n) evolves one Wolfram generation per bar
   function caRow(rule,n,gen){let row=new Array(n).fill(false);row[n>>1]=true;
@@ -1248,11 +1257,18 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function splitCents(tok){const m=/([+-]\d{1,4})$/.exec(tok);if(!m||/^[A-G]/.test(tok))return[tok,0];
     return[tok.slice(0,m.index),parseInt(m[1],10)];}
   // resolve a melodic token to the frequency(ies) it sounds (1 note, or N for a chord)
+  // chord voicing: re-arrange a chord's notes. open/spread = alternate notes up an 8ve;
+  // drop2 = 2nd-from-top down an 8ve; wide = each note in its own octave; close = as-is.
+  function voiceChord(ch,type){if(!type||!ch||ch.length<2)return ch;const c=ch.slice();
+    if(type==="open"||type==="spread"){for(let i=1;i<c.length;i+=2)c[i]+=12;return c;}
+    if(type==="drop2"){const s=c.slice().sort((a,b)=>a-b);if(s.length>=2)s[s.length-2]-=12;return s;}
+    if(type==="wide"){for(let i=0;i<c.length;i++)c[i]+=12*i;return c;}
+    return c;}
   function melFreqs(tok,v,k,baseOct){
     if(tok==="x")return [noteToFreq("c3")];
     if(k&&isDegree(tok))return [midiToFreq(degreeToMidi(tok,k))];
     const ch=romanToChord(tok,k)||parseChord(tok,baseOct);
-    if(ch)return ch.map(midiToFreq);
+    if(ch)return voiceChord(ch,v&&v.voicing).map(midiToFreq);
     const f=noteToFreq(tok);return f?[f]:[];}
   function trigger(v,tok,t,durOverride,velMul,isFlam){const vm=velMul||1;if(tok==="."||tok==="~")return;
     if(v.flam&&!isFlam)trigger(v,tok,t-0.026,durOverride,vm*0.45,true);  // flam: a soft grace note just before the hit
@@ -1308,7 +1324,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         for(const[lv,le,sh]of layers)scheduleSeq(lv,le,barT,bar,sh);}}}
   // schedule one token sequence for a voice within a bar (shared by normal/jux/off)
   function scheduleSeq(v,eff,barT,bar,shift){const sw=v.swing!=null?v.swing:+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n,sh=(shift||0)*step;
-      for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);if(tok==="."||tok==="~")continue;
+      const tieN=(idx)=>{let c=0;for(let j=idx+1;j<n&&eff[j]==="_";j++)c++;return c;};  // note tie: `_` extends the previous note
+      for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);if(tok==="."||tok==="~"||tok==="_")continue;
         if(v.degrade&&rng(seed,bar,v.name+"dg",i)<v.degrade)continue;  // degrade N: randomly drop a fraction of hits
         let t0=barT+i*step+sh+(v.nudge||0)*step,vel=1;if(i%2===1)t0+=sw*step;  // nudge: per-voice microtiming (push/lay-back)
         {const fa=v.humanize!=null?v.humanize:feelAmt;if(fa){t0+=(rng(seed,bar,v.name,i*3+7)-0.5)*fa*0.016;vel=1+(rng(seed,bar,v.name,i*3+11)-0.5)*fa*0.5;}}
@@ -1324,7 +1341,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
             for(let j=0;j<M;j++){const tt=t0+j*step/M;
               if(v.sample)playSample(v.sample,tt,Math.min(1,(v.gain||0.22)*3),midiToFreq(ord[j])/(noteToFreq(v.root||"c3")||noteToFreq("c3")),v);
               else tone(tt,midiToFreq(ord[j]),step/M,v);}continue;}}
-        for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel*tm[3]*rampF(j,tm[2],tm[4]));}}
+        const tie=tieN(i);
+        if(tm[2]===1&&tie>0)trigger(v,base,t0,step*(1+tie),vel*tm[3]);  // tied note: sustain across the following `_` steps
+        else for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel*tm[3]*rampF(j,tm[2],tm[4]));}}
   // recursively schedule a [a b ...] sub-sequence inside [t0, t0+dur)
   function scheduleGroup(v,tok,bar,t0,dur,vel){const inner=tokenizePat(tok.slice(1,-1)),m=inner.length;if(!m)return;const sub=dur/m;
     for(let i=0;i<m;i++){let ct=pickAlt(inner[i],bar,v.name+"g"+i);if(prog.length&&ct[0]==="^")ct=resolveProg(ct,v,bar);if(ct==="."||ct==="~")continue;const ct0=t0+i*sub;
@@ -2799,6 +2818,49 @@ bass:   ^1 . . . 5, . ^1 . ^1 . . . 6, . ^1 . | sine | oct 2 | sub 0.5 | gain 0.
 #  Astuce : ir = INSERT par voix (≠ reverb N qui est un send global).
 #  spring a ce « boing » métallique ; cathedral peut durer 5 secondes.
 # ----------------------------------------------------------------`;
+  PRESETS.newmusic=`# ================================================================
+#  LOOM — « NEWMUSIC » : 4 nouvelles CAPACITÉS musicales du moteur.
+#   1) gammes PERSONNALISÉES   scale: 0 2 3 5 7 9 10  (microtonal ok)
+#   2) liaisons _              1 _ _ 3   (la note tenue sur plusieurs pas)
+#   3) voicings d'accords      | voicing open|drop2|wide
+#   4) mélodies de Markov      | markov  (régénère d'après ses transitions)
+#
+#  Ici : une gamme inventée (avec un quart de ton), une mélodie tenue,
+#  des accords aérés, et une voix qui s'auto-régénère.
+# ================================================================
+
+title:  Newmusic
+bpm:    96
+key:    a 0 2 3.5 5 7 9 10     # une gamme PERSO : 3e degré neutre (quart de ton)
+seed:   6
+tune:   equal
+warmth: 0.4
+scene:  string
+song:   a*8 b*8
+
+# 1+2) mélodie en notes TENUES (_) sur la gamme perso
+chant:  1 _ _ 3 . 5 _ _ 3 _ 2 . 1 _ _ . | reed | slide | lp 2200 | reverb 0.6 | delay 0.3 | gain 0.12 | hue 150
+
+# 3) accords AÉRÉS (voicing open) qui suivent la prog
+prog:   Am Fmaj7 Cmaj7 G
+keys:   ^ . . . . . . . . . . . . . . . | voicing open | saw | unison 3 | lp 1300 | env 0.4 0.3 0.7 1.5 | reverb 0.6 | gate 1.8 | gain 0.08 | hue 280
+
+# 4) ligne qui s'AUTO-RÉGÉNÈRE chaque mesure (Markov sur son propre motif)
+gen:    1 3 5 3 1 5 6 5 | markov | pluck 0.7 | delay 0.25 | reverb 0.4 | gate 0.6 | gain 0.1 | hue 40
+
+# basse tenue
+bass:   1 _ _ _ 5, _ _ _ 4, _ _ _ 5, _ _ _ | sine | oct 2 | sub 0.5 | gain 0.16 | hue 30
+
+# une pulsation douce
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.4 | in b
+
+# ----------------------------------------------------------------
+#  À essayer :
+#   • change la gamme : key: a 0 1 4 5 7 8 11  (un mode inédit)
+#   • enlève | markov sur gen -> le motif redevient fixe
+#   • | voicing wide -> accords étalés sur 2 octaves
+#   • mets des _ partout pour des nappes très legato
+# ----------------------------------------------------------------`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -3424,7 +3486,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mixtape","evolution","spaces","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mixtape","evolution","spaces","newmusic","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
@@ -3490,7 +3552,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     {t:"33 · Morceaux longs (@section)",d:"nom@section: donne un motif différent par section -> le morceau évolue dans le temps.",c:"song: a*4 b*4\nkey:  a minor\nbass: 1 . 5, . | sine | oct 2 | gain 0.3\nbass@b: 1 3 5 3 1 5 3 1 | saw | oct 2 | drive 0.3 | gain 0.16"},
     {t:"34 · Accordage (tune)",d:"tune change l'intonation : just (ratios purs), pyth (Pythagore), 19edo (19 notes par octave)...",c:"key:  c major\ntune: just\nkeys: I . IV . V . I . | sine | gain 0.2"},
     {t:"35 · Samples du monde",d:"Des sons échantillonnés repitchés sur les degrés + percussions du monde.",c:"key:   c minor\ntabla: e(7,16) | sample tabla | gain 0.4\nsitar: 1 . 2 3 . 4 5 . | sample sitar | gain 0.4"},
-    {t:"36 · Réverbe à convolution (espaces)",d:"| ir pose un VRAI espace acoustique sur une voix : hall room plate spring cathedral (+ mix 0-1). Plus réaliste que reverb N.",c:"key:  a minor\nprog: Am F C G\npad:  ^ . . . | saw | unison 3 | ir hall 0.4 | gain 0.1\nharp: 1 2 3 5 3 2 | pluck 0.7 | ir plate 0.5 | gain 0.12\nbell: 1' . . . 5 . . . | bell | ir cathedral 0.5 | gain 0.1"}
+    {t:"36 · Réverbe à convolution (espaces)",d:"| ir pose un VRAI espace acoustique sur une voix : hall room plate spring cathedral (+ mix 0-1). Plus réaliste que reverb N.",c:"key:  a minor\nprog: Am F C G\npad:  ^ . . . | saw | unison 3 | ir hall 0.4 | gain 0.1\nharp: 1 2 3 5 3 2 | pluck 0.7 | ir plate 0.5 | gain 0.12\nbell: 1' . . . 5 . . . | bell | ir cathedral 0.5 | gain 0.1"},
+    {t:"37 · Gammes perso & liaisons",d:"scale: 0 2 3 5 7 9 10 invente N'IMPORTE quelle gamme (microtonal ok). Le _ prolonge la note précédente (notes tenues).",c:"key:  d 0 1.5 3 5 7 8 10\nlead: 1 _ _ 3 . 5 _ 2 1 _ 7, . 1 _ _ . | pluck 0.7 | reverb 0.4 | gain 0.13\ndrone: 1 . . . . . . . | bow | gain 0.1"},
+    {t:"38 · Voicings & Markov",d:"| voicing aère un accord (open/drop2/wide). | markov régénère une mélodie d'après ses propres enchaînements.",c:"key:  c major\nseed: 4\nkeys: Cmaj7 . Fmaj7 . G7 . Em7 . | voicing open | sine | reverb 0.3 | gain 0.14\nlead: 1 2 3 5 6 5 3 2 | markov | pluck 0.7 | delay 0.2 | gain 0.1"}
   ];
   // course lessons are wired below, in the unified APPRENDRE panel
 
@@ -3507,11 +3571,13 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Gammes","scale: dorian","major minor dorian phrygian lydian mixolydian locrian · pentatonic minpent · harmonic_minor melodic_minor whole_tone blues chromatic"],
     ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian"],
     ["Microtonal","key: d bayati","maqâm à vrais quarts de ton : bayati rast saba sikah huzam jiharkah"],
+    ["Gammes","scale: 0 2 3 5 7 9 10","gamme PERSONNALISÉE : demi-tons depuis la tonique (microtonal ok : 0 1.5 3 5 7 8 10)"],
     ["Microtonal","3+50   c3-30","bend une note de N cents (+ aigu / - grave)"],
     ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : 5 maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13"],
     ["Accords","Cm7/G   C/E","renversement / slash : la note après / passe à la basse"],
     ["Accords","I ii iii IV V vi vii (+7)","chiffres romains = accords diatoniques de la key"],
     ["Accords","| arp up","arpège : up / down / updown / downup"],
+    ["Accords","| voicing open|drop2|wide|close","ré-harmonise un accord : open/drop2/wide = renversements plus aérés/riches"],
     ["Verbes","| rev","inverse le motif"],
     ["Verbes","| fast N    | slow N","accélère N× / joue une mesure sur N"],
     ["Verbes","| every N <verbe>","applique un verbe une mesure sur N"],
@@ -3524,6 +3590,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Motif","a b ; c d","stack : plusieurs lignes simultanées sur UNE voix (séparées par ;) — polyphonie/contrepoint"],
     ["Motif","x!  x!!","accent : ! augmente la vélocité de la note (!=fort, !!=plus fort) — groove/backbeat"],
     ["Motif","{a b c}","choix ALÉATOIRE : tire une alternative au hasard à chaque fois (déterministe via seed)"],
+    ["Motif","1 _ _ 3","liaison : _ PROLONGE la note précédente sur le pas (notes tenues, phrasé legato)"],
     ["Motif","x*8>  x*8<","roll : *N> monte en intensité (crescendo), *N< descend (decrescendo) — montées/fills"],
     ["Effets & mix","| degrade N","raréfie : enlève N% des coups au hasard (seeded) — variation/espace"],
     ["Son","| shift N","microtiming : décale la voix de N pas (-0.5..0.5). + = en retard (laid-back), - = en avance (push)"],
@@ -3568,6 +3635,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Génératif (maths)","ca(rule,n)","automate cellulaire (Wolfram) qui évolue chaque mesure — rules 90 30 110 18 150"],
     ["Génératif (maths)","morse(n)   fib(n)","suites de Thue-Morse / mot de Fibonacci comme rythme (auto-similaire)"],
     ["Génératif (maths)","| poly N","vraie polymétrie : la voix tourne à N pas/mesure et dérive (phasing à la Reich)"],
+    ["Génératif (maths)","| markov","régénère la mélodie d'après ses propres transitions note→note (chaîne de Markov, seedée)"],
     ["Génératif","x?    x?70","probabilité (~50% / 70%)"],
     ["Génératif","seed: 42","rend l'aléatoire reproductible"],
     ["Génératif","x*3","ratchet / roll (N frappes dans un pas)"],
@@ -3780,6 +3848,10 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
+    "- Custom scales: scale: 0 2 3 5 7 9 10 defines ANY scale as semitone offsets from the tonic — microtonal allowed (scale: 0 1.5 3 5 7 8 10 for quarter-tones). key: c 0 2 3 5 7 9 10 works too. Lets you invent scales beyond the named ones.",
+    "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
+    "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",
+    "- Markov melodies: | markov regenerates a voice's line from its OWN note-to-note transitions (a seeded Markov walk) — same notes, new order that still 'sounds like' the original. e.g. lead: 1 2 3 5 6 5 3 2 | markov.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
     "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",

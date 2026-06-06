@@ -1,0 +1,43 @@
+# ================================================================
+#  LOOM — « NEWMUSIC » : 4 nouvelles CAPACITÉS musicales du moteur.
+#   1) gammes PERSONNALISÉES   scale: 0 2 3 5 7 9 10  (microtonal ok)
+#   2) liaisons _              1 _ _ 3   (la note tenue sur plusieurs pas)
+#   3) voicings d'accords      | voicing open|drop2|wide
+#   4) mélodies de Markov      | markov  (régénère d'après ses transitions)
+#
+#  Ici : une gamme inventée (avec un quart de ton), une mélodie tenue,
+#  des accords aérés, et une voix qui s'auto-régénère.
+# ================================================================
+
+title:  Newmusic
+bpm:    96
+key:    a 0 2 3.5 5 7 9 10     # une gamme PERSO : 3e degré neutre (quart de ton)
+seed:   6
+tune:   equal
+warmth: 0.4
+scene:  string
+song:   a*8 b*8
+
+# 1+2) mélodie en notes TENUES (_) sur la gamme perso
+chant:  1 _ _ 3 . 5 _ _ 3 _ 2 . 1 _ _ . | reed | slide | lp 2200 | reverb 0.6 | delay 0.3 | gain 0.12 | hue 150
+
+# 3) accords AÉRÉS (voicing open) qui suivent la prog
+prog:   Am Fmaj7 Cmaj7 G
+keys:   ^ . . . . . . . . . . . . . . . | voicing open | saw | unison 3 | lp 1300 | env 0.4 0.3 0.7 1.5 | reverb 0.6 | gate 1.8 | gain 0.08 | hue 280
+
+# 4) ligne qui s'AUTO-RÉGÉNÈRE chaque mesure (Markov sur son propre motif)
+gen:    1 3 5 3 1 5 6 5 | markov | pluck 0.7 | delay 0.25 | reverb 0.4 | gate 0.6 | gain 0.1 | hue 40
+
+# basse tenue
+bass:   1 _ _ _ 5, _ _ _ 4, _ _ _ 5, _ _ _ | sine | oct 2 | sub 0.5 | gain 0.16 | hue 30
+
+# une pulsation douce
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.4 | in b
+
+# ----------------------------------------------------------------
+#  À essayer :
+#   • change la gamme : key: a 0 1 4 5 7 8 11  (un mode inédit)
+#   • enlève | markov sur gen -> le motif redevient fixe
+#   • | voicing wide -> accords étalés sur 2 octaves
+#   • mets des _ partout pour des nappes très legato
+# ----------------------------------------------------------------

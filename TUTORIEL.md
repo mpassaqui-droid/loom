@@ -68,6 +68,7 @@ Change la gamme, la même mélodie change de couleur.
 - **Du monde** : `hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa
   purvi slendro pelog hirajoshi insen iwato egyptian`
 - **Microtonales (vrais quarts de ton)** : `bayati rast saba sikah huzam jiharkah`
+- **Personnalisée** : `scale: 0 2 3 5 7 9 10` (demi-tons depuis la tonique ; microtonal ok : `0 1.5 3 5 7 8 10`)
 
 ```
 key:  e phrygian
@@ -86,6 +87,7 @@ Une **MAJUSCULE** joue un accord entier (minuscule = note simple).
 - **Chiffres romains** (avec une key) : `I ii iii IV V vi vii` (+`7`)
 - **Arpège** : `| arp up` (`down` / `updown` / `downup`)
 - **Harmoniseur** : `| chord m7` → chaque note devient un accord
+- **Voicing** : `| voicing open|drop2|wide|close` → réharmonise un accord (espacements plus aérés)
 
 ```
 key:  c major
@@ -115,6 +117,7 @@ pad:  ^ . . . | saw | unison 4 | lp 1200 | gain 0.15
 | `x!  x!!` | **accent** (vélocité plus forte) |
 | `x*3` | **ratchet** : 3 frappes dans le pas |
 | `x*8>` / `x*8<` | **roll** crescendo / decrescendo |
+| `1 _ _ 3` | **liaison** : `_` prolonge la note précédente (notes tenues / legato) |
 | `x?` / `x?70` | **probabilité** (~50 % / 70 %) |
 | `{a b c}` | **aléatoire** : tire une alternative (reproductible via `seed`) |
 | `<a/b/c>` | **alternance** : une version par mesure |
@@ -125,6 +128,7 @@ pad:  ^ . . . | saw | unison 4 | lp 1200 | gain 0.15
 | `e(k,n)` `e(k,n,rot)` | **euclidien** (k frappes réparties sur n pas) |
 | `ca(rule,n)` | **automate de Wolfram** (évolue chaque mesure ; rules 90 30 110 18 150) |
 | `morse(n)` `fib(n)` | suites de **Thue-Morse / Fibonacci** (auto-similaires) |
+| `| markov` | régénère la mélodie d'après ses propres enchaînements note→note (Markov) |
 
 ```
 seed:  5
