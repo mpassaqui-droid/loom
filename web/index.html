@@ -886,8 +886,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       for(let k=0;k<4;k++){const ap=ctx.createBiquadFilter();ap.type="allpass";ap.frequency.value=400+k*350;ap.Q.value=0.7;lg.connect(ap.frequency);node.connect(ap);node=ap;}
       node.connect(sum);out=sum;mods.push(lfo);}
     let trem=null,lfoPan=null;
-    if(v.lfo&&(v.lfo.target==="gain"||v.lfo.target==="vol")){trem=ctx.createGain();trem.gain.value=1;out.connect(trem);out=trem;}
-    if(v.lfo&&v.lfo.target==="pan"&&ctx.createStereoPanner){lfoPan=ctx.createStereoPanner();out.connect(lfoPan);out=lfoPan;}
+    const lfoTgt=t2=>(v.lfo&&v.lfo.target===t2)||(v.lfo2&&v.lfo2.target===t2);
+    if(lfoTgt("gain")||lfoTgt("vol")){trem=ctx.createGain();trem.gain.value=1;out.connect(trem);out=trem;}
+    if(lfoTgt("pan")&&ctx.createStereoPanner){lfoPan=ctx.createStereoPanner();out.connect(lfoPan);out=lfoPan;}
     if(pan!=null&&ctx.createStereoPanner){const pn=ctx.createStereoPanner();pn.pan.value=Math.max(-1,Math.min(1,pan));out.connect(pn);out=pn;}
     // orbit: the voice circles the listener — an LFO pans it while a gain wobble fakes distance (rotating motion)
     if(v.orbit&&ctx.createStereoPanner){const lo=ctx.createOscillator();lo.frequency.value=Math.max(0.02,Math.min(20,v.orbit));
@@ -920,16 +921,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         out.connect(d);d.connect(p);p.connect(wg);wg.connect(bus);};
       mk(0.015,0.6,-0.7);mk(0.022,0.45,0.7);}
     // LFO routing
-    let lfoOsc=null;
-    if(v.lfo){lfoOsc=ctx.createOscillator();
-      lfoOsc.type=({sine:"sine",tri:"triangle",triangle:"triangle",saw:"sawtooth",sawtooth:"sawtooth",square:"square",sqr:"square",rand:"square",random:"square"}[v.lfo.shape||"sine"])||"sine";
-      lfoOsc.frequency.value=Math.max(0.01,v.lfo.rate||4);
-      const lg=ctx.createGain();lfoOsc.connect(lg);const depth=v.lfo.depth!=null?v.lfo.depth:0.5,tg=v.lfo.target;
+    const SHP={sine:"sine",tri:"triangle",triangle:"triangle",saw:"sawtooth",sawtooth:"sawtooth",square:"square",sqr:"square",rand:"square",random:"square"};
+    const mkLFO=cfg=>{if(!cfg)return null;const o=ctx.createOscillator();o.type=SHP[cfg.shape||"sine"]||"sine";o.frequency.value=Math.max(0.01,cfg.rate||4);
+      const lg=ctx.createGain();o.connect(lg);const depth=cfg.depth!=null?cfg.depth:0.5,tg=cfg.target;
       if(tg==="cutoff"&&filter){lg.gain.value=(v.cutoff||1200)*Math.min(0.95,depth);lg.connect(filter.frequency);}
       else if((tg==="reso"||tg==="q"||tg==="res")&&filter){lg.gain.value=Math.min(20,depth*20);lg.connect(filter.Q);}
-      else if(tg==="pitch"){lg.gain.value=Math.min(400,Math.max(0,depth*100));for(const o of oscs)lg.connect(o.detune);}
+      else if(tg==="pitch"){lg.gain.value=Math.min(400,Math.max(0,depth*100));for(const oo of oscs)lg.connect(oo.detune);}
       else if(tg==="pan"&&lfoPan){lg.gain.value=Math.min(1,depth);lg.connect(lfoPan.pan);}
-      else if(trem){lg.gain.value=Math.min(0.9,depth);lg.connect(trem.gain);}}
+      else if((tg==="gain"||tg==="vol")&&trem){lg.gain.value=Math.min(0.9,depth);lg.connect(trem.gain);}
+      return o;};
+    const lfoOsc=mkLFO(v.lfo),lfo2Osc=mkLFO(v.lfo2);
     // ADSR (or original pluck if no env)
     let stop;
     if(v.env){const e=v.env;const aT=t+Math.max(0.001,e.a),dT=aT+Math.max(0.001,e.d);
@@ -941,7 +942,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       g.gain.exponentialRampToValueAtTime(peak,t+0.008);g.gain.exponentialRampToValueAtTime(0.001,t+d);stop=t+d+0.02;}
     for(const o of oscs){o.start(t);o.stop(stop);}
     for(const m of mods){m.start(t);m.stop(stop);}
-    if(lfoOsc){lfoOsc.start(t);lfoOsc.stop(stop);}}
+    if(lfoOsc){lfoOsc.start(t);lfoOsc.stop(stop);}
+    if(lfo2Osc){lfo2Osc.start(t);lfo2Osc.stop(stop);}}
   function midiToFreq(midi){return 440*Math.pow(2,(midi-69)/12);}
   // --- HUM TO MELODY: detect sung pitch (autocorrelation) and write a melody line ---
   function autoCorrelate(buf,sr){let rms=0;for(let i=0;i<buf.length;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/buf.length);if(rms<0.01)return -1;
@@ -1199,7 +1201,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1211,6 +1213,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="env")env={a:Math.max(0,parseFloat(p[1])||0.01),d:Math.max(0,parseFloat(p[2])||0.1),
         s:p[3]!==undefined?Math.max(0,Math.min(1,parseFloat(p[3]))):0.6,r:Math.max(0,parseFloat(p[4])||0.2)};
       else if(p[0]==="lfo")lfo={target:(p[1]||"cutoff"),rate:parseFloat(p[2])||4,depth:p[3]!==undefined?parseFloat(p[3]):0.5,shape:(p[4]||"sine")};
+      else if(p[0]==="lfo2")lfo2={target:(p[1]||"pitch"),rate:parseFloat(p[2])||4,depth:p[3]!==undefined?parseFloat(p[3]):0.5,shape:(p[4]||"sine")};
       else if(p[0]==="unison")unison=Math.max(1,Math.min(7,parseInt(p[1],10)||1));
       else if(p[0]==="supersaw"){wave="sawtooth";unison=7;detune=18;spread=0.85;}  // macro: instant wide supersaw
       else if(p[0]==="detune")detune=Math.max(0,Math.min(100,parseFloat(p[1])||0));
@@ -1286,7 +1289,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -4198,6 +4201,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Son (additif)","| organ 888650000","orgue à TIRETTES (Hammond) : 9 chiffres 0-8 = niveau de chaque harmonique"],
     ["Son","| drive X","distorsion / chaleur (0-1)"],
     ["Son","| lfo cutoff|pitch|gain|pan|reso RATE DEPTH [forme]","modulation ; forme = sine/tri/saw/square (mouvement, vibrato, trémolo, wobble)"],
+    ["Son","| lfo2 …","DEUXIÈME LFO indépendant (ex. wobble du filtre + vibrato en même temps)"],
     ["Automation","| lp 300..6000   (| over N)","rampe d'un paramètre dans le temps (filtre qui s'ouvre, riser)"],
     ["Automation","| drive 0..0.6   | pan -1..1","tout param A..B évolue sur la section (ou N mesures)"],
     ["Signaux","| lp sine 0.5 300 4000","un param ondule : WAVE(sine saw tri square rand) RATE(cycles/mesure) MIN MAX"],
@@ -4402,6 +4406,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
+    "- Second LFO: | lfo2 ... is an independent second LFO (same syntax as lfo) so you can modulate two things at once, e.g. | lfo cutoff 2 0.8 square | lfo2 pitch 5 0.2 (wobble filter AND vibrato).",
     "- LFO depth: | lfo TARGET RATE DEPTH [shape] modulates a parameter. TARGET = cutoff, pitch, gain, pan, reso (filter resonance). shape = sine, tri, saw, square (square cutoff = the dubstep wobble). e.g. | lfo cutoff 2 0.7 square , | lfo pan 1 0.9 , | lfo pitch 6 0.3 tri (vibrato).",
     "- Arrangement chance: | chance N (0-1) makes a WHOLE voice play only some bars at random (seeded) — e.g. a fill or a counter-melody that comes and goes. Different from x? (per-note) and degrade (per-hit).",
     "- Trance gate: | tgate N chops a sustained sound into N rhythmic pulses per bar (the pumping gated-pad sound of trance/EDM). e.g. pad: Am7 . . . | saw | unison 3 | tgate 8.",
