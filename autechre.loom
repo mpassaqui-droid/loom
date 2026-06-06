@@ -1,0 +1,59 @@
+# ================================================================
+#  LOOM — « AUTECHRE » : polymétrie & déphasage (Reich / Autechre).
+#  Le set qui expose ce qui restait : poly N (vraie polymétrie),
+#  humanize · orbit · wow · fib(n) · spread · tune: pyth (microtonal).
+#
+#  L'IDÉE : trois voix jouent LE MÊME motif mais à des longueurs
+#  PREMIÈRES ENTRE ELLES (13, 16, 17 pas). Elles partent ensemble,
+#  DÉRIVENT lentement, puis se recroisent — le « phasing » de Steve Reich.
+#
+#  > RUN et laisse tourner : ça évolue tout seul, sans se répéter.
+#  > SOLO (S) ph1/ph2/ph3 ensemble pour entendre le déphasage.
+# ================================================================
+
+title:  AUTECHRE
+seed:   31
+bpm:    150
+key:    c minor
+prog:   Cm Ab Eb Bb        # le token ^ (nappe, basse) suit cette harmonie
+tune:   pyth               # microtonal : accordage pythagoricien (quintes pures)
+duck:   30
+warmth: 0.4
+scene:  superf
+film:   square
+song:   intro*2 weave*8 phase*8 drift*8 out*2
+
+# ---------- ANCRE (le seul tempo stable) ----------
+kick:   x . . . . . x . . . x . . . . . | sample bd | gain 0.5 | comp 0.5 | in weave phase drift out
+sub:    1 . . . . . 5, . . . 1 . . . . . | sine | oct 1 | sub 0.5 | env 0.005 0.1 0.3 0.07 | gain 0.3 | in phase drift out
+
+# ---------- PERCUSSION GÉNÉRATIVE ----------
+# fib(n) : le mot de Fibonacci comme rythme (auto-similaire), + HUMANIZE par voix
+click:  fib(16) | sample rim | gain 0.16 | humanize 35 | pan 0.25 | in weave phase drift out
+# automate règle 110 (Turing-complet) + ORBIT : le charley tourne autour de toi
+hat:    ca(110,16) | sample hh | gain 0.11 | orbit 0.25 | degrade 15 | in weave phase drift out
+
+# ---------- PHASING : même motif, longueurs premières entre elles ----------
+# Les trois voix lisent « 1 5 4 3 5 6 1' 3 » à 13 / 16 / 17 pas par mesure -> dérive.
+ph1:    1 5 4 3 5 6 1' 3 | poly 13 | pluck 0.7 | reverb 0.6 | gate 0.6 | gain 0.1 | pan -0.4 | hue 190 | in phase drift out
+ph2:    1 5 4 3 5 6 1' 3 | poly 16 | pluck 0.7 | reverb 0.6 | gate 0.6 | gain 0.1 | hue 250 | in phase drift out
+ph3:    1 5 4 3 5 6 1' 3 | poly 17 | pluck 0.7 | reverb 0.6 | gate 0.6 | gain 0.1 | pan 0.4 | hue 320 | in phase drift out
+
+# basse en polymétrie aussi (11 pas) -> elle glisse contre le kick
+bassly: 1 . 5, . 1 . 3 . 4, . | poly 11 | saw | oct 2 | lp 700 q 6 | drive 0.3 | gate 0.5 | gain 0.13 | hue 30 | in phase drift out
+
+# ---------- TEXTURES ----------
+# nappe : accord tenu (^) + WOW (pleurage de bande) + ORBIT lent + flange
+pad:    ^ . . . . . . . . . . . . . . . | saw | unison 5 | spread 0.8 | lp 1300 | wow 0.4 | orbit 0.08 | flange 0.2 | reverb 0.7 | gate 1.8 | gain 0.07 | hue 280 | in intro weave phase drift out
+# cloches : fib(8) clairsemé + delay long, microtonal pythagoricien
+bell:   fib(8) | bell | semi 12 | delay 0.45 | reverb 0.6 | degrade 25 | gain 0.07 | pan -0.3 | hue 60 | in drift out
+
+# drone wavefolding qui s'ouvre (drift only)
+drone@drift: 1 . . . . . . . | saw | unison 5 | spread 0.9 | fold 0..0.9 | over 8 | lp 300..4000 | reverb 0.6 | gate 2 | gain 0.06 | hue 160
+
+# ----------------------------------------------------------------
+#  À essayer :
+#   • change les poly (13/16/17 -> 12/15/16) : autre vitesse de dérive
+#   • change la prog (Cm Ab Eb Bb -> Cm Fm Gm Eb) : nappe + basse suivent
+#   • tune: just / 19edo -> autres couleurs microtonales
+# ----------------------------------------------------------------
