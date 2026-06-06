@@ -4472,8 +4472,97 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • touche N en plein écran -> 22 scènes (julia, fire, helix, torus…)
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
+  PRESETS.mycelium=`# ================================================================
+#  LOOM — « MYCÉLIUM » : un organisme sonore qui POUSSE.
+#
+#  Le pari : tu ne dois JAMAIS réentendre la même chose.
+#  Pour ça, TROIS principes, et aucune progression d'accords :
+#
+#   1. GAMMES MICROTONALES INVENTÉES (quarts de ton) — des intervalles
+#      que ton oreille ne connaît pas. Et elles MODULENT à chaque section
+#      (key@section) : le sol harmonique se déplace sous tes pieds.
+#   2. TOUT EST GÉNÉRÉ — walk · drunk · logistic · perlin · ca · lsys ·
+#      {choix} · <alternance> — et ces suites CHANGENT À CHAQUE MESURE
+#      (elles sont seedées sur le numéro de mesure). Donc ça ne boucle pas.
+#   3. LE TEMPS RESPIRE — meter impair (5/4), accel lent, groove humain.
+#
+#  > RUN, laisse pousser longtemps. Change seed: (8/9/10…) = un autre organisme,
+#    toujours cohérent. tune: 24edo pour pousser encore le microtonal.
+# ================================================================
+
+title:  Mycélium
+bpm:    68
+tune:   equal
+seed:   7
+meter:  5/4
+accel:  64 78
+feel:   28
+warmth: 0.55
+duck:   28
+groove: humanish
+
+# --- chaque section vit dans sa propre gamme microtonale (quarts de ton) ---
+key:           e 0 1.5 5 6.5 7 10            # spore : suspendu, fragile
+key@germinate: a 0 2 3.5 5 7 8.5 10          # germination : ça s'ouvre
+key@reseau:    c 0 1 3 4.5 6 7 9 10.5        # réseau : dense, 8 degrés
+key@fruct:     g 0 2.5 4 5 7.5 9 11          # fructification : lumineux
+key@spores:    d 0 1.5 4 6 7 9.5             # spores : retour, mais ailleurs
+
+scene:           gcells
+scene@germinate: gaurora
+scene@reseau:    gmandel
+scene@fruct:     gwarp
+scene@spores:    nebula
+film:   square
+
+song:   spore*4 germinate*6 reseau*8 fruct*8 reseau*6 spores*6
+
+# ---------- LE LIT : bourdon + sous-basse, microtonal, jamais figé ----------
+drone:  1 . . . . . . . . . . . . . . . | bow | unison 3 | detune 9 | wow 0.35 | lp 900 | ir cathedral 0.5 | reverb 0.8 | gate 4 | gain 0.07 | hue 160
+sub:    1 . . . . . . . | sine | oct 1 | sub 0.6 | env 1.2 0.8 0.9 2.5 | gain 0.2 | hue 220 | in reseau fruct spores
+
+# ---------- POULS : une cellule qui bat, densité croissante par section ----------
+pulse@germinate: e(3,16) | sine | fm 1 1.5 | lp 700 | env 0.005 0.12 0 0.1 | gain 0.16 | hue 30
+pulse@reseau:    e(5,16) | sine | fm 1 2 | lp 800 | env 0.004 0.1 0 0.08 | gain 0.16 | hue 30
+pulse@fruct:     e(7,16) | tri | fm 1 2.5 | lp 1000 | drive 0.15 | env 0.004 0.1 0 0.08 | gain 0.15 | hue 30
+heart:  drunk(16) | sample bd | gain 0.34 | comp 0.4 | every 4 fast 2 | in reseau fruct
+
+# ---------- SÈVE : la mélodie principale, 100% générée, autre à chaque mesure ----------
+sap@spore:     walk(8) | bell | detune 5 | wow 0.3 | reverb 0.85 | delay 0.5 | echo 8 0.5 | degrade 25 | gain 0.09 | pan 0.25 | hue 60
+sap@germinate: walk(10) | pluck 0.7 | harmonize 7 0.3 | slide | reverb 0.7 | delay 0.4 | echo 6 0.45 | humanize 45 | gain 0.1 | hue 90
+sap@reseau:    logistic(16) | sine | fm 1 2.5 | slide | lp 2400 | delay 0.3 | echo 8 0.4 | gate 0.6 | humanize 40 | gain 0.09 | hue 180
+sap@fruct:     walk(12) | pluck 0.75 | harmonize 5 0.35 | reverb 0.6 | delay 0.3 | echo 8 0.45 | mutate 25 | humanize 40 | gain 0.1 | hue 280
+sap@spores:    perlin(16) | bell | detune 4 | semi 12 | reverb 0.85 | echo 8 0.55 | degrade 35 | gain 0.07 | hue 60
+
+# ---------- FILAMENTS : polymétrie en dérive (deux voix qui se déphasent) ----------
+fil1@reseau: 1 4 6 3 5 1' | poly 13 | pluck 0.6 | reverb 0.6 | gate 0.5 | pan -0.35 | gain 0.07 | hue 200
+fil2@reseau: 1 4 6 3 5 1' | poly 17 | pluck 0.6 | reverb 0.6 | gate 0.5 | pan 0.35 | gain 0.07 | hue 320
+fil3@fruct:  1 3 5 6 4 2 8 | poly 11 | pluck 0.6 | autopan 0.3 | reverb 0.5 | gate 0.5 | gain 0.06 | hue 240
+
+# ---------- SPORES : grains/cloches désaccordées qui flottent et mutent ----------
+spore1@germinate: lsys(8) | bell | detune 6 | grain 0.4 | reverb 0.8 | delay 0.4 | degrade 30 | gain 0.06 | pan -0.3 | hue 50
+spore2@reseau:    ca(110,16) | bell | detune 5 | grain 0.3 | reverb 0.75 | echo 6 0.4 | degrade 40 | gain 0.05 | pan 0.3 | shuffle | hue 50
+spore3@spores:    {1 4}*2 . [6 3] . {5 1'} . . 4 . [2 6] . 3 . . | bell | detune 5 | reverb 0.85 | echo 8 0.55 | degrade 45 | mutate 30 | gain 0.06 | hue 190
+
+# ---------- VOIX D'HUMUS : un chœur de formantes, organique, sous la surface ----------
+humus@reseau: 1 . . . 5 . . . 6 . . . 4 . . . | saw | unison 4 | vowel a | harmonize 7 0.4 | lp 1500 | env 0.3 0.4 0.6 1.6 | reverb 0.85 | humanize 55 | gate 1.6 | gain 0.06 | hue 300
+humus@fruct:  1 . . 5 . . 6 . . 4 . . 1' . . . | saw | unison 5 | vowel o | harmonize 12 0.35 | lp 1700 | reverb 0.85 | humanize 55 | gate 1.4 | gain 0.06 | pan -0.3 | hue 320
+
+# ---------- TEXTURE : un souffle de bruit filtré qui respire avec l'accel ----------
+air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.15 0.5 sine | reverb 0.7 | gate 2 | gain 0.03 | in spore germinate fruct spores
+
+# ---------- PERCUSSIONS GÉNÉRATIVES : grain de bois, jamais le même motif ----------
+tick@reseau: ca(90,16) | sample hh | gain 0.1 | swing 56 | degrade 20 | orbit 0.25 | stereo 1.3 | chance 0.85 | pan 0.2
+tick@fruct:  drunk(16) | sample hh | gain 0.11 | swing 58 | degrade 16 | stereo 1.4 | chance 0.9 | pan -0.2
+wood@fruct:  e(5,16) | sample perc | reson 320 0.4 | crush 5 | pan -0.3 | chance 0.6 | gain 0.12 | shuffle
+
+# ----------------------------------------------------------------
+#  Aucune ligne mélodique n'est écrite « en dur » : tout pousse.
+#  Essaie : seed: 9 · tune: 24edo · meter: 7/8 · enlève accel: pour figer le tempo.
+# ----------------------------------------------------------------
+`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mycelium","afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
