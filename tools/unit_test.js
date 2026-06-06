@@ -96,5 +96,23 @@ eq(L.midiToToken(baseC + 4), '3', 'midiToToken +major third -> 3');
 eq(L.midiToToken(baseC + 7), '5', 'midiToToken +fifth -> 5');
 eq(L.midiToToken(baseC + 12), "1'", 'midiToToken +octave -> 1 up');
 
+// odd meters: meter N/D -> bar length in quarter-note beats
+eq(L.parseMeter('meter: 7/8'), 3.5, 'meter 7/8 = 3.5 beats');
+eq(L.parseMeter('meter: 5/4'), 5, 'meter 5/4 = 5 beats');
+eq(L.parseMeter('bpm: 120'), 4, 'no meter -> 4/4 default');
+
+// modulation: key@SECTION resolves that section in its own key
+const km = L.parseKeyMap('key@chorus: c minor\nkey@verse: a minor');
+eq(km.chorus.tonic, 0, 'key@chorus tonic = C');
+eq(km.verse.tonic, 9, 'key@verse tonic = A');
+L.setTuning('equal');
+eq(L.degreeToMidi('1', km.chorus) % 12, 0, 'degree 1 in chorus(Cm) = C');
+eq(L.degreeToMidi('1', km.verse) % 12, 9, 'degree 1 in verse(Am) = A');
+
+// accelerando / ritardando
+eq(L.parseAccel('accel: 100 130'), {a:100,b:130,bars:0}, 'accel 100->130');
+eq(L.parseAccel('accel: 140 90 16'), {a:140,b:90,bars:16}, 'ritard 140->90 over 16 bars');
+eq(L.parseAccel('bpm: 120'), null, 'no accel directive -> null');
+
 console.log((fail===0 ? 'OK' : 'FAIL') + ': ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

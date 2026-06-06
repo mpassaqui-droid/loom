@@ -281,9 +281,12 @@ pad:  Am7 . . . F . . . | saw | lp 1100 | crush 6 | gain 0.18
 ## 12. La structure d'un morceau
 
 - **`bpm: 128`** : tempo · **`tempo: intro 120 drop 140`** : tempo par section
+- **`meter: 7/8`** : **mesure impaire** (5/4, 12/8…) — change la longueur de la barre
+- **`accel: 120 160 [bars]`** : **accelerando / ritardando** (le tempo glisse de A à B)
 - **`song: intro*4 drop*8 break*4`** : l'arrangement (nom\*mesures, en boucle)
 - **`| in verse chorus`** : la voix ne joue que dans ces sections
 - **`nom@section: motif`** : un motif **différent** par section → morceaux longs
+- **`key@section: c minor`** : **modulation** (cette section change de tonalité)
 
 ```
 song: intro*2 drop*4 outro*2

@@ -1,0 +1,41 @@
+# ================================================================
+#  LOOM — « ODYSSEY » : 4 capacités de timing & d'harmonie d'un coup.
+#   • meter: 7/8        -> mesure impaire (5 + 2, le groove « boiteux »)
+#   • accel: 96 132     -> le tempo monte du début à la fin (accelerando)
+#   • key@drop: ...     -> MODULATION : le drop change de tonalité
+#   • | voicing lead    -> les accords s'enchaînent en douceur (voice-leading)
+#
+#  > RUN : ça accélère, le drop module vers le haut, et tout est en 7/8.
+# ================================================================
+
+title:  Odyssey
+meter:  7/8
+accel:  96 132
+key:    c minor
+key@drop: eb minor          # le drop module un ton et demi plus haut
+prog:   Cm Ab Eb Bb
+warmth: 0.45
+scene:  ripple
+song:   intro*2 build*4 drop*4 build*4 drop*4 out*2
+
+# batterie en 7/8 (accent sur 1 et 6 : groupement 5+2)
+kick:   x . . . . x . | sample bd | gain 0.5 | comp 0.4 | in build drop out
+snare:  . . . x . . . | sample sd | gain 0.4 | in build drop out
+hat:    x . x x . x x | sample hh | gain 0.1 | swing 56 | in build drop out
+
+# accords qui suivent la prog AVEC voice-leading (enchaînement doux)
+keys:   ^ . . . . . . | voicing lead | saw | unison 3 | lp 1500 | env 0.02 0.2 0.6 0.5 | reverb 0.6 | gate 1.6 | gain 0.09 | hue 270
+
+# basse (suit la fondamentale ^1) — se module avec la section
+bass:   ^1 . . . 5, . . | sine | oct 2 | sub 0.5 | slide | lp 700 | gain 0.16 | hue 30 | in build drop out
+
+# lead génératif (Markov) sur la gamme de la section courante
+lead:   1 3 5 4 3 2 1 | markov | pluck 0.7 | delay 0.25 | reverb 0.4 | gate 0.6 | gain 0.1 | hue 200 | in drop
+
+# nappe tenue (liaisons _) qui traverse
+pad:    ^1 _ _ _ _ _ _ | bow | unison 2 | lp 1100 | reverb 0.7 | gain 0.06 | hue 320 | in intro build drop out
+
+# ----------------------------------------------------------------
+#  À essayer : meter: 5/4 ou 12/8 · accel: 132 90 (ralentir) ·
+#  key@drop: c major (le drop s'éclaire au lieu de s'assombrir).
+# ----------------------------------------------------------------

@@ -280,7 +280,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,analyser=null,scopeMode="wave";
-  let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
+  let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
   const WAVES={sine:"sine",square:"square",saw:"sawtooth",sawtooth:"sawtooth",tri:"triangle",triangle:"triangle",pulse:"square"};
@@ -474,7 +474,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ render ] rien à rendre - écris un morceau","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
     if(!OAC){log("[ render ] non supporté par ce navigateur","err");return;}
@@ -482,7 +482,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     log("[ render ] chargement des samples…","ai");
     try{await Promise.all(voices.filter(v=>v.sample).map(v=>loadSample(v.sample)));}catch(_){}
     log("[ render ] rendu de "+nbars+" mesures…","ai");
-    const rate=ctx.sampleRate||44100,total=(Object.keys(tempoMap).length?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
+    const rate=ctx.sampleRate||44100,total=((accel||Object.keys(tempoMap).length)?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
     const off=new OAC(2,Math.ceil(total*rate),rate);
     const sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf,analyser,delayL,delayR},svMidi=midiOut,svTS=transportStart;
     await ensureWorklet(off);midiOut=null;ctx=off;transportStart=0;buildGraph();   // transportStart=0 so automation lines up
@@ -502,11 +502,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   async function renderStems(){initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ stems ] rien à rendre","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC){log("[ stems ] non supporté","err");return;}
     const btn=$("stemsBtn");if(btn)btn.disabled=true;
     try{await Promise.all(voices.filter(v=>v.sample).map(v=>loadSample(v.sample)));}catch(_){}
-    const names=[...new Set(voices.map(v=>v.name))],rate=ctx.sampleRate||44100,total=(Object.keys(tempoMap).length?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
+    const names=[...new Set(voices.map(v=>v.name))],rate=ctx.sampleRate||44100,total=((accel||Object.keys(tempoMap).length)?Array.from({length:nbars},(_,b)=>cycleLenForBar(b)).reduce((a,c)=>a+c,0):cycleLen*nbars)+1.5;
     log("[ stems ] rendu de "+names.length+" pistes…","ai");
     for(const nm of names){
       const off=new OAC(2,Math.ceil(total*rate),rate),sv={ctx,master,comp,bus,scGain,delay,fb,echoSend,conv,spaceSend,noiseBuf,analyser,delayL,delayR},svMidi=midiOut,svTS=transportStart;
@@ -1031,7 +1031,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parseTempoMap(text){const m={};for(let raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="tempo"){const t=line.slice(i+1).trim().split(/\s+/);
       for(let k=0;k+1<t.length;k+=2){const n=parseFloat(t[k+1]);if(!isNaN(n)&&isNaN(parseFloat(t[k])))m[t[k].toLowerCase()]=Math.max(40,Math.min(300,n));}return m;}}return m;}
-  function cycleLenForBar(bar){const s=song.length?sectionAtBar(song,bar):null,bp=(s&&tempoMap[s])?tempoMap[s]:baseBpm;return (60/bp)*4;}
+  // odd meters: meter: 7/8 -> a bar = 7 eighth-notes (= 3.5 quarters). meter: 3 = 3 beats.
+  function parseMeter(text){let mb=4;for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="meter"){const v=line.slice(i+1).trim(),m=/^(\d+)\s*\/\s*(\d+)$/.exec(v);
+      if(m){const N=+m[1],D=+m[2];if(N>0&&D>0)mb=N*4/D;}else{const n=parseFloat(v);if(!isNaN(n)&&n>0)mb=n;}}}return mb;}
+  // modulation: key@SECTION: c minor  -> that section resolves degrees/chords in its own key
+  function parseKeyMap(text){const m={};for(const raw of text.split("\n")){const line=raw.trim();if(!line||line.startsWith("#"))continue;
+    const i=line.indexOf(":");if(i<0)continue;const am=/^key@(.+)$/.exec(line.slice(0,i).trim().toLowerCase());if(!am)continue;
+    const k=parseKey("key: "+line.slice(i+1).trim());if(k)m[am[1].trim()]=k;}return m;}
+  // accelerando / ritardando: accel: 120 160 [bars] -> tempo ramps linearly across the piece
+  function parseAccel(text){for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="accel"){const t=line.slice(i+1).trim().split(/\s+/).map(parseFloat);
+      if(t.length>=2&&!isNaN(t[0])&&!isNaN(t[1]))return{a:Math.max(40,Math.min(300,t[0])),b:Math.max(40,Math.min(300,t[1])),bars:(t[2]>1)?Math.round(t[2]):0};}}return null;}
+  function cycleLenForBar(bar){let bp;
+    if(accel){const tb=accel.bars||(song.length?song.reduce((a,s)=>a+s[1],0):8),span=tb>1?tb-1:1,f=Math.max(0,Math.min(1,bar/span));bp=accel.a+(accel.b-accel.a)*f;}
+    else{const s=song.length?sectionAtBar(song,bar):null;bp=(s&&tempoMap[s])?tempoMap[s]:baseBpm;}
+    return (60/bp)*meterBeats;}
   function parseProg(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="prog"){const out=[];  // chords cycle one per bar; Am*4 = hold 4 bars
       for(const t of line.slice(i+1).trim().split(/\s+/).filter(Boolean)){const m=t.split("*"),nn=m[1]?parseInt(m[1],10):1;for(let k=0;k<(isNaN(nn)?1:Math.max(1,Math.min(64,nn)));k++)out.push(m[0]);}
@@ -1258,17 +1273,22 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     return[tok.slice(0,m.index),parseInt(m[1],10)];}
   // resolve a melodic token to the frequency(ies) it sounds (1 note, or N for a chord)
   // chord voicing: re-arrange a chord's notes. open/spread = alternate notes up an 8ve;
-  // drop2 = 2nd-from-top down an 8ve; wide = each note in its own octave; close = as-is.
-  function voiceChord(ch,type){if(!type||!ch||ch.length<2)return ch;const c=ch.slice();
+  // drop2 = 2nd-from-top down an 8ve; wide = each note in its own octave;
+  // lead = shift the whole chord by octaves to stay near the PREVIOUS chord (smooth voice-leading).
+  function voiceChord(ch,v){const type=v&&v.voicing;if(!type||!ch||ch.length<2)return ch;const c=ch.slice();
     if(type==="open"||type==="spread"){for(let i=1;i<c.length;i+=2)c[i]+=12;return c;}
     if(type==="drop2"){const s=c.slice().sort((a,b)=>a-b);if(s.length>=2)s[s.length-2]-=12;return s;}
     if(type==="wide"){for(let i=0;i<c.length;i++)c[i]+=12*i;return c;}
+    if(type==="lead"){const last=v._lastVoiced;
+      if(last&&last.length){const ref=last.reduce((a,b)=>a+b,0)/last.length,cur=c.reduce((a,b)=>a+b,0)/c.length;
+        const sh=Math.round((ref-cur)/12);for(let i=0;i<c.length;i++)c[i]+=12*sh;}
+      v._lastVoiced=c.slice();return c;}
     return c;}
   function melFreqs(tok,v,k,baseOct){
     if(tok==="x")return [noteToFreq("c3")];
     if(k&&isDegree(tok))return [midiToFreq(degreeToMidi(tok,k))];
     const ch=romanToChord(tok,k)||parseChord(tok,baseOct);
-    if(ch)return voiceChord(ch,v&&v.voicing).map(midiToFreq);
+    if(ch)return voiceChord(ch,v).map(midiToFreq);
     const f=noteToFreq(tok);return f?[f]:[];}
   function trigger(v,tok,t,durOverride,velMul,isFlam){const vm=velMul||1;if(tok==="."||tok==="~")return;
     if(v.flam&&!isFlam)trigger(v,tok,t-0.026,durOverride,vm*0.45,true);  // flam: a soft grace note just before the hit
@@ -1295,7 +1315,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(songOn&&playing)log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
-    if(tempoMap&&Object.keys(tempoMap).length)cycleLen=cycleLenForBar(bar);  // per-section tempo (guarded: no map = unchanged)
+    if(accel||(tempoMap&&Object.keys(tempoMap).length))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (guarded: nothing set = unchanged)
+    const _savedKey=key;if(sec&&keyMap[sec])key=keyMap[sec];  // modulation: this section resolves in its own key (restored at end)
     const anySolo=voices.some(v=>v.solo);  // live mixing: mute / solo per voice
     for(const v of activeVoices(bar)){
       if(v.mute||(anySolo&&!v.solo))continue;
@@ -1321,7 +1342,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
           [{...v,pan:0.82,hue:hu(v,30)},applyOne(baseEff,v.jux,bar),0]];
         if(v.off&&baseEff.length)layers=layers.concat(layers.map(([lv,le])=>
           [{...lv,gain:(lv.gain||0.25)*0.6,hue:hu(lv,180)},v.off.verb?applyOne(le,v.off.verb,bar):le,v.off.n]));
-        for(const[lv,le,sh]of layers)scheduleSeq(lv,le,barT,bar,sh);}}}
+        for(const[lv,le,sh]of layers)scheduleSeq(lv,le,barT,bar,sh);}}key=_savedKey;}
   // schedule one token sequence for a voice within a bar (shared by normal/jux/off)
   function scheduleSeq(v,eff,barT,bar,shift){const sw=v.swing!=null?v.swing:+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n,sh=(shift||0)*step;
       const tieN=(idx)=>{let c=0;for(let j=idx+1;j<n&&eff[j]==="_";j++)c++;return c;};  // note tie: `_` extends the previous note
@@ -2099,7 +2120,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     codeView=buildCodeView(editor.value);
-    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;cycleLen=(60/bpm)*4;tempoMap=parseTempoMap(editor.value);
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
@@ -2861,6 +2882,47 @@ kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.4 | in b
 #   • | voicing wide -> accords étalés sur 2 octaves
 #   • mets des _ partout pour des nappes très legato
 # ----------------------------------------------------------------`;
+  PRESETS.odyssey=`# ================================================================
+#  LOOM — « ODYSSEY » : 4 capacités de timing & d'harmonie d'un coup.
+#   • meter: 7/8        -> mesure impaire (5 + 2, le groove « boiteux »)
+#   • accel: 96 132     -> le tempo monte du début à la fin (accelerando)
+#   • key@drop: ...     -> MODULATION : le drop change de tonalité
+#   • | voicing lead    -> les accords s'enchaînent en douceur (voice-leading)
+#
+#  > RUN : ça accélère, le drop module vers le haut, et tout est en 7/8.
+# ================================================================
+
+title:  Odyssey
+meter:  7/8
+accel:  96 132
+key:    c minor
+key@drop: eb minor          # le drop module un ton et demi plus haut
+prog:   Cm Ab Eb Bb
+warmth: 0.45
+scene:  ripple
+song:   intro*2 build*4 drop*4 build*4 drop*4 out*2
+
+# batterie en 7/8 (accent sur 1 et 6 : groupement 5+2)
+kick:   x . . . . x . | sample bd | gain 0.5 | comp 0.4 | in build drop out
+snare:  . . . x . . . | sample sd | gain 0.4 | in build drop out
+hat:    x . x x . x x | sample hh | gain 0.1 | swing 56 | in build drop out
+
+# accords qui suivent la prog AVEC voice-leading (enchaînement doux)
+keys:   ^ . . . . . . | voicing lead | saw | unison 3 | lp 1500 | env 0.02 0.2 0.6 0.5 | reverb 0.6 | gate 1.6 | gain 0.09 | hue 270
+
+# basse (suit la fondamentale ^1) — se module avec la section
+bass:   ^1 . . . 5, . . | sine | oct 2 | sub 0.5 | slide | lp 700 | gain 0.16 | hue 30 | in build drop out
+
+# lead génératif (Markov) sur la gamme de la section courante
+lead:   1 3 5 4 3 2 1 | markov | pluck 0.7 | delay 0.25 | reverb 0.4 | gate 0.6 | gain 0.1 | hue 200 | in drop
+
+# nappe tenue (liaisons _) qui traverse
+pad:    ^1 _ _ _ _ _ _ | bow | unison 2 | lp 1100 | reverb 0.7 | gain 0.06 | hue 320 | in intro build drop out
+
+# ----------------------------------------------------------------
+#  À essayer : meter: 5/4 ou 12/8 · accel: 132 90 (ralentir) ·
+#  key@drop: c major (le drop s'éclaire au lieu de s'assombrir).
+# ----------------------------------------------------------------`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -3486,7 +3548,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mixtape","evolution","spaces","newmusic","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mixtape","evolution","spaces","newmusic","odyssey","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
@@ -3554,7 +3616,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     {t:"35 · Samples du monde",d:"Des sons échantillonnés repitchés sur les degrés + percussions du monde.",c:"key:   c minor\ntabla: e(7,16) | sample tabla | gain 0.4\nsitar: 1 . 2 3 . 4 5 . | sample sitar | gain 0.4"},
     {t:"36 · Réverbe à convolution (espaces)",d:"| ir pose un VRAI espace acoustique sur une voix : hall room plate spring cathedral (+ mix 0-1). Plus réaliste que reverb N.",c:"key:  a minor\nprog: Am F C G\npad:  ^ . . . | saw | unison 3 | ir hall 0.4 | gain 0.1\nharp: 1 2 3 5 3 2 | pluck 0.7 | ir plate 0.5 | gain 0.12\nbell: 1' . . . 5 . . . | bell | ir cathedral 0.5 | gain 0.1"},
     {t:"37 · Gammes perso & liaisons",d:"scale: 0 2 3 5 7 9 10 invente N'IMPORTE quelle gamme (microtonal ok). Le _ prolonge la note précédente (notes tenues).",c:"key:  d 0 1.5 3 5 7 8 10\nlead: 1 _ _ 3 . 5 _ 2 1 _ 7, . 1 _ _ . | pluck 0.7 | reverb 0.4 | gain 0.13\ndrone: 1 . . . . . . . | bow | gain 0.1"},
-    {t:"38 · Voicings & Markov",d:"| voicing aère un accord (open/drop2/wide). | markov régénère une mélodie d'après ses propres enchaînements.",c:"key:  c major\nseed: 4\nkeys: Cmaj7 . Fmaj7 . G7 . Em7 . | voicing open | sine | reverb 0.3 | gain 0.14\nlead: 1 2 3 5 6 5 3 2 | markov | pluck 0.7 | delay 0.2 | gain 0.1"}
+    {t:"38 · Voicings & Markov",d:"| voicing aère un accord (open/drop2/wide). | markov régénère une mélodie d'après ses propres enchaînements.",c:"key:  c major\nseed: 4\nkeys: Cmaj7 . Fmaj7 . G7 . Em7 . | voicing open | sine | reverb 0.3 | gain 0.14\nlead: 1 2 3 5 6 5 3 2 | markov | pluck 0.7 | delay 0.2 | gain 0.1"},
+    {t:"39 · Mesures impaires & tempo qui glisse",d:"meter: 7/8 met la barre en temps impairs. accel: A B fait glisser le tempo de A à B (montée/ralenti).",c:"meter: 7/8\naccel: 100 130\nkey:  e phrygian\nlead: 1 2 3 4 5 4 3 | pluck 0.7 | gain 0.13\nkick: x . . x . x . | sample bd | gain 0.4"},
+    {t:"40 · Modulation & voice-leading",d:"key@section change de tonalité pour une section (vraie modulation). | voicing lead enchaîne les accords en douceur.",c:"song: verse*4 chorus*4\nkey:  a minor\nkey@chorus: c minor\nprog: Am F C G\nkeys: ^ . . . | voicing lead | sine | reverb 0.3 | gain 0.15\nbass: ^1 . . . | sine | oct 2 | gain 0.2"}
   ];
   // course lessons are wired below, in the unified APPRENDRE panel
 
@@ -3577,7 +3641,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Accords","Cm7/G   C/E","renversement / slash : la note après / passe à la basse"],
     ["Accords","I ii iii IV V vi vii (+7)","chiffres romains = accords diatoniques de la key"],
     ["Accords","| arp up","arpège : up / down / updown / downup"],
-    ["Accords","| voicing open|drop2|wide|close","ré-harmonise un accord : open/drop2/wide = renversements plus aérés/riches"],
+    ["Accords","| voicing open|drop2|wide|close|lead","ré-harmonise un accord : open/drop2/wide = aéré ; lead = voice-leading (proche de l'accord précédent)"],
     ["Verbes","| rev","inverse le motif"],
     ["Verbes","| fast N    | slow N","accélère N× / joue une mesure sur N"],
     ["Verbes","| every N <verbe>","applique un verbe une mesure sur N"],
@@ -3623,6 +3687,8 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Théorie","tune: just|pyth|Nedo|equal","accordage : juste intonation / Pythagore / N-EDO (ex. 19edo, 31edo) / tempérament égal"],
     ["Tempo","bpm: 128","fixe le tempo du morceau (BPM, dans le fichier) — sinon le bouton BPM"],
     ["Tempo","tempo: intro 120 drop 140","tempo PAR SECTION (paires nom/bpm) — accélère/ralentit selon le morceau"],
+    ["Tempo","meter: 7/8","MESURE impaire : N/D temps par barre (7/8, 5/4, 3/4…) — change la longueur de la barre"],
+    ["Tempo","accel: 120 160 [bars]","ACCELERANDO / ritardando : le tempo glisse de A à B (sur tout le morceau, ou sur N mesures)"],
     ["Mix","warmth: 0.5","saturation chaleur du master (0-1, AudioWorklet sur-échantillonné) — repli auto si indispo"],
     ["Vidéo","film: vertical|square|wide","format du bouton FILM : 9:16 (réseaux) / 1:1 / paysage (défaut)"],
     ["Vidéo","title: Mon morceau","carte-titre en fondu au début du FILM (sinon le nom du projet, ou LOOM)"],
@@ -3643,6 +3709,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Structure","song: intro*4 drop*8","arrangement (nom*mesures ; boucle)"],
     ["Structure","| in verse chorus","la voix ne joue que dans ces sections"],
     ["Structure (long)","nom@section: motif","pattern différent par section → morceaux longs"],
+    ["Structure (long)","key@section: c minor","MODULATION : cette section résout ses degrés/accords dans sa propre tonalité"],
     ["Son","| saw sine tri pulse square","forme d'onde"],
     ["Son","| gain N","volume de la voix (0-1)"],
     ["Son","| oct N","octave par défaut des degrés"],
@@ -3848,6 +3915,10 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
+    "- Odd meters: meter: 7/8 sets the bar to N/D beats (7/8, 5/4, 3/4, 12/8…) — changes the bar length, so patterns feel in odd time. meter: 3 = 3 beats. One meter per song.",
+    "- Modulation (key change): key@SECTION: c minor makes that song section resolve its degrees AND its ^/prog chords in a different key. e.g. song: verse*4 chorus*4 with key: a minor and key@chorus: c minor -> the chorus lifts to C minor. Great for a key change at the drop/chorus.",
+    "- Accelerando/ritardando: accel: 120 160 ramps the tempo from 120 to 160 across the whole piece (accel: 160 90 8 = slow down over 8 bars). For a build-up or a tape-stop ending.",
+    "- Voice-leading: | voicing lead keeps each chord close to the previous one (smooth, no big register jumps) — lovely on a prog: pad. (Also open/drop2/wide for spacing.)",
     "- Custom scales: scale: 0 2 3 5 7 9 10 defines ANY scale as semitone offsets from the tonic — microtonal allowed (scale: 0 1.5 3 5 7 8 10 for quarter-tones). key: c 0 2 3 5 7 9 10 works too. Lets you invent scales beyond the named ones.",
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
     "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",
@@ -4047,7 +4118,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
   bind("vol","vVol",v=>{if(master)master.gain.value=v/100*0.8;});
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   // expose pure language functions for unit testing (harmless in the browser)
-  try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;}};}catch(_){}
   animate();
 })();
 </script>
