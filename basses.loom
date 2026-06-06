@@ -1,0 +1,51 @@
+# ================================================================
+#  LOOM — « BASSES » : le zoo des basses.
+#  Même riff partout, UN design de basse par ligne.
+#  > RUN. Isole chaque basse avec S (solo) / M (mute) dans la grille.
+#  > Au départ seule l'« acid » joue ; SOLO les autres pour comparer.
+# ================================================================
+
+title: Basses
+bpm:   128
+key:   a minor
+duck:  60              # sidechain : tout pompe sur le kick
+warmth: 0.4
+scene: lissajous
+
+# ---------- GROOVE ----------
+kick:  x . . . x . . . x . . . x . . . | sample bd | gain 0.6 | comp 0.5
+clap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | shift 0.04
+hat:   x x! x x x x! x x x x! x x x x! x x | sample hh | gain 0.1 | swing 56 | degrade 25
+
+# ---------- LES BASSES (même riff, timbre différent) ----------
+# 1) ACID 303 : saw + slide + filtre résonant + enveloppe de filtre + drive
+acid:   1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | drive 0.4 | gate 0.4 | gain 0.16 | hue 0
+
+# 2) REESE : super-saw désaccordé + FM (jungle/DnB)
+reese:  1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | unison 3 | detune 18 | fm 0.5 2 | lp 900 | gain 0.1 | hue 280 | mute
+
+# 3) SUB : sinus pur + sous-oscillateur (le poids)
+sub:    1 . . . 5, . 1 . 4 . 1 . 5 . 1' . | sine | oct 1 | sub 0.6 | env 0.005 0.1 0.3 0.08 | gain 0.34 | hue 220 | mute
+
+# 4) 808 : sinus + pitch-drop (bend) + queue longue
+b808:   1 . . . . . . . 5, . . . . . . . | sine | oct 2 | bend -10 0.12 | env 0.005 0.5 0.2 0.6 | gain 0.3 | hue 30 | mute
+
+# 5) WOBBLE : filtre qui ondule (dubstep) via LFO
+wobble: 1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | unison 2 | lp 600 | lfo cutoff 4 0.8 | drive 0.3 | gain 0.12 | hue 160 | mute
+
+# 6) FM BASS : grasse et métallique (Chowning)
+fmbass: 1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | sine | oct 2 | fm 1 3 | lp 1200 | gate 0.5 | gain 0.13 | hue 200 | mute
+
+# 7) FOLD : wavefolding West-coast (harmoniques mouvants)
+fold:   1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | fold 0..0.7 | over 8 | lp 1000 | gain 0.11 | hue 60 | mute
+
+# 8) PLUCK : basse pincée Karplus-Strong (boisée)
+pluck:  1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | pluck 0.4 | oct 2 | lp 1500 | gate 0.6 | gain 0.15 | hue 40 | mute
+
+# 9) RING : modulation en anneau (gnarly/robot)
+ring:   1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | ring 60 | lp 800 | drive 0.3 | gain 0.11 | hue 300 | mute
+
+# ----------------------------------------------------------------
+#  Au départ : « acid » seule. SOLO (S) chaque ligne pour la juger.
+#  Combine-en deux (ex. sub + acid) en les démutant ensemble.
+# ----------------------------------------------------------------

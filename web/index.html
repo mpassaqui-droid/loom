@@ -2049,6 +2049,57 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   PRESETS.strings="# CORDES FROTTÉES (modèle physique bowed / Karplus-Strong soutenu).\nkey:  a minor\nprog: Am F C G\nscene: lissa3d\ncello: ^1 . . . | bow | oct 2 | lp 1400 | comp 0.4 | reverb 0.6 | gain 0.13\nviola: ^ . . . . . . . | bow | lp 1900 | reverb 0.7 | gate 1.6 | gain 0.08 | hue 200\nlead:  1 . 3 . 5 . 1' . 7 . 5 . 3 . 2 . | bow | lp 2200 | reverb 0.5 | gate 0.7 | gain 0.1 | hue 280";
   PRESETS.kalimba="# KALIMBA / HARPE (corde pincée Karplus-Strong).\nkey:  c major\nprog: C G Am F\nscene: phyllo\nkal:  ^1 ^2 ^3 ^2 ^3 ^1' ^2 ^3 | pluck 0.7 | delay 0.3 | reverb 0.5 | gate 0.6 | gain 0.14 | hue 40\nbell: . . ^1' . . . ^3' . | bell | reverb 0.6 | delay 0.4 | gain 0.1 | hue 60\nbass: ^1 . . . ^1 . . . | pluck 0.4 | oct 2 | gain 0.16";
   PRESETS.westcoast="# WEST COAST (wavefolding Buchla + granulaire + PWM).\nkey:  c minor\nscene: reaction\ndrone: 1 . . . | saw | fold 0..0.9 | over 8 | lp 1200 | reverb 0.5 | gate 2 | gain 0.1\ncloud: 5 . . . 1' . . . | sine | grain 0.6 | reverb 0.7 | gate 1.5 | gain 0.08 | hue 180\nbleep: 1 5 1' 5 3 5 1' 5 | pwm 0.6 | lp 1800..3000 | over 8 | delay 0.3 | gain 0.12 | hue 300\nkick:  x . . . x . . . | sample bd";
+  PRESETS.basses=`# ================================================================
+#  LOOM — « BASSES » : le zoo des basses.
+#  Même riff partout, UN design de basse par ligne.
+#  > RUN. Isole chaque basse avec S (solo) / M (mute) dans la grille.
+#  > Au départ seule l'« acid » joue ; SOLO les autres pour comparer.
+# ================================================================
+
+title: Basses
+bpm:   128
+key:   a minor
+duck:  60              # sidechain : tout pompe sur le kick
+warmth: 0.4
+scene: lissajous
+
+# ---------- GROOVE ----------
+kick:  x . . . x . . . x . . . x . . . | sample bd | gain 0.6 | comp 0.5
+clap:  . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | shift 0.04
+hat:   x x! x x x x! x x x x! x x x x! x x | sample hh | gain 0.1 | swing 56 | degrade 25
+
+# ---------- LES BASSES (même riff, timbre différent) ----------
+# 1) ACID 303 : saw + slide + filtre résonant + enveloppe de filtre + drive
+acid:   1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | drive 0.4 | gate 0.4 | gain 0.16 | hue 0
+
+# 2) REESE : super-saw désaccordé + FM (jungle/DnB)
+reese:  1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | unison 3 | detune 18 | fm 0.5 2 | lp 900 | gain 0.1 | hue 280 | mute
+
+# 3) SUB : sinus pur + sous-oscillateur (le poids)
+sub:    1 . . . 5, . 1 . 4 . 1 . 5 . 1' . | sine | oct 1 | sub 0.6 | env 0.005 0.1 0.3 0.08 | gain 0.34 | hue 220 | mute
+
+# 4) 808 : sinus + pitch-drop (bend) + queue longue
+b808:   1 . . . . . . . 5, . . . . . . . | sine | oct 2 | bend -10 0.12 | env 0.005 0.5 0.2 0.6 | gain 0.3 | hue 30 | mute
+
+# 5) WOBBLE : filtre qui ondule (dubstep) via LFO
+wobble: 1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | unison 2 | lp 600 | lfo cutoff 4 0.8 | drive 0.3 | gain 0.12 | hue 160 | mute
+
+# 6) FM BASS : grasse et métallique (Chowning)
+fmbass: 1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | sine | oct 2 | fm 1 3 | lp 1200 | gate 0.5 | gain 0.13 | hue 200 | mute
+
+# 7) FOLD : wavefolding West-coast (harmoniques mouvants)
+fold:   1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | fold 0..0.7 | over 8 | lp 1000 | gain 0.11 | hue 60 | mute
+
+# 8) PLUCK : basse pincée Karplus-Strong (boisée)
+pluck:  1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | pluck 0.4 | oct 2 | lp 1500 | gate 0.6 | gain 0.15 | hue 40 | mute
+
+# 9) RING : modulation en anneau (gnarly/robot)
+ring:   1 . 1' . 5, . 1 . 4 . 1 . 5 . 1' . | saw | oct 2 | ring 60 | lp 800 | drive 0.3 | gain 0.11 | hue 300 | mute
+
+# ----------------------------------------------------------------
+#  Au départ : « acid » seule. SOLO (S) chaque ligne pour la juger.
+#  Combine-en deux (ex. sub + acid) en les démutant ensemble.
+# ----------------------------------------------------------------`;
   PRESETS.claviers=`# ================================================================
 #  LOOM — « CLAVIERS » : le zoo des petits claviers/synthés.
 #  Chaque ligne = UNE famille de synthèse, tous sur la même prog.
@@ -2305,7 +2356,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["claviers","nova","atlas","aurora"]],
+    ["★ Vitrines",["claviers","basses","nova","atlas","aurora"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto","signals"]],
