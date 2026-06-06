@@ -2112,6 +2112,60 @@ kendang2@ramai: . . . x . . x . . . . x . . x . | sample perc | gain 0.2 | pan 0
 #   • monte detune (6 -> 12) : le « ombak » bat plus fort, plus vivant
 #   • slow le tempo (bpm: 80) pour un gamelan méditatif de temple
 # ----------------------------------------------------------------`;
+  PRESETS.monologue=`# ================================================================
+#  LOOM — « MONOLOGUE » : à la manière d'Aphex Twin (Avril 14th / Rhubarb).
+#  Une seule voix qui PARLE : une mélodie fragile, légèrement désaccordée
+#  (wow + detune = ce flou doux-amer si reconnaissable), qui hésite et se
+#  développe, posée sur une nappe chaude. Presque pas de batterie : intime.
+#
+#  Le « monologue » = la voix « voix ». Elle change à chaque section
+#  (a -> b -> reprise -> coda) et improvise via {choix} et ? (hésitations).
+#
+#  > RUN, baisse les lumières, laisse parler. Change seed: 8 -> autre récit.
+# ================================================================
+
+title:  Monologue
+bpm:    84
+key:    a minor
+prog:   Am9 Fmaj7 Cmaj7 E7     # bittersweet : le E7 ramène un sol# qui pince
+tune:   just                   # ratios purs : chaleur + le detune qui chante
+seed:   7
+feel:   38                     # beaucoup de rubato : ça respire, pas mécanique
+duck:   0
+warmth: 0.5
+scene:  reaction
+film:   square
+song:   intro*2 a*4 b*4 a*4 coda*4
+
+# ---------- LA VOIX (le monologue) : e-piano FM doux, désaccordé ----------
+voix:      1 . . 3 . 5 . 3 . 2 . 1 . 7, . . | sine | fm 1 1.5 | unison 2 | detune 8 | wow 0.35 | slide | env 0.005 0.25 0.4 0.6 | reverb 0.6 | delay 0.3 | gate 0.7 | humanize 45 | gain 0.13 | hue 200 | in a b coda
+voix@b:    5 . 1' . {7 1'} . 6 . 5 . 3 . {2 4} . 3 . | sine | fm 1 1.5 | unison 2 | detune 9 | wow 0.4 | slide | env 0.005 0.25 0.4 0.6 | reverb 0.6 | delay 0.35 | gate 0.7 | humanize 45 | gain 0.14 | hue 210
+voix@coda: 1 . . . 3 . 2 . 1 . . . 7, . . . | sine | fm 1 1.5 | unison 2 | detune 7 | wow 0.3 | slide | env 0.01 0.3 0.4 0.9 | reverb 0.7 | delay 0.3 | gate 0.9 | humanize 40 | gain 0.12 | hue 190
+
+# ---------- réponse (une 2e voix, en écho décalé : le doute) ----------
+echo@b:    . . {3 5}? . . . 7? . . . {1' 2'}? . . . 5? . | sine | fm 1 2 | wow 0.3 | reverb 0.7 | delay 0.4 | gate 0.6 | degrade 30 | gain 0.07 | pan 0.35 | hue 280
+
+# ---------- NAPPE chaude (Rhubarb) : large, lente, légèrement désaccordée ----------
+pad:       ^ . . . . . . . . . . . . . . . | saw | unison 5 | detune 12 | spread 0.7 | wow 0.18 | lp 1100 | env 1.4 0.8 0.7 3 | reverb 0.75 | gate 2 | gain 0.08 | hue 300 | in intro a b a coda
+# sous-nappe sinus, une octave en dessous : le fond
+deep:      ^1 . . . . . . . . . . . . . . . | sine | oct 3 | env 1.6 1 0.8 3 | reverb 0.6 | gate 2 | gain 0.06 | hue 320 | in intro a b a coda
+
+# ---------- sub doux : le poids, sans batterie ----------
+sub:       ^1 . . . . . . . | sine | oct 2 | env 0.02 0.3 0.4 0.6 | gain 0.16 | in a b coda
+
+# ---------- boîte à musique : éclats rares (le souvenir) ----------
+boite@b:   ^1' . . . . . . . ^5 . . . . . . . | bell | reverb 0.7 | delay 0.5 | degrade 35 | gain 0.06 | pan -0.3 | hue 60
+
+# ---------- grain de vinyle : intimité lo-fi (du début à la fin) ----------
+air:       1 . . . . . . . . . . . . . . . | sine | noise 0.5 | hp 1200 | gate 2 | reverb 0.4 | gain 0.03 | in intro a b a coda
+
+# ----------------------------------------------------------------
+#  À essayer :
+#   • seed: 8, 9… -> la voix « dit » autre chose (les {choix} changent)
+#   • monte detune (8 -> 14) et wow (0.35 -> 0.6) -> plus cassé, plus triste
+#   • prog: Am9 Dm9 Fmaj7 E7 -> autre couleur harmonique
+#   • bpm: 72 -> encore plus suspendu
+# ----------------------------------------------------------------`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -2737,7 +2791,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mixtape","taqsim","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mixtape","monologue","taqsim","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
     ["Génératif & rythme",["euclid","automata","phase","chance","rolls","vary","shift","poly","song","long","auto","signals"]],
