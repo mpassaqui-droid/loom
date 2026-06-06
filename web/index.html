@@ -1481,6 +1481,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const g=(fr.length>1?v.gain*0.7:v.gain)*vm;
       fr.forEach((f,j)=>tone(t+(v.strum?j*v.strum:0),f,dur,v,{gain:g}));}}  // strum: stagger chord notes in time
   function scheduleBar(barT,bar){const sw=+$("swing").value/100;
+    if(vjOn&&stageOn&&bar>0&&bar%4===0)sceneMode=SCENES[Math.floor(Math.random()*SCENES.length)];  // VJ mode: auto-cycle scenes
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(songOn&&playing&&(!lintUntil||(((typeof performance!=="undefined"&&performance.now)?performance.now():9e15)>lintUntil)))log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
     if(accel||(tempoMap&&Object.keys(tempoMap).length))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (guarded: nothing set = unchanged)
@@ -1563,6 +1564,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     drawScope();if(stageOn)drawStage();
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
+  let vjOn=false;
   let stageOn=false,rings=[],lastBass=0,particles=[],vizQ=[],beams=[],flash=null,sceneMode="radial",sceneTime=0,stars=[],flowP=[],juliaCv=null,juliaCtx=null,netP=[],wfCv=null,wfCtx=null,fountP=[],fireP=[],mtxD=[],rdU=null,rdV=null,rdU2=null,rdV2=null,rdCv=null,rdCtx=null,warpP=[],epiTrail=[],vorS=[],dpA1=2.4,dpA2=2.4,dpV1=0,dpV2=0,dpTrail=[];
   // HSV -> [r,g,b] 0-255 (for per-pixel scenes like the Julia fractal)
   function hsv2rgb(h,s,v){h=((h%360)+360)%360/60;const i=Math.floor(h),f=h-i,p=v*(1-s),q=v*(1-s*f),t=v*(1-s*(1-f));
@@ -4826,6 +4828,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     const typing=e.target&&(e.target.tagName==="TEXTAREA"||e.target.tagName==="INPUT");
     if(e.key==="Escape"&&stageOn){stageOn=false;$("stageWrap").style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}
     else if(stageOn&&!typing&&(e.key==="n"||e.key==="N")){sceneMode=SCENES[(SCENES.indexOf(sceneMode)+1)%SCENES.length];}
+    else if(stageOn&&!typing&&(e.key==="v"||e.key==="V")){vjOn=!vjOn;log("[ vj ] défilement auto des scènes "+(vjOn?"ON (toutes les 4 mesures)":"OFF"),"ai");}
     else if(stageOn&&!typing&&(e.key==="c"||e.key==="C")){showCode=!showCode;const se=$("stageEditor");if(se)se.style.display=showCode?"block":"none";}});
   document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stageWrap").style.display="none";}});
   // live coding: typing in either editor updates the boxes immediately and (while playing) recompiles the music after a short pause
