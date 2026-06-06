@@ -1660,7 +1660,11 @@ void main(){
     gl.uniform1f(glU.uBass,b);gl.uniform1f(glU.uMid,m);gl.uniform1f(glU.uTreble,tr);
     gl.uniform1f(glU.uHue,(sceneTime*0.02)%1.0);gl.uniform1i(glU.uMode,GLMODES[mode]||0);
     gl.drawArrays(gl.TRIANGLES,0,3);return true;}
+  let lastScene="";
   function drawStage(){const cv=$("stage");if(!cv||!cv.getContext||!analyser)return;
+    if(sceneMode!==lastScene){lastScene=sceneMode;  // smooth crossfade on scene change (2D + GPU)
+      [cv,$("glstage")].forEach(c=>{if(c&&c.style){c.style.transition="opacity .45s ease";c.style.opacity="0";}});
+      setTimeout(()=>{[$("stage"),$("glstage")].forEach(c=>{if(c&&c.style)c.style.opacity="1";});},40);}
     if(GLSCENES.has(sceneMode)){const g=$("glstage");
       if(drawGL(sceneMode)){if(g)g.style.display="block";cv.width=window.innerWidth;cv.height=window.innerHeight;
         cv.getContext("2d").clearRect(0,0,cv.width,cv.height);return;}
