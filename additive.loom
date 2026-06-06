@@ -1,0 +1,43 @@
+# ================================================================
+#  LOOM — « ADDITIVE » : la synthèse additive (dessiner les harmoniques).
+#   • | partials A B C…  -> l'amplitude de chaque harmonique (1=fond.)
+#   • | organ 888650000  -> orgue à tirettes Hammond (9 chiffres 0-8)
+#   • | arp converge/pinky -> nouveaux modes d'arpège
+#   • scene: ribbon      -> rubans de forme d'onde
+#
+#  > RUN, puis SOLO chaque voix : entends comment chaque jeu d'harmoniques
+#    fabrique un timbre différent à partir de purs sinus additionnés.
+# ================================================================
+
+title:  Additive
+bpm:    100
+key:    c major
+prog:   auto gospel
+tune:   just
+warmth: 0.4
+scene:  ribbon
+song:   a*8 b*8
+
+# orgue à tirettes (Hammond) : fondamentale + octave + quinte + ...
+orgue:  ^ . . . ^ . . . ^ . . . ^ . . . | organ 888600040 | lp 3000 | env 0.01 0.1 0.9 0.2 | reverb 0.3 | haas 0.4 | gain 0.07 | hue 50
+
+# « clarinette » additive : harmoniques IMPAIRES seulement (son creux)
+clar:   ^1 . ^3 . ^5 . ^3 . | partials 1 0 0.6 0 0.4 0 0.28 0 0.2 | lp 2600 | env 0.02 0.15 0.6 0.3 | reverb 0.3 | gain 0.08 | hue 150
+
+# « cloche » additive : harmoniques étalées et décroissantes
+bell:   ^1' . . . ^5 . . . | partials 1 0.5 0.7 0.3 0.55 0.2 0.4 | env 0.005 0.4 0.2 0.6 | reverb 0.6 | delay 0.3 | gain 0.06 | pan -0.3 | hue 280
+
+# arpège en mode « converge » (extérieur -> centre)
+arp:    ^ . ^ . ^ . ^ . | arp converge | pluck 0.7 | autopan 0.3 | delay 0.25 | gate 0.5 | gain 0.08 | hue 40 | in b
+
+# basse sinus pure
+bass:   ^1 . . . 5, . ^1 . | sine | oct 2 | sub 0.4 | gain 0.16 | hue 30
+
+# pulsation légère
+kick:   x . . . x . . . x . . . x . . . | sample bd | gain 0.4 | in b
+hat:    . . x . . . x . . . x . . . x . | sample hh | gain 0.09 | swing 56 | in b
+
+# ----------------------------------------------------------------
+#  Essaie : | partials 1 1 1 1 1 1 1 1 (toutes égales = riche) ·
+#  | organ 800000888 (que les aiguës) · scene: fireworks.
+# ----------------------------------------------------------------

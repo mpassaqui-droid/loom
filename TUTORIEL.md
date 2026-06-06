@@ -87,7 +87,7 @@ Une **MAJUSCULE** joue un accord entier (minuscule = note simple).
   7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13`
 - **Slash / renversement** : `Cm7/G`, `C/E` (la note après `/` va à la basse)
 - **Chiffres romains** (avec une key) : `I ii iii IV V vi vii` (+`7`)
-- **Arpège** : `| arp up` (`down` / `updown` / `downup`)
+- **Arpège** : `| arp up` (`down` / `updown` / `downup` / `converge` / `diverge` / `thumb` / `pinky`)
 - **Harmoniseur** : `| chord m7` → chaque note devient un accord
 - **Voicing** : `| voicing open|drop2|wide|close` → réharmonise un accord (espacements plus aérés)
 
@@ -184,6 +184,8 @@ arp:  1 2 3 5 | jux add 2 | pluck 0.7 | gain 0.12
 | `| supersaw` | macro instantanée (saw + unison 7 + detune + spread) |
 | `| fm RATIO INDEX` | **FM** : cloches, e-piano, basses grasses (index 1–6) |
 | `| wt organ\|warm\|rich\|soft` | **table d'ondes** |
+| `| partials A B C…` | **synthèse additive** : amplitude de chaque harmonique |
+| `| organ 888650000` | **orgue à tirettes** Hammond (9 chiffres 0-8) |
 | `| pwm N` | largeur d'impulsion variable |
 | `| sync N` | **hard-sync** qui balaye (lead rave/acid) |
 | `| fold N` | **wavefolding** (West-coast, harmoniques mouvants) |
