@@ -4530,7 +4530,7 @@ heart:  drunk(16) | sample bd | gain 0.34 | comp 0.4 | every 4 fast 2 | in resea
 # ---------- SÈVE : la mélodie principale, 100% générée, autre à chaque mesure ----------
 sap@spore:     walk(8) | bell | detune 5 | wow 0.3 | reverb 0.85 | delay 0.5 | echo 8 0.5 | degrade 25 | gain 0.09 | pan 0.25 | hue 60
 sap@germinate: walk(10) | pluck 0.7 | harmonize 7 0.3 | slide | reverb 0.7 | delay 0.4 | echo 6 0.45 | humanize 45 | gain 0.1 | hue 90
-sap@reseau:    logistic(16) | sine | fm 1 2.5 | slide | lp 2400 | delay 0.3 | echo 8 0.4 | gate 0.6 | humanize 40 | gain 0.09 | hue 180
+sap@reseau:    logistic(16) | shuffle | every 3 rev | sine | fm 1 2.5 | slide | lp 2400 | delay 0.3 | echo 8 0.4 | gate 0.6 | humanize 40 | gain 0.09 | hue 180
 sap@fruct:     walk(12) | pluck 0.75 | harmonize 5 0.35 | reverb 0.6 | delay 0.3 | echo 8 0.45 | mutate 25 | humanize 40 | gain 0.1 | hue 280
 sap@spores:    perlin(16) | bell | detune 4 | semi 12 | reverb 0.85 | echo 8 0.55 | degrade 35 | gain 0.07 | hue 60
 
@@ -5389,6 +5389,28 @@ wood@fruct:  e(5,16) | sample perc | reson 320 0.4 | crush 5 | pan -0.3 | chance
   try{if(typeof window!=="undefined")window.__loom={transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
+</script>
+<!-- Shared Rust engine (loom-core -> WASM), loaded NON-destructively. The JS
+     engine above keeps playing; this just exposes window.__loomRust so the same
+     core can be A/B-checked in the browser and, later, drive audio directly.
+     Any failure (missing build / old browser) is swallowed — the app is unaffected. -->
+<script type="module">
+  (async () => {
+    try {
+      const w = await import('./pkg/loom_wasm.js');
+      await w.default();                       // init the wasm module
+      window.__loomRust = {
+        scheduleBar: (src, bar) => JSON.parse(w.schedule_bar_json(src, bar)),
+        barSeconds:  (src, bar) => w.bar_seconds(src, bar),
+        barBpm:      (src, bar) => w.bar_bpm(src, bar),
+        info:        (src)      => JSON.parse(w.program_info_json(src)),
+      };
+      console.log('%c[LOOM] moteur Rust (WASM) chargé — window.__loomRust prêt',
+                  'color:#6f6');
+    } catch (e) {
+      console.warn('[LOOM] moteur Rust non chargé (l\'app JS continue normalement):', e.message);
+    }
+  })();
 </script>
 </body>
 </html>
