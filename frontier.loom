@@ -1,0 +1,38 @@
+# ================================================================
+#  LOOM — « FRONTIER » : le gros lot d'ajouts (sampler + monde + visuel).
+#   • | chop N        -> beat-slice une boucle (jungle/IDM)
+#   • | reverse       -> le sample à l'envers
+#   • | begin / end   -> ne joue qu'une région du sample
+#   • | autopan RATE  -> la voix balaie l'espace toute seule
+#   • gammes du monde -> bhairavi, malkauns, nikriz, ryukyu… (12 nouvelles)
+#   • scènes          -> grid (synthwave) · petals (fleur spectrale)
+# ================================================================
+
+title:  Frontier
+bpm:    150
+key:    c bhairavi          # raga (komal Re + komal Dha) — couleur grave d'Inde du nord
+duck:   30
+warmth: 0.4
+scene:  grid
+song:   intro*2 main*8 break*4 main*8 out*2
+
+# beat-slice de l'amen, réarrangé par le chop
+chop:   x . x . x . x x . x . x x . x . | sample amen | chop 8 | gain 0.28 | in main out
+# une réinjection à l'envers, juste un bout du sample
+rev:    . . . . x . . . . . . . x . . . | sample amen | reverse | begin 0.4 | end 0.7 | redux 4 | gain 0.18 | in main break
+# sub qui tient le bas
+sub:    1 . . . . . . . 5, . . . 4, . . . | sine | oct 1 | sub 0.6 | env 0.005 0.2 0.3 0.2 | gain 0.28 | in main out
+
+# basse acid sur la gamme raga
+bass:   1 . 1' . 5, . 1 . 4 . 1 . 5, . 1' . | saw | oct 2 | slide | lp 600 q 8 | fenv 0.6 | drive 0.3 | gain 0.13 | in main out
+
+# nappe qui se balade dans le champ stéréo (autopan)
+pad:    1 . . . 4 . . . 5 . . . 1' . . . | saw | unison 4 | autopan 0.35 | vowel a | lp 1400 | reverb 0.6 | gate 1.6 | gain 0.07 | in intro main break out
+
+# lead pincé, mélodie raga
+lead:   1 2 3 . 5 4 3 . 2 1 7, . 1 . . . | pluck 0.7 | delay 0.25 | reverb 0.4 | gate 0.6 | gain 0.1 | in main
+
+# ----------------------------------------------------------------
+#  Essaie : scene: petals · key: c malkauns (pentatonique sombre) ·
+#  chop 16 sur la boucle · | reverse sur la nappe.
+# ----------------------------------------------------------------

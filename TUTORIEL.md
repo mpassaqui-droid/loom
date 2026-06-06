@@ -66,7 +66,9 @@ Change la gamme, la même mélodie change de couleur.
 - **Occidentales** : `major minor dorian phrygian lydian mixolydian locrian`
   `pentatonic minpent harmonic_minor melodic_minor whole_tone blues chromatic`
 - **Du monde** : `hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa
-  purvi slendro pelog hirajoshi insen iwato egyptian`
+  purvi slendro pelog hirajoshi insen iwato egyptian` + `bhairavi malkauns
+  ahirbhairav nikriz athar_kurd ryukyu pelog_selisir tritone harmonic_major
+  lydian_minor hindu`
 - **Microtonales (vrais quarts de ton)** : `bayati rast saba sikah huzam jiharkah`
 - **Personnalisée** : `scale: 0 2 3 5 7 9 10` (demi-tons depuis la tonique ; microtonal ok : `0 1.5 3 5 7 8 10`)
 
@@ -258,6 +260,7 @@ acid:  1 5, 1' 5 4 1 5 3 | saw | oct 2 | slide | lp 500 q 9 | fenv 0.7 | gain 0.
 | `| ir hall\|room\|plate\|spring\|cathedral [mix]` | **réverbe à convolution** : un espace acoustique réel, en insert par voix |
 | `| eq L M H` | EQ 3 bandes en dB (grave/médium/aigu) |
 | `| chorus N` `| phaser N` | élargissement / balayage psyché |
+| `| autopan RATE` | panoramique automatique (LFO gauche↔droite) |
 | `| comp N` | compression (punch & glue) |
 | `| drive X` | distorsion / chaleur |
 | `| crush BITS` | bitcrush 1–8 (lo-fi/IDM) |
@@ -323,6 +326,7 @@ keys: I . IV . V . I . | sine | gain 0.2
 - **Mélodiques** (repitchés sur les degrés) : `bass arpy gtr casio sax sitar
   juno hoover stab bleep sid voodoo`
 - **Loops / voix** : `amen break amencut` · `vox yeah breath wood metal glass bottle`
+- **`| chop N`** : **beat-slice** une boucle (joue 1/N par coup) · **`| reverse`** : à l'envers · **`| begin B | end E`** : ne joue qu'une région
 - **`| root NOTE`** : accorde un sample mélodique à l'oreille
 - **Tes fichiers** : panneau « mes sons » → dépose un audio → `| sample <ton_nom>`
 

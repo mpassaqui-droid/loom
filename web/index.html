@@ -599,11 +599,18 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const gg=ctx.createGain();gg.gain.setValueAtTime(0.0001,gt);gg.gain.exponentialRampToValueAtTime(Math.max(0.001,(gain||0.5)/Math.sqrt(G)*2),gt+glen*0.4);gg.gain.exponentialRampToValueAtTime(0.0001,gt+glen);
       let node=gg;if(ctx.createStereoPanner){const pp=ctx.createStereoPanner();pp.pan.value=(Math.random()*2-1)*0.8;gg.connect(pp);node=pp;}
       s.connect(gg);node.connect(bus);connectFx(node,v);s.start(gt,off,glen+0.02);}return true;}
+  const sbufRev={};
+  function revBuffer(name){if(sbufRev[name])return sbufRev[name];const b=sbuf[name];if(!b||!ctx.createBuffer)return b;
+    const r=ctx.createBuffer(b.numberOfChannels,b.length,b.sampleRate);
+    for(let ch=0;ch<b.numberOfChannels;ch++){const src=b.getChannelData(ch),dst=r.getChannelData(ch),L=src.length;for(let i=0;i<L;i++)dst[i]=src[L-1-i];}
+    sbufRev[name]=r;return r;}
   function playSample(name,t,gain,rate,v){const b=sbuf[name];if(!b)return false;
     if(v&&v.grain)return grainSample(name,t,gain,rate,v);
-    const s=ctx.createBufferSource();s.buffer=b;s.playbackRate.value=rate||1;
+    const s=ctx.createBufferSource();s.buffer=(v&&v.revsamp)?revBuffer(name):b;s.playbackRate.value=rate||1;
     const g=ctx.createGain();g.gain.value=gain!=null?gain:0.9;s.connect(g).connect(bus);connectFx(g,v);
-    if(v&&v.chop){const N=v.chop,idx=(v._chopN=((v._chopN||0)+1))%N,sl=b.duration/N;s.start(t,idx*sl,sl);}  // beat-slice: play the next 1/N slice
+    const dur0=b.duration;
+    if(v&&v.chop){const N=v.chop,idx=(v._chopN=((v._chopN||0)+1))%N,sl=dur0/N;s.start(t,idx*sl,sl);}  // beat-slice: play the next 1/N slice
+    else if(v&&(v.sbeg!=null||v.sfin!=null)){const o=(v.sbeg||0)*dur0,len=((v.sfin!=null?v.sfin:1)-(v.sbeg||0))*dur0;s.start(t,Math.max(0,o),Math.max(0.01,len));}  // sample region [begin,end]
     else s.start(t);return true;}
 
   // --- MIDI out: send a voice's notes to a DAW / hardware synth ---
@@ -870,6 +877,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const pn=ctx.createStereoPanner(),pg=ctx.createGain();pg.gain.value=0.95;lo.connect(pg);pg.connect(pn.pan);
       const dg=ctx.createGain();dg.gain.value=0.7;const dgo=ctx.createGain();dgo.gain.value=0.3;lo.connect(dgo);dgo.connect(dg.gain);
       out.connect(pn);pn.connect(dg);out=dg;mods.push(lo);}
+    // autopan: an LFO sweeps the stereo position back and forth
+    if(v.autopan&&ctx.createStereoPanner){const lo=ctx.createOscillator();lo.frequency.value=v.autopan;
+      const pn=ctx.createStereoPanner(),pg=ctx.createGain();pg.gain.value=0.92;lo.connect(pg);pg.connect(pn.pan);out.connect(pn);out=pn;mods.push(lo);}
     // ir: convolution-reverb INSERT with a synthesized impulse of a real space (wet/dry mix)
     if(v.ir&&ctx.createConvolver){const irb=irBuffer(v.ir);if(irb){try{
       const cv2=ctx.createConvolver();cv2.buffer=irb;
@@ -961,7 +971,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     kumoi:[0,2,3,7,9],yo:[0,2,5,7,9],blues_major:[0,2,3,4,7,9],majblues:[0,2,3,4,7,9],
     // maqam with true quarter tones (0.5 = a quarter tone) — rendered microtonally
     bayati:[0,1.5,3,5,7,8,10],rast:[0,2,3.5,5,7,9,10.5],saba:[0,1.5,3,4,7,8,10],
-    sikah:[0,1.5,3.5,5.5,7,8.5,10.5],huzam:[0,1.5,3.5,5,6.5,8.5,10],jiharkah:[0,2,4,5,7,9,10.5]};
+    sikah:[0,1.5,3.5,5.5,7,8.5,10.5],huzam:[0,1.5,3.5,5,6.5,8.5,10],jiharkah:[0,2,4,5,7,9,10.5],
+    bhairavi:[0,1,3,5,7,8,10],malkauns:[0,3,5,8,10],ahirbhairav:[0,1,4,5,7,9,10],  // ragas indiens
+    nikriz:[0,2,3,6,7,9,10],athar_kurd:[0,1,3,6,7,8,11],  // maqamat
+    ryukyu:[0,4,5,7,11],pelog_selisir:[0,1,3,7,8],  // Okinawa / Bali
+    istrian:[0,1,3,4,6,7],tritone:[0,1,4,6,7,10],  // istrien / Petrouchka
+    harmonic_major:[0,2,4,5,7,8,11],lydian_minor:[0,2,4,6,7,8,10],hindu:[0,2,4,5,7,8,10]};
   const DEFAULT_OCTAVE=3;
   function tonicPc(w){const m=/^([a-gA-G])([#b]?)/.exec(w);if(!m)return null;
     const map={c:0,d:2,e:4,f:5,g:7,a:9,b:11};let s=map[m[1].toLowerCase()];if(m[2]==="#")s++;if(m[2]==="b")s--;
@@ -1144,7 +1159,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,sbeg=null,sfin=null,autopan=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1169,6 +1184,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="ir"){ir=p[1]||"hall";const mx=parseFloat(p[2]);if(!isNaN(mx))irmix=Math.max(0,Math.min(1,mx));}
       else if(p[0]==="voicing"||p[0]==="voice")voicing=p[1]||"open";
       else if(p[0]==="cresc")dyn=1;else if(p[0]==="dim"||p[0]==="decresc")dyn=-1;
+      else if(p[0]==="reverse"||p[0]==="rev?")revsamp=true;
+      else if(p[0]==="begin")sbeg=Math.max(0,Math.min(1,parseFloat(p[1])||0));
+      else if(p[0]==="end")sfin=Math.max(0,Math.min(1,parseFloat(p[1])!=null&&!isNaN(parseFloat(p[1]))?parseFloat(p[1]):1));
+      else if(p[0]==="autopan")autopan=Math.max(0.02,Math.min(20,parseFloat(p[1])||1));
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
       else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
       else if(p[0]==="fm")fm={ratio:Math.max(0.1,Math.min(16,parseFloat(p[1])||2)),index:Math.max(0,Math.min(12,parseFloat(p[2])!=null&&!isNaN(parseFloat(p[2]))?parseFloat(p[2]):3))};
@@ -1220,7 +1239,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,sbeg,sfin,autopan,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -1455,7 +1474,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // HSV -> [r,g,b] 0-255 (for per-pixel scenes like the Julia fractal)
   function hsv2rgb(h,s,v){h=((h%360)+360)%360/60;const i=Math.floor(h),f=h-i,p=v*(1-s),q=v*(1-s*f),t=v*(1-s*(1-f));
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
-  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple"];
+  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple","grid","petals"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let spectroCv=null;  // persistent offscreen for the scrolling spectrogram scene
   let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3;
@@ -2029,6 +2048,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         if(b>0.55){c.fillStyle=hexA(fg,(b-0.55)*1.8);c.fillRect(px,py,st,st);}
         else if(b<0.32){c.fillStyle=hexA(cyn,(0.32-b)*1.3);c.fillRect(px,py,st,st);}}}
       c.fillStyle=am;c.shadowBlur=10;c.shadowColor=am;c.beginPath();c.arc(s1x,sy,4,0,7);c.fill();c.beginPath();c.arc(s2x,sy,4,0,7);c.fill();c.shadowBlur=0;}
+    else if(sceneMode==="grid"){sceneTime+=0.03+bass*0.09;const hz=cy+H*0.05;  // synthwave perspective grid + sun
+      const sr=Math.min(W,H)*0.15;c.fillStyle=hexA(am,0.55);c.beginPath();c.arc(cx,hz-sr*0.35,sr,Math.PI,2*Math.PI);c.fill();
+      c.strokeStyle=hexA(fg,0.5);c.lineWidth=1.5;c.shadowBlur=8;c.shadowColor=fg;
+      for(let i=-12;i<=12;i++){c.beginPath();c.moveTo(cx,hz);c.lineTo(cx+i*W*0.09,H);c.stroke();}
+      c.strokeStyle=hexA(cyn,0.6);c.shadowColor=cyn;
+      for(let i=1;i<=16;i++){const z=(i+(sceneTime%1))/16,y=hz+(H-hz)*z*z;if(y<=hz)continue;c.globalAlpha=Math.min(1,1.2-z);c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke();}
+      c.globalAlpha=1;c.strokeStyle=hexA(am,0.7);c.lineWidth=2;c.beginPath();
+      for(let x=0;x<=W;x+=8){const m=fb[Math.floor(x/W*n*0.3)]/255;const y=hz-m*H*0.13*(0.3+bass);x?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.shadowBlur=0;}
+    else if(sceneMode==="petals"){sceneTime+=0.01+bass*0.04;const P=72,maxR=Math.min(W,H)*0.44;  // rotating spectral flower
+      c.save();c.translate(cx,cy);c.rotate(sceneTime);
+      for(let i=0;i<P;i++){const a=i/P*Math.PI*2,m=Math.pow(fb[Math.floor(i*n*0.5/P)]/255,1.3),len=maxR*(0.18+m);
+        c.strokeStyle=hslA((i/P*360+sceneTime*40)%360,0.55+m*0.4);c.lineWidth=3+m*7;c.shadowBlur=12;c.shadowColor=c.strokeStyle;
+        c.beginPath();c.moveTo(0,0);c.lineTo(Math.cos(a)*len,Math.sin(a)*len);c.stroke();}
+      c.restore();c.shadowBlur=0;}
     else{ // radial (default)
       const rg=c.createRadialGradient(cx,cy,0,cx,cy,R*(1.3+bass*1.8));
       rg.addColorStop(0,hexA(fg,0.5));rg.addColorStop(0.4,hexA(fg,0.1));rg.addColorStop(1,hexA(bg,0));
@@ -2982,6 +3015,44 @@ pad:    ^1 _ _ _ _ _ _ | bow | unison 2 | lp 1100 | reverb 0.7 | gain 0.06 | hue
 #  À essayer : meter: 5/4 ou 12/8 · accel: 132 90 (ralentir) ·
 #  key@drop: c major (le drop s'éclaire au lieu de s'assombrir).
 # ----------------------------------------------------------------`;
+  PRESETS.frontier=`# ================================================================
+#  LOOM — « FRONTIER » : le gros lot d'ajouts (sampler + monde + visuel).
+#   • | chop N        -> beat-slice une boucle (jungle/IDM)
+#   • | reverse       -> le sample à l'envers
+#   • | begin / end   -> ne joue qu'une région du sample
+#   • | autopan RATE  -> la voix balaie l'espace toute seule
+#   • gammes du monde -> bhairavi, malkauns, nikriz, ryukyu… (12 nouvelles)
+#   • scènes          -> grid (synthwave) · petals (fleur spectrale)
+# ================================================================
+
+title:  Frontier
+bpm:    150
+key:    c bhairavi          # raga (komal Re + komal Dha) — couleur grave d'Inde du nord
+duck:   30
+warmth: 0.4
+scene:  grid
+song:   intro*2 main*8 break*4 main*8 out*2
+
+# beat-slice de l'amen, réarrangé par le chop
+chop:   x . x . x . x x . x . x x . x . | sample amen | chop 8 | gain 0.28 | in main out
+# une réinjection à l'envers, juste un bout du sample
+rev:    . . . . x . . . . . . . x . . . | sample amen | reverse | begin 0.4 | end 0.7 | redux 4 | gain 0.18 | in main break
+# sub qui tient le bas
+sub:    1 . . . . . . . 5, . . . 4, . . . | sine | oct 1 | sub 0.6 | env 0.005 0.2 0.3 0.2 | gain 0.28 | in main out
+
+# basse acid sur la gamme raga
+bass:   1 . 1' . 5, . 1 . 4 . 1 . 5, . 1' . | saw | oct 2 | slide | lp 600 q 8 | fenv 0.6 | drive 0.3 | gain 0.13 | in main out
+
+# nappe qui se balade dans le champ stéréo (autopan)
+pad:    1 . . . 4 . . . 5 . . . 1' . . . | saw | unison 4 | autopan 0.35 | vowel a | lp 1400 | reverb 0.6 | gate 1.6 | gain 0.07 | in intro main break out
+
+# lead pincé, mélodie raga
+lead:   1 2 3 . 5 4 3 . 2 1 7, . 1 . . . | pluck 0.7 | delay 0.25 | reverb 0.4 | gate 0.6 | gain 0.1 | in main
+
+# ----------------------------------------------------------------
+#  Essaie : scene: petals · key: c malkauns (pentatonique sombre) ·
+#  chop 16 sur la boucle · | reverse sur la nappe.
+# ----------------------------------------------------------------`;
   PRESETS.taqsim=`# ================================================================
 #  LOOM — « TAQSIM » : maqâm bayâtî, en QUARTS DE TON.
 #  La gamme bayati = [0, 1.5, 3, 5, 7, 8, 10] demi-tons : son 2e degré
@@ -3607,7 +3678,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #   • change seed: 24 -> 25  -> nouvelle variation (mais toujours juste)
 # ================================================================`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mixtape","evolution","spaces","newmusic","odyssey","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mixtape","evolution","spaces","newmusic","odyssey","frontier","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
@@ -3689,7 +3760,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     {t:"39 · Mesures impaires & tempo qui glisse",d:"meter: 7/8 met la barre en temps impairs. accel: A B fait glisser le tempo de A à B (montée/ralenti).",c:"meter: 7/8\naccel: 100 130\nkey:  e phrygian\nlead: 1 2 3 4 5 4 3 | pluck 0.7 | gain 0.13\nkick: x . . x . x . | sample bd | gain 0.4"},
     {t:"40 · Modulation & voice-leading",d:"key@section change de tonalité pour une section (vraie modulation). | voicing lead enchaîne les accords en douceur.",c:"song: verse*4 chorus*4\nkey:  a minor\nkey@chorus: c minor\nprog: Am F C G\nkeys: ^ . . . | voicing lead | sine | reverb 0.3 | gain 0.15\nbass: ^1 . . . | sine | oct 2 | gain 0.2"},
     {t:"41 · Groove & dynamiques",d:"groove: dilla donne le swing « bancal » du hip-hop à tout. | cresc fait monter la vélocité (crescendo), | dim la fait descendre.",c:"groove: dilla\nkey:  f minor\nkick: x . . . x . . . | sample bd | gain 0.5\nhat:  x x x x x x x x | sample hh | gain 0.1\nfill: 1 2 3 4 5 6 7 1' | cresc | pluck 0.7 | gain 0.12"},
-    {t:"42 · Verbes de motif & tempéraments",d:"| invert renverse la mélodie (miroir). | sequence la répète transposée. tune: werck = tempérament baroque.",c:"key:  c major\ntune: werck\nlead: 1 2 3 5 3 2 | invert | pluck 0.7 | reverb 0.3 | gain 0.12\nseq:  1 2 3 | sequence 2 | sine | gain 0.1"}
+    {t:"42 · Verbes de motif & tempéraments",d:"| invert renverse la mélodie (miroir). | sequence la répète transposée. tune: werck = tempérament baroque.",c:"key:  c major\ntune: werck\nlead: 1 2 3 5 3 2 | invert | pluck 0.7 | reverb 0.3 | gain 0.12\nseq:  1 2 3 | sequence 2 | sine | gain 0.1"},
+    {t:"43 · Sampler : chop, reverse, region",d:"| chop N découpe une boucle en N tranches (une par coup). | reverse la lit à l'envers. | begin/end ne jouent qu'une partie.",c:"loop: x . x . x . x . | sample amen | chop 8 | gain 0.3\nrev:  x . . . x . . . | sample amen | reverse | gain 0.2\nbit:  . . x . . . x . | sample break | begin 0.5 | end 0.75 | gain 0.2"},
+    {t:"44 · Gammes du monde & autopan",d:"De nouvelles gammes (ragas, maqamat, Okinawa…). | autopan balaie la voix de gauche à droite.",c:"key:  c bhairavi\nlead: 1 2 3 5 4 3 2 1 | pluck 0.7 | gain 0.13\npad:  1 . . . 5 . . . | sine | autopan 0.4 | reverb 0.5 | gate 1.6 | gain 0.08"}
   ];
   // course lessons are wired below, in the unified APPRENDRE panel
 
@@ -3704,6 +3777,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Notes & degrés","1'   5,","octave : ' monte, , descend"],
     ["Notes & degrés","7#  3b  5b","altération chromatique (en suffixe)"],
     ["Gammes","scale: dorian","major minor dorian phrygian lydian mixolydian locrian · pentatonic minpent · harmonic_minor melodic_minor whole_tone blues chromatic"],
+    ["Gammes du monde","+ ragas/maqamat","bhairavi malkauns ahirbhairav nikriz athar_kurd ryukyu pelog_selisir istrian tritone harmonic_major lydian_minor hindu"],
     ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian"],
     ["Microtonal","key: d bayati","maqâm à vrais quarts de ton : bayati rast saba sikah huzam jiharkah"],
     ["Gammes","scale: 0 2 3 5 7 9 10","gamme PERSONNALISÉE : demi-tons depuis la tonique (microtonal ok : 0 1.5 3 5 7 8 10)"],
@@ -3805,6 +3879,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Effets & mix","duck: N","sidechain : tout pompe sur le kick"],
     ["Groove","feel: N","humanise le timing/vélocité (0-100) — ça respire au lieu d'être mécanique"],
     ["Samples (drums)","| sample bd","bd sd hh cp kick2 kick909 clubkick clap2 oh rim cow perc tom tom2 tom3 ride tabla"],
+    ["Sampler","| chop N   | reverse","beat-slice : joue 1/N de la boucle à chaque coup · reverse = lit le sample à l'envers"],
+    ["Sampler","| begin B   | end E","ne joue que la région [B..E] du sample (0-1) — chops manuels, FX"],
+    ["Effets & mix","| autopan RATE","panoramique automatique : un LFO balaie la voix de gauche à droite (Hz)"],
     ["Samples (mélo)","| sample sitar","bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo (repitchés)"],
     ["Samples (loops/voix)","| sample amen","breaks: amen break amencut · voix/texture: vox yeah breath wood metal glass bottle"],
     ["Samples","| root NOTE","accorde un sample mélodique à l'oreille"],
@@ -3825,7 +3902,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Son","| orbit RATE","spatialisation : la voix tourne autour de l'auditeur (Hz) — mouvement stéréo + distance"],
     ["Groove","| humanize N","humanisation par voix (0-100) : micro-décalages timing/vélocité, indépendant du feel global"],
     ["Live","| mute  /  | solo","coupe une voix / isole une voix (mixage en direct)"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
@@ -3991,6 +4068,9 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- Math sequences as rhythm: morse(n) = the Thue-Morse sequence (famously non-repeating, balanced), fib(n) = the Fibonacci word (quasi-periodic, self-similar). e.g. hat: morse(16) , perc: fib(16) | sample perc. They give organic, never-quite-repeating patterns.",
     "- Cellular automata: a token ca(rule,n) generates an evolving rhythm from a Wolfram elementary CA (rule 0-255, n cells) that advances one generation EACH BAR, so the pattern morphs over time on its own. Great rules: 90 (Sierpinski), 30 (chaos), 110, 18, 150, 54. e.g. hat: ca(90,16) , perc: ca(30,16) | sample perc. Best for percussion/texture; combine with a steady kick.",
     "- Euclidean rhythms: a token e(k,n) expands to k hits spread evenly over n steps; e(k,n,rot) rotates. Great for drums, e.g. kick: e(4,16) , hat: e(7,16,2). Mix with plain tokens.",
+    "- Sampler chops: | chop N beat-slices a loop sample (plays the next 1/N slice each hit — great on | sample amen/break for jungle/IDM). | reverse plays the sample backwards. | begin B | end E play only the region B..E (0-1) of the sample. Combine: break: x x x x | sample amen | chop 8.",
+    "- Auto-pan: | autopan RATE sweeps a voice left<->right with an LFO (RATE in Hz, e.g. 0.5 = slow sweep). Lovely on pads/arps for movement.",
+    "- More world scales: bhairavi malkauns ahirbhairav (ragas), nikriz athar_kurd (maqamat), ryukyu (Okinawa), pelog_selisir (Bali), tritone (Petrushka), harmonic_major, lydian_minor, hindu. Use like key: c bhairavi.",
     "- Groove templates: groove: dilla (also mpc, swing16, push, laidback, humanish) applies a named microtiming feel to the whole track — dilla = the loose, drunk hip-hop swing. One groove per song.",
     "- Phrase dynamics: | cresc makes a voice's notes get LOUDER across the bar, | dim gets softer (a crescendo/diminuendo). e.g. fill: x x x x x x x x | cresc | sample sd.",
     "- Motif verbs: | invert mirrors a melody upside-down around its first note; | sequence N repeats the motif transposed by N scale-steps (a melodic sequence). e.g. lead: 1 2 3 5 | invert , or 1 2 3 | sequence 2 (motif then up a third).",
@@ -4038,7 +4118,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
-    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; organic/biology/dna -> scene: helix; hypnotic/optical/interference -> scene: moire; hot/intense/fire -> scene: fire; radiant/solar/burst -> scene: sunburst; hacker/digital-rain/cyber -> scene: matrix; cosmic/planetary/space -> scene: orbits; world/earth/global -> scene: globe; waveform/oscillo/landscape -> scene: wave; mathematical/geometric/elegant -> scene: harmono; chaos/organic/smoke -> scene: clifford; resonance/standing-waves/sacred -> scene: cymatic; chaotic/butterfly/scientific -> scene: lorenz; intricate/lacework/web -> scene: dejong; spiral/chaotic/funnel -> scene: rossler; flower/symmetry/morphing -> scene: superf; alien/dense/orbital -> scene: hopalong; floral/petals/delicate -> scene: rose; geometric/gears/spirograph -> scene: spiro; organic/cellular/blob -> scene: gumowski; sparkly/dust/nebula -> scene: tinker; glitch/scatter/digital -> scene: ikeda; natural/sunflower/golden -> scene: phyllo; cellular/biological/coral -> scene: reaction; maze/woven/tile -> scene: truchet; speed/hyperspace/launch -> scene: warp; fractal/fire/ship -> scene: ship; psychedelic/quartic/bloom -> scene: julia4; star/rosette/intricate -> scene: maurer; clockwork/fourier/drawing -> scene: epicycle; knot/3d-curve/ribbon -> scene: lissa3d; sacred/geometry/meditative -> scene: flower; cells/hive/grid -> scene: honeycomb; 3d/geometric/rotating -> scene: cube; 4d/hypercube/mind-bending -> scene: tesseract; topology/knot/looping -> scene: knot; vortex/wormhole/portal -> scene: wormhole; mathematical/twist/infinite -> scene: mobius; chaos/physics/swing -> scene: pendulum; eq/circular/audio -> scene: radialbars; fractal/dust/curve -> scene: henon; flowing/symmetric/3d -> scene: thomas; orbital/wing/3d -> scene: aizawa; nature/plant/fractal -> scene: fern; chaotic/3d/scroll -> scene: chen; cells/mosaic/territory -> scene: voronoi; fractal/triangle/recursive -> scene: sierpinski; 3d/swirl/exotic -> scene: dadras/halvorsen; ornate/banknote/rosette -> scene: guilloche; storm/electric/aggressive -> scene: lightning; sacred/cube/geometry -> scene: metatron; sequencer/tracker/columns -> scene: tracker; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
+    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; organic/biology/dna -> scene: helix; hypnotic/optical/interference -> scene: moire; hot/intense/fire -> scene: fire; radiant/solar/burst -> scene: sunburst; hacker/digital-rain/cyber -> scene: matrix; cosmic/planetary/space -> scene: orbits; world/earth/global -> scene: globe; waveform/oscillo/landscape -> scene: wave; mathematical/geometric/elegant -> scene: harmono; chaos/organic/smoke -> scene: clifford; resonance/standing-waves/sacred -> scene: cymatic; chaotic/butterfly/scientific -> scene: lorenz; intricate/lacework/web -> scene: dejong; spiral/chaotic/funnel -> scene: rossler; flower/symmetry/morphing -> scene: superf; alien/dense/orbital -> scene: hopalong; floral/petals/delicate -> scene: rose; geometric/gears/spirograph -> scene: spiro; organic/cellular/blob -> scene: gumowski; sparkly/dust/nebula -> scene: tinker; glitch/scatter/digital -> scene: ikeda; natural/sunflower/golden -> scene: phyllo; cellular/biological/coral -> scene: reaction; maze/woven/tile -> scene: truchet; speed/hyperspace/launch -> scene: warp; fractal/fire/ship -> scene: ship; psychedelic/quartic/bloom -> scene: julia4; star/rosette/intricate -> scene: maurer; clockwork/fourier/drawing -> scene: epicycle; knot/3d-curve/ribbon -> scene: lissa3d; sacred/geometry/meditative -> scene: flower; cells/hive/grid -> scene: honeycomb; 3d/geometric/rotating -> scene: cube; 4d/hypercube/mind-bending -> scene: tesseract; topology/knot/looping -> scene: knot; vortex/wormhole/portal -> scene: wormhole; mathematical/twist/infinite -> scene: mobius; chaos/physics/swing -> scene: pendulum; eq/circular/audio -> scene: radialbars; fractal/dust/curve -> scene: henon; flowing/symmetric/3d -> scene: thomas; orbital/wing/3d -> scene: aizawa; nature/plant/fractal -> scene: fern; chaotic/3d/scroll -> scene: chen; cells/mosaic/territory -> scene: voronoi; fractal/triangle/recursive -> scene: sierpinski; 3d/swirl/exotic -> scene: dadras/halvorsen; ornate/banknote/rosette -> scene: guilloche; storm/electric/aggressive -> scene: lightning; sacred/cube/geometry -> scene: metatron; sequencer/tracker/columns -> scene: tracker; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
