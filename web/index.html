@@ -1085,7 +1085,35 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     chinese:"gamme chinoise brillante — éclat, antiquité",
     malkauns:"raga nocturne profond (pentatonique mineure) — méditation grave",
     gypsy:"hongrois mineur — deux secondes augmentées, flamme tzigane",
-    hungarian_minor:"mineur hongrois — exotique, intense, deux seconds augmentés"};
+    hungarian_minor:"mineur hongrois — exotique, intense, deux seconds augmentés",
+    byzantine:"double harmonique majeure — opulent, byzantin, deux secondes augmentées",
+    double_harmonic:"deux secondes augmentées — le « son arabe » majeur, dramatique",
+    phrygian_dominant:"5e mode du mineur harmonique — flamenco, klezmer, metal oriental",
+    spanish:"phrygien dominant — cadence andalouse, guitare flamenca",
+    persian:"gamme persane — tendue, ornementée",
+    todi:"raga grave et complexe — intense",
+    marwa:"raga du crépuscule — sans quinte, flottant",
+    purvi:"raga solennel du coucher — majestueux",
+    kumoi:"gamme japonaise claire (koto) — délicate",
+    iwato:"gamme japonaise sombre — austère",
+    insen:"gamme japonaise minimaliste — méditative",
+    kurd:"maqâm kurde (proche du phrygien) — sobre",
+    nahawand:"maqâm proche du mineur mélodique — chaleureux",
+    ajam:"maqâm proche du majeur — joyeux, ouvert",
+    saba:"maqâm triste à 4e abaissée — déchirant",
+    sikah:"maqâm sur un quart de ton — flottant, mystique",
+    huzam:"maqâm sikah — émotion microtonale intense",
+    ahirbhairav:"raga matinal apaisant — bhairav adouci",
+    nikriz:"maqâm à 4e augmentée — exotique, brillant",
+    ryukyu:"gamme d'Okinawa — ensoleillée",
+    prometheus:"« accord mystique » de Scriabine — irréel, planant",
+    enigmatic:"gamme énigmatique de Verdi — étrange",
+    octatonic:"demi-tons/tons alternés — jazz, Stravinsky, tension symétrique",
+    diminished:"octatonique — instable, suspense, cinéma",
+    augmented:"gamme augmentée — symétrique, onirique",
+    overtone:"gamme des harmoniques — lumineuse, lydienne-dominante",
+    yo:"pentatonique japonaise « claire »",
+    in:"pentatonique japonaise « sombre » — élégie"};
   function currentScaleName(text){let nm=null;for(const raw of text.split("\n")){const l=raw.trim();const i=l.indexOf(":");if(i<0)continue;
     const k=l.slice(0,i).trim().toLowerCase(),w=l.slice(i+1).trim().toLowerCase().split(/\s+/).filter(Boolean);
     if(k==="key"&&w[1]&&!/^-?[\d.]/.test(w[1]))nm=w[1];else if(k==="scale"&&w[0]&&!/^-?[\d.]/.test(w[0]))nm=w[0];}
@@ -1448,8 +1476,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const n=+m[1],range=Math.max(2,m[2]?+m[2]:7);let d=1,out=[];
     for(let i=0;i<n;i++){out.push(String(Math.max(1,Math.min(range,d))));const st=[-2,-1,-1,1,1,2][Math.floor(rng(seed,bar,"walk:"+i,i)*6)%6];d=Math.max(1,Math.min(range,d+st));}
     return out;}
+  // lsys(n): a Lindenmayer system -> self-similar melodic sequence (algorithmic composition)
+  function expandLsys(tok){const m=/^lsys\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
+    const rules={"1":["1","2"],"2":["3","1"],"3":["5","2"],"5":["6","3"],"6":["1'","5"],"1'":["3'","1"]};
+    let s=["1"];for(let g=0;g<8&&s.length<n;g++){let nx=[];for(const c of s)nx.push(...(rules[c]||[c]));if(nx.length===s.length)break;s=nx;}
+    return s.slice(0,n);}
+  // drunk(n): a "drunk walk" rhythm — hit probability drifts, making natural clusters/gaps
+  function expandDrunk(tok,bar){const m=/^drunk\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];let p=0.5,out=[];
+    for(let i=0;i<n;i++){const r=rng(seed,bar,"drunk",i);out.push(r<p?"x":".");p=Math.max(0.15,Math.min(0.85,p+(r-0.5)*0.45));}return out;}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
-    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar);if(c)out.push(...c);else out.push(tok);}
+    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
@@ -1461,6 +1497,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const refresh=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};refresh();
       b.addEventListener("click",e=>{e.stopPropagation();v[key]=!v[key];refresh();});return b;};
     nm.appendChild(mk("M","mute","#ff6a6a"));nm.appendChild(mk("S","solo","#ffd24a"));
+    // live mixer: per-voice volume fader (sets v.gain in real time)
+    const vol=document.createElement("input");vol.type="range";vol.min="0";vol.max="1";vol.step="0.01";vol.value=(v.gain!=null?v.gain:0.25);
+    vol.title="volume";vol.style.cssText="width:58px;vertical-align:middle;margin:0 5px;cursor:pointer";
+    vol.addEventListener("input",e=>{e.stopPropagation();v.gain=parseFloat(vol.value);});nm.appendChild(vol);
     const lbl=document.createElement("span");lbl.textContent=v.name;lbl.style.marginLeft="4px";nm.appendChild(lbl);
     const cells=document.createElement("div");cells.className="cells";v.cells=[];
     v.tokens.forEach((tok,i)=>{const c=document.createElement("span");c.className="cell";
@@ -1616,7 +1656,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // HSV -> [r,g,b] 0-255 (for per-pixel scenes like the Julia fractal)
   function hsv2rgb(h,s,v){h=((h%360)+360)%360/60;const i=Math.floor(h),f=h-i,p=v*(1-s),q=v*(1-s*f),t=v*(1-s*(1-f));
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
-  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple","grid","petals","dna","mandala","spectrum3d","ribbon","fireworks","vortex","lattice","tiles","starsphere","bubbles","comet","shader","gtunnel","gfractal","gwarp"];
+  const SCENES=["radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple","grid","petals","dna","mandala","spectrum3d","ribbon","fireworks","vortex","lattice","tiles","starsphere","bubbles","comet","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let spectroCv=null;  // persistent offscreen for the scrolling spectrogram scene
   let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3;
@@ -1663,7 +1703,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       try{(wrap.requestFullscreen||wrap.webkitRequestFullscreen||function(){}).call(wrap);}catch(_){}}
     else{wrap.style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}}
   // ===== GPU shader visualizer (WebGL) — full-screen fragment shaders reactive to the audio =====
-  const GLMODES={shader:0,gtunnel:1,gfractal:2,gwarp:3};
+  const GLMODES={shader:0,gtunnel:1,gfractal:2,gwarp:3,gtorus:4,gkaleid:5,gaurora:6};
   const GLSCENES=new Set(Object.keys(GLMODES));
   let gl=null,glProg=null,glU={},glOK=null;
   const GL_FRAG=`precision highp float;
@@ -1678,6 +1718,15 @@ void main(){
     float m=length(p); col=hsv(fract(m*0.3+t*0.05+uHue),0.85,smoothstep(0.,2.,m)*(0.5+uTreble));
   } else if(uMode==3){ float v=0.; for(int i=1;i<=5;i++){float fi=float(i);v+=sin(uv.x*fi*2.+t+uBass*3.)*cos(uv.y*fi*2.-t*0.7)/fi;}
     col=hsv(fract(v*0.3+uHue+t*0.03),0.7,0.5+0.5*v)*(0.6+uMid);
+  } else if(uMode==4){ vec3 ro=vec3(0.,0.,-3.2),rd=normalize(vec3(uv,1.6)); float tt=0.,d; vec3 p;
+    for(int i=0;i<48;i++){ p=ro+rd*tt; float a=t*0.4; p.xy=mat2(cos(a),-sin(a),sin(a),cos(a))*p.xy;
+      vec2 q=vec2(length(p.xy)-1.0,p.z); d=length(q)-(0.32+uBass*0.25); if(d<0.01||tt>9.)break; tt+=d; }
+    float g=clamp(1.0-tt/9.,0.,1.); col=hsv(fract(uHue+tt*0.12+t*0.04),0.75,g*g*(0.5+uMid)+uTreble*0.2);
+  } else if(uMode==5){ vec2 p=uv; float a=atan(p.y,p.x),r=length(p); a=mod(a,0.7854)-0.3927; p=vec2(cos(a),sin(a))*r;
+    float v=sin(p.x*6.+t)+sin(p.y*6.-t)+sin(r*10.-t*2.+uBass*5.); col=hsv(fract(v*0.2+uHue),0.85,0.55+0.4*sin(v));
+  } else if(uMode==6){ float v=0.; for(int i=1;i<=4;i++){float fi=float(i); v+=sin(uv.x*fi*1.5+t*0.6+uBass*2.)/fi;}
+    float band=smoothstep(0.06,0.0,abs(uv.y-v*0.5))*(0.6+uMid);
+    col=hsv(fract(0.45+uv.y*0.1+uHue+t*0.02),0.7,band)+hsv(fract(0.6+uHue),0.5,band*0.5);
   } else { vec2 p=uv*2.; p+=0.5*vec2(sin(p.y*2.+t),cos(p.x*2.+t*0.8));
     float v=sin(p.x*3.+t)+sin(p.y*3.-t)+sin((p.x+p.y)*2.+t*1.3);
     col=hsv(fract(v*0.2+uHue+t*0.02),0.85,0.55+0.35*sin(v+t)+uBass*0.4);
@@ -4503,7 +4552,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     ["Son","| orbit RATE","spatialisation : la voix tourne autour de l'auditeur (Hz) — mouvement stéréo + distance"],
     ["Groove","| humanize N","humanisation par voix (0-100) : micro-décalages timing/vélocité, indépendant du feel global"],
     ["Live","| mute  /  | solo","coupe une voix / isole une voix (mixage en direct)"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp|gtorus|gkaleid|gaurora","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
@@ -4735,7 +4784,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
-    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; organic/biology/dna -> scene: helix; hypnotic/optical/interference -> scene: moire; hot/intense/fire -> scene: fire; radiant/solar/burst -> scene: sunburst; hacker/digital-rain/cyber -> scene: matrix; cosmic/planetary/space -> scene: orbits; world/earth/global -> scene: globe; waveform/oscillo/landscape -> scene: wave; mathematical/geometric/elegant -> scene: harmono; chaos/organic/smoke -> scene: clifford; resonance/standing-waves/sacred -> scene: cymatic; chaotic/butterfly/scientific -> scene: lorenz; intricate/lacework/web -> scene: dejong; spiral/chaotic/funnel -> scene: rossler; flower/symmetry/morphing -> scene: superf; alien/dense/orbital -> scene: hopalong; floral/petals/delicate -> scene: rose; geometric/gears/spirograph -> scene: spiro; organic/cellular/blob -> scene: gumowski; sparkly/dust/nebula -> scene: tinker; glitch/scatter/digital -> scene: ikeda; natural/sunflower/golden -> scene: phyllo; cellular/biological/coral -> scene: reaction; maze/woven/tile -> scene: truchet; speed/hyperspace/launch -> scene: warp; fractal/fire/ship -> scene: ship; psychedelic/quartic/bloom -> scene: julia4; star/rosette/intricate -> scene: maurer; clockwork/fourier/drawing -> scene: epicycle; knot/3d-curve/ribbon -> scene: lissa3d; sacred/geometry/meditative -> scene: flower; cells/hive/grid -> scene: honeycomb; 3d/geometric/rotating -> scene: cube; 4d/hypercube/mind-bending -> scene: tesseract; topology/knot/looping -> scene: knot; vortex/wormhole/portal -> scene: wormhole; mathematical/twist/infinite -> scene: mobius; chaos/physics/swing -> scene: pendulum; eq/circular/audio -> scene: radialbars; fractal/dust/curve -> scene: henon; flowing/symmetric/3d -> scene: thomas; orbital/wing/3d -> scene: aizawa; nature/plant/fractal -> scene: fern; chaotic/3d/scroll -> scene: chen; cells/mosaic/territory -> scene: voronoi; fractal/triangle/recursive -> scene: sierpinski; 3d/swirl/exotic -> scene: dadras/halvorsen; ornate/banknote/rosette -> scene: guilloche; storm/electric/aggressive -> scene: lightning; sacred/cube/geometry -> scene: metatron; sequencer/tracker/columns -> scene: tracker; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
+    "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp|gtorus|gkaleid|gaurora to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; organic/biology/dna -> scene: helix; hypnotic/optical/interference -> scene: moire; hot/intense/fire -> scene: fire; radiant/solar/burst -> scene: sunburst; hacker/digital-rain/cyber -> scene: matrix; cosmic/planetary/space -> scene: orbits; world/earth/global -> scene: globe; waveform/oscillo/landscape -> scene: wave; mathematical/geometric/elegant -> scene: harmono; chaos/organic/smoke -> scene: clifford; resonance/standing-waves/sacred -> scene: cymatic; chaotic/butterfly/scientific -> scene: lorenz; intricate/lacework/web -> scene: dejong; spiral/chaotic/funnel -> scene: rossler; flower/symmetry/morphing -> scene: superf; alien/dense/orbital -> scene: hopalong; floral/petals/delicate -> scene: rose; geometric/gears/spirograph -> scene: spiro; organic/cellular/blob -> scene: gumowski; sparkly/dust/nebula -> scene: tinker; glitch/scatter/digital -> scene: ikeda; natural/sunflower/golden -> scene: phyllo; cellular/biological/coral -> scene: reaction; maze/woven/tile -> scene: truchet; speed/hyperspace/launch -> scene: warp; fractal/fire/ship -> scene: ship; psychedelic/quartic/bloom -> scene: julia4; star/rosette/intricate -> scene: maurer; clockwork/fourier/drawing -> scene: epicycle; knot/3d-curve/ribbon -> scene: lissa3d; sacred/geometry/meditative -> scene: flower; cells/hive/grid -> scene: honeycomb; 3d/geometric/rotating -> scene: cube; 4d/hypercube/mind-bending -> scene: tesseract; topology/knot/looping -> scene: knot; vortex/wormhole/portal -> scene: wormhole; mathematical/twist/infinite -> scene: mobius; chaos/physics/swing -> scene: pendulum; eq/circular/audio -> scene: radialbars; fractal/dust/curve -> scene: henon; flowing/symmetric/3d -> scene: thomas; orbital/wing/3d -> scene: aizawa; nature/plant/fractal -> scene: fern; chaotic/3d/scroll -> scene: chen; cells/mosaic/territory -> scene: voronoi; fractal/triangle/recursive -> scene: sierpinski; 3d/swirl/exotic -> scene: dadras/halvorsen; ornate/banknote/rosette -> scene: guilloche; storm/electric/aggressive -> scene: lightning; sacred/cube/geometry -> scene: metatron; sequencer/tracker/columns -> scene: tracker; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
