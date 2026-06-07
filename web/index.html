@@ -5560,6 +5560,39 @@ kick:   x . . . . . . . x . . . . . x . | sample bd | gain 0.26 | comp 0.3
     return null;}
   // OFFLINE "why it sounds like this": read the code and explain it instantly,
   // using the knowledge base — works with no internet. Returns lines for the log.
+  // SURPRISE METER: how much does the music actually CHANGE? Schedules several
+  // bars via the real engine and measures (a) per-voice bar-to-bar variety,
+  // (b) pitch entropy, (c) rhythm entropy. Flags voices that repeat identically.
+  function noveltyReport(text){
+    const song=parseSong(text);
+    const total=song.length?song.reduce((a,s)=>a+s[1],0):8;
+    const bars=Math.max(2,Math.min(8,total));
+    const perVoice={},mel=[],onsets=[];
+    for(let b=0;b<bars;b++){
+      let evs;try{evs=scheduleBarCapture(text,b);}catch(_){evs=[];}
+      const byV={};
+      for(const e of evs){(byV[e.voice]||(byV[e.voice]=[])).push((Math.round(e.phase*1000)/1000)+":"+e.tok);
+        if(!e.drum&&e.tok&&!/^[._~]/.test(e.tok))mel.push(e.tok);
+        onsets.push(Math.round(e.phase*16));}
+      for(const v in byV)(perVoice[v]||(perVoice[v]=[])).push(byV[v].sort().join(","));
+    }
+    const ent=arr=>{if(arr.length<2)return 0;const c={};for(const x of arr)c[x]=(c[x]||0)+1;
+      let h=0;for(const k in c){const p=c[k]/arr.length;h-=p*Math.log2(p);}
+      const u=Object.keys(c).length;return u>1?h/Math.log2(u):0;};
+    let varSum=0,vc=0;const repeats=[];
+    for(const v in perVoice){const sigs=perVoice[v],uniq=new Set(sigs).size;
+      varSum+=uniq/sigs.length;vc++;
+      // flag only DENSE voices (>=6 hits/bar: drums/leads) that loop identically —
+      // a sparse bourdon/pad repeating is intentional, not a fault.
+      if(sigs.length>=3&&uniq===1&&sigs[0].split(",").length>=6)repeats.push(v);}
+    const avgVar=vc?varSum/vc:1,pE=ent(mel),rE=ent(onsets);
+    const score=Math.round(100*(0.6*avgVar+0.22*pE+0.18*rE));
+    const out=["[ nouveauté ] score "+score+"/100  (variété/mesure "+Math.round(avgVar*100)+"% · hauteurs "+Math.round(pE*100)+"% · rythme "+Math.round(rE*100)+"%)"];
+    if(repeats.length)out.push("   ⤷ ces voix denses bouclent à l'identique : "+repeats.join(", ")+" — varie-les (générateur walk/drunk/ca, ou | every N rot/mutate/shuffle)");
+    if(score<50)out.push("   ⤷ assez répétitif : fais évoluer les sections (@section), varie la batterie, ou monte le seed");
+    else if(score>=75)out.push("   ⤷ riche & changeant : ça ne boucle pas bêtement 👏");
+    return out;
+  }
   function analyzePiece(text){
     const NN=["do","do#","ré","ré#","mi","fa","fa#","sol","sol#","la","la#","si"];
     const out=[],has=re=>re.test(text);
@@ -5586,6 +5619,7 @@ kick:   x . . . . . . . x . . . . . x . | sample bd | gain 0.26 | comp 0.3
     if(parseAccel(text)) why.push("le tempo accélère/respire au fil du morceau");
     if(why.length) out.push("[ pourquoi ça sonne ] "+why.join(" · ")+".");
     const song=parseSong(text); if(song&&song.length) out.push("[ forme ] "+song.map(s=>s[0]).join(" → "));
+    try{noveltyReport(text).forEach(l=>out.push(l));}catch(_){}
     if(!out.length) out.push("[ analyse ] morceau libre (pas de tonalité déclarée) — les notes sont absolues.");
     return out;
   }
@@ -5652,7 +5686,7 @@ kick:   x . . . . . . . x . . . . . x . | sample bd | gain 0.26 | comp 0.3
     const cl=cycleLen,out=_cap.map(o=>({voice:o.v,phase:o.t/cl,tok:o.tok,drum:o.drum,pan:o.pan}));
     _cap=prev;return out;
   }
-  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>
