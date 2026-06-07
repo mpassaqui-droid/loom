@@ -25,13 +25,15 @@
   body.flat h1{text-shadow:none;}
   /* desktop: spread panels across the width (mobile stays a single column) */
   @media (min-width:980px){
-    body{max-width:1120px;}
-    /* newspaper columns: small panels flow into 2 cols, key blocks span full */
-    #ws{column-count:2;column-gap:20px;}
-    #ws>*{break-inside:avoid;margin-bottom:16px;}
-    #ws>.wide{column-span:all;}
-    textarea{height:240px;}
+    body{max-width:1320px;}
+    /* desktop workspace: a clean 2-col grid — small panels share a row,
+       key blocks (editor, scope, grid, console…) span the full width. */
+    #ws{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+    #ws>*{margin-bottom:0;}
+    #ws>.wide{grid-column:1 / -1;}
+    textarea{height:300px;}
   }
+  @media (min-width:1500px){ body{max-width:1500px;} textarea{height:340px;} }
   h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
     text-shadow:0 0 12px var(--green);letter-spacing:3px;margin-bottom:6px;}
   .sub{color:var(--dim);font-size:20px;margin-bottom:20px;}
