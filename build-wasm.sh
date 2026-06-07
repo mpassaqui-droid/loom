@@ -13,8 +13,12 @@ cd "$(dirname "$0")"
 echo "==> cargo build (wasm32, release)"
 cargo build -p loom-wasm --target wasm32-unknown-unknown --release
 
-echo "==> wasm-bindgen -> web/pkg/"
+echo "==> wasm-bindgen -> web/pkg/ (browser)"
 wasm-bindgen target/wasm32-unknown-unknown/release/loom_wasm.wasm \
   --out-dir web/pkg --target web
 
-echo "==> done. web/pkg/loom_wasm.js is ready (served by the static web server)."
+echo "==> wasm-bindgen -> tools/pkg-node/ (for node tools/parity_test.js)"
+wasm-bindgen target/wasm32-unknown-unknown/release/loom_wasm.wasm \
+  --out-dir tools/pkg-node --target nodejs
+
+echo "==> done. web/pkg/loom_wasm.js ready; run 'node tools/parity_test.js' to check JS<->Rust parity."
