@@ -100,6 +100,7 @@ const pieces = {
   'rythmes du monde': 'kick: tresillo\nhat: bembe\nclap: son\nperc: baiao',
   'sieve (Xenakis)': 'kick: sieve(16,3:0,5:2)\nhat: sieve(13,2:0,3:1)\nperc: sieve(12,4:1,6:3)',
   '1/f pink': 'seed: 5\nkey: c minor\nmel: pink(16)\nmel2: 1f(13)',
+  'contours arc/rise/fall': 'key: c major\nm1: arc(8)\nm2: rise(6)\nm3: fall(10)',
 };
 
 let total = 0, bad = 0;

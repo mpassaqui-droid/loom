@@ -263,6 +263,25 @@ fn expand_bin_token(tok: &str) -> Option<Vec<String>> {
     Some(format!("{:b}", v).chars().map(|c| if c == '1' { "x".into() } else { ".".into() }).collect())
 }
 /// Expand bar/seed-INDEPENDENT generative tokens in place.
+/// Shaped melodic contour (constraint composition): `arc(n)` rises to a peak and
+/// falls back to the tonic (resolves), `rise(n)` ascends, `fall(n)` descends to the
+/// tonic. Snapped to scale degrees 1..range (default 7). Deterministic.
+fn expand_shape_token(tok: &str) -> Option<Vec<String>> {
+    let (kind, rest) = ["arc", "rise", "fall"].iter()
+        .find_map(|k| tok.strip_prefix(&format!("{}(", k)).map(|r| (*k, r)))?;
+    let inner = rest.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse().ok()?;
+    if n == 0 || n > 1024 { return None; }
+    let range: f64 = it.next().and_then(|s| s.trim().parse::<f64>().ok()).unwrap_or(7.0).max(2.0);
+    Some((0..n).map(|i| {
+        let t = if n > 1 { i as f64 / (n as f64 - 1.0) } else { 0.0 };
+        let c: f64 = match kind { "arc" => 1.0 - (2.0 * t - 1.0).abs(), "rise" => t, _ => 1.0 - t };
+        let d = (1.0 + (range - 1.0) * c).round().clamp(1.0, range) as i64;
+        d.to_string()
+    }).collect())
+}
+
 /// `sieve(N,M:R,M:R,…)` -> Xenakis sieve: N steps, a hit where ANY residual class
 /// matches (i mod M == R). Number theory -> complex, non-periodic rhythms.
 fn expand_sieve_token(tok: &str) -> Option<Vec<String>> {
@@ -321,6 +340,7 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
         else if let Some(seq) = expand_bin_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_rhythm_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_sieve_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_shape_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -2641,6 +2661,16 @@ mod tests {
         // consecutive bars differ -> genuine evolution
         let bars: Vec<String> = (0..6).map(|b| apply_verb(&t, "develop", b, 0).join(" ")).collect();
         assert!(bars.iter().collect::<std::collections::HashSet<_>>().len() >= 5);
+    }
+
+    #[test]
+    fn shape_contours() {
+        // arc: rises to a peak and resolves back on the tonic
+        assert_eq!(parse("m: arc(9)")[0].tokens.join(" "), "1 3 4 6 7 6 4 3 1");
+        // rise ascends, fall descends to the tonic
+        assert_eq!(parse("m: rise(7)")[0].tokens.join(" "), "1 2 3 4 5 6 7");
+        assert_eq!(parse("m: fall(7)")[0].tokens.join(" "), "7 6 5 4 3 2 1");
+        assert!(expand_shape_token("arc(0)").is_none());
     }
 
     #[test]
