@@ -4655,8 +4655,58 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
 #  tune: pyth · enlève le bourdon et écoute ce qui se perd.
 # ----------------------------------------------------------------
 `;
+  PRESETS.ballade=`# ================================================================
+#  LOOM — « BALLADE » : l'harmonie fonctionnelle du jazz, entendue.
+#
+#  Le sujet : POURQUOI une suite d'accords « avance » et « se résout ».
+#   • La cadence reine : ii → V → I (Dm7 → G7 → Cmaj7). La tension de la
+#     dominante (G7) appelle le repos de la tonique (Cmaj7). (Tape ?ii-v-i)
+#   • La DOMINANTE SECONDAIRE : A7 n'est pas dans la tonalité — c'est le « V
+#     de ii » : il tonicise Dm7 le temps d'un accord, et ouvre une couleur.
+#     (Tape ?dominante-secondaire) C'est le « VI » de l'analyse romaine.
+#   • Le SWING : les croches inégales — le balancement même du jazz.
+#
+#  > RUN, puis clique ❓ explique : il NOMMERA la cadence (ii–V–I) tout seul.
+# ================================================================
+
+title:  Ballade
+bpm:    78
+key:    c major
+tune:   equal
+feel:   26
+swing:  60
+warmth: 0.5
+scene:  lissa3d
+film:   square
+song:   tete*8 solo*8 tete*8
+
+# prog : ii V I · puis A7 = dominante secondaire (V/ii) · retour ii V I
+prog:   Dm7 G7 Cmaj7 A7 Dm7 G7 Cmaj7 Cmaj7
+
+# ---------- PIANO : comp les accords de la grille (^ = l'accord courant) ----------
+piano:  ^ . . . | sine | unison 2 | env 0.02 0.35 0.55 0.9 | lp 2600 | reverb 0.45 | gain 0.12 | hue 200
+voic:   . . ^ . | sine | env 0.02 0.3 0.5 0.6 | reverb 0.4 | gain 0.07 | pan 0.2 | hue 220
+
+# ---------- CONTREBASSE : la racine de chaque accord (^1), pizzicato ----------
+bass:   ^1 . . . ^1 . . 5, | pluck 0.45 | oct 2 | gain 0.2 | hue 40
+
+# ---------- MÉLODIE : un thème simple sur la grille (degrés dans la tonalité) ----------
+mel@tete:  . . 3 . 5 . 6 . 1' . 7 . 6 . 5 . | sine | fm 1 1.5 | reverb 0.4 | delay 0.3 | gate 0.7 | humanize 30 | gain 0.12 | hue 280
+mel@solo:  3 5 6 1' 7 6 5 3 2 3 5 6 5 3 2 1 | sine | fm 1 2 | slide | reverb 0.4 | delay 0.3 | gate 0.6 | every 2 sometimes add 2 | humanize 35 | gain 0.11 | hue 300
+
+# ---------- BATTERIE JAZZ : ride swingué + balai + grosse caisse feutrée ----------
+ride:   x . x x . x x . x . x x . x x . | sample hh | gain 0.1 | pan 0.25 | swing 60
+brush:  . . . . x . . . . . . . x . . . | sample sd | gain 0.16 | swing 60
+kick:   x . . . . . . . x . . . . . x . | sample bd | gain 0.26 | comp 0.3
+
+# ----------------------------------------------------------------
+#  Essaie : remplace A7 par Eb7 (substitution tritonique de... non — ajoute
+#  Abm7 Db7 avant Cmaj7 pour un ii-V tritonique) · ou prog: Cmaj7 A7 Dm7 G7
+#  (anatole / rhythm changes). Clique ❓ explique pour voir l'analyse.
+# ----------------------------------------------------------------
+`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["mycelium","yaman","afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["mycelium","yaman","ballade","afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
@@ -5248,7 +5298,13 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
     arpege:"jouer les notes d'un accord une par une, au lieu d'ensemble",
     microtonal:"des notes « entre les touches » du piano (quarts de ton, EDO) — maqâm, gamelan",
     edo:"division égale de l'octave en N pas (12 = piano ; 19, 31 = microtonal)",
-    bourdon:"une note tenue en continu sous la mélodie (drone) — Inde, cornemuse, raga"};
+    bourdon:"une note tenue en continu sous la mélodie (drone) — Inde, cornemuse, raga",
+    "ii-v-i":"la cadence reine du jazz : ii (sous-dominante) → V (dominante, tension) → I (tonique, repos). Le moteur de presque tout le jazz et la pop sophistiquée",
+    "dominante-secondaire":"un accord de dominante (7) qui résout vers un degré AUTRE que la tonique — il « tonicise » une note, ouvre une couleur passagère (ex. A7→Dm en do = V/ii)",
+    reharmonisation:"remplacer les accords d'une mélodie par d'autres (substitutions, tritoniques, dominantes secondaires) pour enrichir la couleur sans changer l'air",
+    "substitution-tritonique":"remplacer une dominante par celle située un triton plus loin (G7→Db7) — même tension, basse qui descend chromatiquement, très jazz",
+    modal:"composer sur un mode (dorien, lydien…) plutôt qu'une cadence tonale — l'ambiance vient de la couleur du mode, pas de la tension V→I (Miles, Coltrane)",
+    voicing:"la façon de disposer les notes d'un accord (renversements, notes larges/serrées) — change la couleur sans changer l'accord"};
   // DEEP knowledge: traditions & concepts that tie history + meaning + acoustics to
   // the sound. Each entry is several lines (origine · sens/émotion · pourquoi ça sonne
   // · en LOOM). Surfaced by the ? teacher and as a hint when you RUN a piece.
@@ -5493,6 +5549,15 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
   {const chips=$("aiChips");if(chips)chips.addEventListener("click",e=>{const b=e.target.closest("[data-ai]");if(!b)return;
     $("vibeIn").value=b.getAttribute("data-ai");vibe();});}
   // AI music teacher: explain the current piece in plain words (uses the free brain; prose, not code)
+  // name the cadence from a roman-numeral progression (the harmonic "punctuation")
+  function cadenceOf(pr){const t=pr.toUpperCase().split(/\s+/);
+    for(let i=0;i<t.length-2;i++)if(t[i]==="II"&&t[i+1]==="V"&&t[i+2]==="I")return "ii–V–I, la cadence reine du jazz (double tension qui résout)";
+    for(let i=0;i<t.length-1;i++){
+      if(t[i]==="V"&&t[i+1]==="I")return "cadence parfaite (V→I) : la résolution la plus forte, conclusive";
+      if(t[i]==="IV"&&t[i+1]==="I")return "cadence plagale (IV→I) : douce, le « amen » des hymnes";
+      if(t[i]==="V"&&t[i+1]==="VI")return "cadence rompue (V→vi) : la résolution attendue est déjouée, suspense";}
+    if(t[t.length-1]==="V")return "demi-cadence (…→V) : on reste suspendu, en attente";
+    return null;}
   // OFFLINE "why it sounds like this": read the code and explain it instantly,
   // using the knowledge base — works with no internet. Returns lines for the log.
   function analyzePiece(text){
@@ -5514,7 +5579,8 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
     if(has(/\b(walk|drunk|ca|lsys|pi|perlin|logistic|fib|morse|bin|recaman|cantor)\s*\(/)) why.push("des suites génératives font varier le motif à chaque mesure (jamais figé)");
     if(has(/\be\(\d/)) why.push("des rythmes euclidiens répartissent les coups régulièrement-irrégulièrement (groove du monde)");
     const pr=(()=>{const sk=key,sp=prog;key=parseKey(text);prog=parseProg(text);const r=progRoman();key=sk;prog=sp;return r;})();
-    if(pr) why.push("la progression "+pr+" crée un cycle tension→détente");
+    if(pr){out.push("[ harmonie ] progression : "+pr+(cadenceOf(pr)?" — "+cadenceOf(pr):""));
+      why.push("la progression enchaîne tension (dominante) → détente (tonique)");}
     if(/\|\s*(swing|groove:)/.test(text)||/^groove:/m.test(text)) why.push("le swing/groove décale les temps → ça balance (humain, pas robotique)");
     const mt=parseMeter(text); if(mt&&Math.abs(mt-4)>0.01) why.push("une métrique inhabituelle ("+mt+" temps) déstabilise joliment le pas");
     if(parseAccel(text)) why.push("le tempo accélère/respire au fil du morceau");

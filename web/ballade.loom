@@ -1,0 +1,49 @@
+# ================================================================
+#  LOOM — « BALLADE » : l'harmonie fonctionnelle du jazz, entendue.
+#
+#  Le sujet : POURQUOI une suite d'accords « avance » et « se résout ».
+#   • La cadence reine : ii → V → I (Dm7 → G7 → Cmaj7). La tension de la
+#     dominante (G7) appelle le repos de la tonique (Cmaj7). (Tape ?ii-v-i)
+#   • La DOMINANTE SECONDAIRE : A7 n'est pas dans la tonalité — c'est le « V
+#     de ii » : il tonicise Dm7 le temps d'un accord, et ouvre une couleur.
+#     (Tape ?dominante-secondaire) C'est le « VI » de l'analyse romaine.
+#   • Le SWING : les croches inégales — le balancement même du jazz.
+#
+#  > RUN, puis clique ❓ explique : il NOMMERA la cadence (ii–V–I) tout seul.
+# ================================================================
+
+title:  Ballade
+bpm:    78
+key:    c major
+tune:   equal
+feel:   26
+swing:  60
+warmth: 0.5
+scene:  lissa3d
+film:   square
+song:   tete*8 solo*8 tete*8
+
+# prog : ii V I · puis A7 = dominante secondaire (V/ii) · retour ii V I
+prog:   Dm7 G7 Cmaj7 A7 Dm7 G7 Cmaj7 Cmaj7
+
+# ---------- PIANO : comp les accords de la grille (^ = l'accord courant) ----------
+piano:  ^ . . . | sine | unison 2 | env 0.02 0.35 0.55 0.9 | lp 2600 | reverb 0.45 | gain 0.12 | hue 200
+voic:   . . ^ . | sine | env 0.02 0.3 0.5 0.6 | reverb 0.4 | gain 0.07 | pan 0.2 | hue 220
+
+# ---------- CONTREBASSE : la racine de chaque accord (^1), pizzicato ----------
+bass:   ^1 . . . ^1 . . 5, | pluck 0.45 | oct 2 | gain 0.2 | hue 40
+
+# ---------- MÉLODIE : un thème simple sur la grille (degrés dans la tonalité) ----------
+mel@tete:  . . 3 . 5 . 6 . 1' . 7 . 6 . 5 . | sine | fm 1 1.5 | reverb 0.4 | delay 0.3 | gate 0.7 | humanize 30 | gain 0.12 | hue 280
+mel@solo:  3 5 6 1' 7 6 5 3 2 3 5 6 5 3 2 1 | sine | fm 1 2 | slide | reverb 0.4 | delay 0.3 | gate 0.6 | every 2 sometimes add 2 | humanize 35 | gain 0.11 | hue 300
+
+# ---------- BATTERIE JAZZ : ride swingué + balai + grosse caisse feutrée ----------
+ride:   x . x x . x x . x . x x . x x . | sample hh | gain 0.1 | pan 0.25 | swing 60
+brush:  . . . . x . . . . . . . x . . . | sample sd | gain 0.16 | swing 60
+kick:   x . . . . . . . x . . . . . x . | sample bd | gain 0.26 | comp 0.3
+
+# ----------------------------------------------------------------
+#  Essaie : remplace A7 par Eb7 (substitution tritonique de... non — ajoute
+#  Abm7 Db7 avant Cmaj7 pour un ii-V tritonique) · ou prog: Cmaj7 A7 Dm7 G7
+#  (anatole / rhythm changes). Clique ❓ explique pour voir l'analyse.
+# ----------------------------------------------------------------
