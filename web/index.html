@@ -4858,8 +4858,73 @@ air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.1
 #  Essaie : seed: 18 · tune: 24edo · meter: 7/8 · enlève accel: pour figer.
 # ----------------------------------------------------------------
 `;
+  PRESETS.nouveautes=`# ================================================================
+#  LOOM — « NOUVEAUTÉS » : tout ce qu'on a ajouté, en action.
+#  (Les commentaires sont sur leur PROPRE ligne : le moteur ne gère pas
+#   encore les commentaires en fin de ligne de code.)
+#
+#  ▶ Pendant que ça joue, essaie les NOUVEAUTÉS DE L'APP :
+#    • ❓ explique  -> analyse hors-ligne : tonalité, tradition, CADENCE,
+#         ACOUSTIQUE (consonance Plomp-Levelt) et NOUVEAUTÉ (mètre de surprise).
+#    • ✨ développe -> ajoute du développement/variation à tout, d'un clic (↩ annuler).
+#    • boîte VIBE  -> tape  ?sieve   ?pythagore   ?raga   ?ii-v-i   pour le savoir.
+# ================================================================
+
+title:  Nouveautés
+key:    c minor
+# tune: just -> intonation JUSTE (ratios purs) : plus consonant que 'equal'
+tune:   just
+bpm:    104
+feel:   22
+scene:  gaurora
+# 2 sections : montre que 'develop' continue d'évoluer partout
+song:   a*4 b*4
+
+# ---------- RYTHMES DU MONDE : des timelines nommées (fini la grille x . . x) ----------
+# tresillo = 3-3-2 cubain (8 pas)
+kick:   tresillo
+# bembe = cloche africaine standard (12 pas) -> se déphase contre le kick
+hat:    bembe | gain 0.12 | swing 56
+# son = clave son 3-2 (arrive en section b)
+clap:   son | gain 0.3 | in b
+
+# ---------- SIEVE (Xenakis) : rythme par théorie des nombres, non périodique ----------
+# coups là où i mod 3 == 0  OU  i mod 5 == 2 -> motif complexe qui ne se répète pas
+perc:   sieve(16,3:0,5:2) | reson 320 0.4 | crush 5 | pan -0.3 | gain 0.12
+
+# ---------- CONTOURS FAÇONNÉS : tu décris la FORME, le moteur écrit la ligne ----------
+# arc = une ARCHE : monte vers un sommet puis RÉSOUT sur la tonique
+lead:   arc(8) | pluck 0.7 | reverb 0.5 | delay 0.3 | gate 0.6 | gain 0.13 | hue 200
+# fall = une descente qui résout sur la tonique
+bass:   fall(8) | saw | oct 2 | lp 700 q 5 | gain 0.15 | hue 0
+
+# ---------- BRUIT ROSE 1/f : une mélodie « naturelle » au profil fractal ----------
+# (Voss-Clarke : la statistique 1/f de la nature et de la vraie musique)
+glass:  pink(16) | sine | fm 1 1.5 | reverb 0.5 | echo 8 0.4 | gate 0.5 | gain 0.09 | hue 280
+
+# ---------- DEVELOP : un motif qui SE TRANSFORME à chaque mesure (ne boucle plus) ----------
+# original -> déplacement -> séquence -> rétrograde -> inversion... (un arc de développement)
+theme:  1 3 5 1' 5 3 | develop | bell | detune 4 | reverb 0.6 | delay 0.3 | gain 0.1 | hue 60
+
+# ---------- PHASING Reich : la MÊME cellule en cycles premiers entre eux ----------
+# poly 12 contre poly 13 -> elles se déphasent en continu (jamais alignées)
+ph1@b:  1 4 5 3 | poly 12 | sine | reverb 0.4 | pan -0.35 | gate 0.5 | gain 0.06 | hue 160
+ph2@b:  1 4 5 3 | poly 13 | sine | reverb 0.4 | pan 0.35 | gate 0.5 | gain 0.06 | hue 320
+
+# ---------- ADDITIF + bourdon : un timbre inventé (partials) qui ancre l'oreille ----------
+# partials = amplitudes des harmoniques -> un instrument qui n'existe pas
+drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | lp 900 | reverb 0.7 | gate 4 | gain 0.05 | hue 30
+
+# ----------------------------------------------------------------
+#  À essayer :
+#  - Compare les hasards :  pink(16)  vs  walk(16)  vs  perlin(16)
+#  - Compare les formes  :  arc(8)  vs  rise(8)  vs  fall(8)
+#  - Microtonal : remplace la ligne 'key:' par une gamme en quarts de ton
+#  - Clique  ✨ développe  puis  ❓ explique  pour voir le score de nouveauté monter
+# ----------------------------------------------------------------
+`;
   const PRESET_GROUPS=[
-    ["★ Vitrines",["aeafx","mycelium","yaman","ballade","afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
+    ["★ Vitrines",["nouveautes","aeafx","mycelium","yaman","ballade","afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
     ["\u{1F570} Histoire \u00e9lectro",["concrete","cologne","columbia","minimal","buchla","berlin","spectral","xenakis","drone","kraftwerk","detroit","dub","eno","jungle","footwork","vaporwave","trance","glitch","boombap","trap","dubstep","breakcore","hyperpop","gqom","afrobeat","gabber","electro"]],
     ["Genres & samples",["set","fat","techno","house","dnb","melodic","ambient","synthwave","chip","samples","world","band","amen","dub"]],
     ["Gammes & théorie",["major","dorian","phrygian","penta","hijaz","maqam","raga","harmonic","prog","jazz","chords","arp"]],
@@ -5761,6 +5826,7 @@ air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.1
     return out;
   }
   function analyzePiece(text){
+    text=text.split("\n").filter(l=>!l.trim().startsWith("#")).join("\n");  // ignore comment lines
     const NN=["do","do#","ré","ré#","mi","fa","fa#","sol","sol#","la","la#","si"];
     const out=[],has=re=>re.test(text);
     const k=parseKey(text),sn=currentScaleName(text);
