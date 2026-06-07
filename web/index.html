@@ -1782,7 +1782,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
   let vjOn=false,sceneMap={},rollOn=false,loopSec=null;
   // piano-roll: render the current bar's melodic notes as blocks (pitch x time), colored per voice
-  function drawRoll(){const cv=$("roll");if(!cv||!cv.getContext)return;const W=cv.width=cv.clientWidth||640,H=cv.height=140,c=cv.getContext("2d");
+  function drawRoll(){const cv=$("roll");if(!cv||!cv.getContext)return;const DPR=Math.min(2,window.devicePixelRatio||1),W=cv.clientWidth||640,H=140;
+    cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);cv.style.height=H+"px";const c=cv.getContext("2d");c.setTransform(DPR,0,0,DPR,0,0);
     let bg="#0b0f0b";try{bg=getComputedStyle(document.body).getPropertyValue("--bg").trim()||bg;}catch(_){}
     c.fillStyle=bg;c.fillRect(0,0,W,H);
     const bar=(playing&&ctx)?Math.floor((ctx.currentTime-transportStart)/cycleLen):0;
@@ -1902,7 +1903,9 @@ void main(){
     for(const u of ["uRes","uTime","uBass","uMid","uTreble","uMode","uHue"])glU[u]=gl.getUniformLocation(glProg,u);
     glOK=true;return true;}
   function drawGL(mode){if(!initGL())return false;const cv=$("glstage");
-    const W=cv.width=window.innerWidth,H=cv.height=window.innerHeight;
+    const DPR=Math.min(window.innerWidth<760?1.5:2,window.devicePixelRatio||1);
+    const W=Math.round(window.innerWidth*DPR),H=Math.round(window.innerHeight*DPR);cv.width=W;cv.height=H;
+    if(cv.style.width!==window.innerWidth+"px"){cv.style.width=window.innerWidth+"px";cv.style.height=window.innerHeight+"px";}
     const n=analyser.frequencyBinCount,fb=new Uint8Array(n);analyser.getByteFrequencyData(fb);
     let b=0,m=0,tr=0;for(let i=0;i<8;i++)b+=fb[i];for(let i=8;i<40;i++)m+=fb[i];for(let i=40;i<110;i++)tr+=fb[i];
     b=Math.min(1,b/2040*1.5);m=Math.min(1,m/8160*1.6);tr=Math.min(1,tr/17850*2.0);
@@ -1922,7 +1925,14 @@ void main(){
         cv.getContext("2d").clearRect(0,0,cv.width,cv.height);return;}
       if(g)g.style.display="none";}  // GL failed -> fall through to Canvas2D
     else{const g=$("glstage");if(g)g.style.display="none";}
-    const W=cv.width=window.innerWidth,H=cv.height=window.innerHeight,c=cv.getContext("2d"),cx=W/2,cy=H/2;
+    // Retina-crisp: back the canvas at device resolution (DPR capped to protect
+    // perf), draw in CSS coords via a transform. All scenes use W/H -> unchanged.
+    const DPR=Math.min(window.innerWidth<760?1.5:2,window.devicePixelRatio||1);
+    const W=window.innerWidth,H=window.innerHeight;
+    cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);          // clears each frame (as before)
+    if(cv.style.width!==W+"px"){cv.style.width=W+"px";cv.style.height=H+"px";}
+    const c=cv.getContext("2d");c.setTransform(DPR,0,0,DPR,0,0);
+    const cx=W/2,cy=H/2;
     let bg="#0b0f0b",fg="#9dff8a",am="#ffc04a",cyn="#5fe6ff",dim="#2b6b22";try{const cs=getComputedStyle(document.body);
       bg=cs.getPropertyValue("--bg").trim()||bg;fg=cs.getPropertyValue("--glow").trim()||fg;am=cs.getPropertyValue("--amber").trim()||am;
       cyn=cs.getPropertyValue("--cyan").trim()||cyn;dim=cs.getPropertyValue("--dim").trim()||dim;}catch(_){}
