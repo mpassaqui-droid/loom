@@ -227,6 +227,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="renderBtn" class="go" title="exporter tout le morceau en WAV">&#11015; RENDER</button>
     <button id="stemsBtn" class="go" title="exporter chaque voix en WAV séparé (stems)">&#11015; STEMS</button>
     <button id="midiBtn" class="go" title="exporter en fichier MIDI (.mid) pour ton DAW">&#127926; MIDI</button>
+    <button id="syncBtn" class="go" title="émettre une horloge MIDI (start + clock 24ppqn) pour synchroniser Ableton/hardware sur le tempo de LOOM — via le port IAC">&#9201; SYNC</button>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
@@ -345,7 +346,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
-  let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,analyser=null,scopeMode="wave";
+  let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,analyser=null,scopeMode="wave";
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
@@ -1713,6 +1714,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(sec&&sceneMap[sec])sceneMode=sceneMap[sec];  // scene@section: visual follows the song structure
     if(songOn&&playing&&(!lintUntil||(((typeof performance!=="undefined"&&performance.now)?performance.now():9e15)>lintUntil)))log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
     if(accel||(tempoMap&&Object.keys(tempoMap).length))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (guarded: nothing set = unchanged)
+    // MIDI CLOCK out (sync Ableton/hardware to LOOM): 24 pulses per quarter-note
+    if(midiClock&&midiOut){const P=Math.max(1,Math.round(24*meterBeats));
+      for(let i=0;i<P;i++){const ct=barT+i/P*cycleLen;midiOut.send([0xF8],performance.now()+Math.max(0,(ct-ctx.currentTime)*1000));}}
     const _savedKey=key;if(sec&&keyMap[sec])key=keyMap[sec];  // modulation: this section resolves in its own key (restored at end)
     const anySolo=voices.some(v=>v.solo);  // live mixing: mute / solo per voice
     // EXPERIMENTAL unified engine: let the shared Rust core (WASM) decide WHICH
@@ -2763,7 +2767,9 @@ void main(){
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
-    if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;tick();}
+    if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;
+      if(midiClock&&midiOut)midiOut.send([0xFA],performance.now()+Math.max(0,(transportStart-ctx.currentTime)*1000));  // MIDI Start
+      tick();}
     log("[ playing ] "+voices.length+" voices @ "+bpm+" bpm","ai");
     const now2=((typeof performance!=="undefined"&&performance.now)?performance.now():0);
     const lw=lint();let info=lw;
@@ -2774,6 +2780,7 @@ void main(){
     if(info){log(info,lw?"err":"ai");lintUntil=now2+(lw?6000:9000);}else lintUntil=0;
     try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   function stop(){playing=false;if(schedTimer)clearTimeout(schedTimer);
+    if(midiClock&&midiOut)try{midiOut.send([0xFC]);}catch(_){}  // MIDI Stop
     voices.forEach(v=>v.cells.forEach(c=>c.classList.remove("play","hit")));log("[ stopped ]");}
 
   const PRESETS={
@@ -5632,6 +5639,15 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   $("renderBtn").addEventListener("click",renderOffline);
   $("stemsBtn").addEventListener("click",renderStems);
   $("midiBtn").addEventListener("click",exportMidi);
+  // ⏱ SYNC : émettre l'horloge MIDI pour caler Ableton sur le tempo de LOOM
+  $("syncBtn").addEventListener("click",()=>{initMidi();midiClock=!midiClock;
+    const b=$("syncBtn");if(b)b.classList.toggle("on",midiClock);
+    if(midiClock){
+      if(!midiOut){log("[ sync ] aucun port MIDI — active IAC (Mac) ou loopMIDI (Win), puis recharge","err");midiClock=false;if(b)b.classList.remove("on");return;}
+      log("[ sync ] horloge MIDI ON → "+(midiOut.name||"sortie")+" · dans Ableton : Préférences>Link/MIDI, active 'Sync' sur ce port","ai");
+      if(playing&&ctx)midiOut.send([0xFA]);  // Start now if already playing
+    } else { if(midiOut)try{midiOut.send([0xFC]);}catch(_){}; log("[ sync ] horloge MIDI OFF","ai"); }
+  });
   $("linkBtn").addEventListener("click",shareLink);
   // --- interface translation (Google widget, 100+ languages). The LOOM language/code is excluded (notranslate). ---
   let gtLoaded=false;
