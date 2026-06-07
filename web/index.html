@@ -1696,8 +1696,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function buildTimeline(){const el=$("timeline");if(!el)return;
     if(!song.length){el.style.display="none";el.innerHTML="";return;}
     el.style.display="flex";
-    el.innerHTML=song.map((s,i)=>'<div class="seg" data-i="'+i+'" style="flex-grow:'+s[1]+'">'+s[0]+'</div>').join("")
-      +'<div class="ph" id="tph" style="left:0"></div>';}
+    el.innerHTML=song.map((s,i)=>{const h=voiceHue(s[0]);return '<div class="seg" data-i="'+i+'" title="'+s[0]+' · '+s[1]+' mes. — clique pour sauter" style="flex-grow:'+s[1]+';cursor:pointer;background:hsla('+h+',60%,45%,0.22)">'+s[0]+'</div>';}).join("")
+      +'<div class="ph" id="tph" style="left:0"></div>';
+    for(const seg of (el.querySelectorAll?el.querySelectorAll(".seg"):[]))seg.addEventListener("click",()=>jumpToSection(+seg.dataset.i));}
+  // arrangement scrub: jump playback to a section's start bar (DAW-style)
+  function jumpToSection(i){if(!song.length||i<0)return;let acc=0;for(let k=0;k<i;k++)acc+=song[k][1];
+    if(!playing)run();if(!ctx)return;
+    barCount=acc;nextBarTime=ctx.currentTime+0.06;transportStart=nextBarTime-acc*cycleLen;
+    log("[ ▸ ] saut → "+song[i][0]+" (mesure "+acc+")","ai");}
 
   // microtonal bend: trailing +N / -N = cents (e.g. 3+50, c3-30, 1'-20)
   function splitCents(tok){const m=/([+-]\d{1,4})$/.exec(tok);if(!m||/^[A-G]/.test(tok))return[tok,0];
