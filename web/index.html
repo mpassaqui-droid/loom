@@ -5606,17 +5606,23 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   function playGroups(groups,gap,hold){if(!ctx)initAudio();if(!ctx)return;if(ctx.state==="suspended")ctx.resume();
     gap=gap||0.4;hold=hold||0.5;
     groups.forEach((g,i)=>setTimeout(()=>{g.forEach(m=>liveNoteOn(m,86));setTimeout(()=>g.forEach(m=>liveNoteOff(m)),hold*1000);},i*gap*1000));}
-  // 👂 EAR-TRAINING : the teacher plays an interval OR a chord, you guess (typed in VIBE)
+  // 👂 EAR-TRAINING : the teacher plays an interval / chord / world-rhythm, you guess (typed in VIBE)
   let earQuiz=null;
   const EAR_INT=["octave","quinte","quarte","tierce","triton","seconde","sixte"];
   const EAR_CH=["maj7","m7","dim","sus4","7"];
-  const EAR_ALL=[...EAR_INT,...EAR_CH];
-  function earRound(){const pick=EAR_ALL[Math.floor(Math.random()*EAR_ALL.length)],cat=EAR_INT.includes(pick)?"intervalle":"accord";
-    earQuiz={answer:pick,cat};const d=loreDemo(pick);if(d)playGroups(d.groups,d.gap,d.hold);
-    const opts=(cat==="intervalle"?EAR_INT:EAR_CH).join("/");
-    log("[ 👂 ] devine l'"+cat+" — écris ta réponse dans VIBE ("+opts+") · 👂 reclique = réécoute","ai");}
+  const EAR_RH=["tresillo","son","bossa","bembe","samba"];
+  const EAR_ALL=[...EAR_INT,...EAR_CH,...EAR_RH];
+  function playRhythm(pat){if(!ctx)initAudio();if(!ctx)return;if(ctx.state==="suspended")ctx.resume();
+    const st=pat.split(/\s+/),n=st.length,step=1.6/n;
+    st.forEach((s,i)=>{if(s==="x")setTimeout(()=>{liveNoteOn(84,80);setTimeout(()=>liveNoteOff(84),90);},i*step*1000);});}
+  function playQuiz(q){if(q.cat==="rythme")playRhythm(RHYTHMS[q.answer]||"x . x .");else{const d=loreDemo(q.answer);if(d)playGroups(d.groups,d.gap,d.hold);}}
+  function earRound(){const pick=EAR_ALL[Math.floor(Math.random()*EAR_ALL.length)],
+    cat=EAR_INT.includes(pick)?"intervalle":EAR_CH.includes(pick)?"accord":"rythme";
+    earQuiz={answer:pick,cat};playQuiz(earQuiz);
+    const opts=(cat==="intervalle"?EAR_INT:cat==="accord"?EAR_CH:EAR_RH).join("/");
+    log("[ 👂 ] devine le "+cat+" — écris ta réponse dans VIBE ("+opts+") · 👂 reclique = réécoute","ai");}
   function gradeEar(g){if(g===earQuiz.answer){log("[ 👂 ✅ ] bravo — c'était bien « "+g+" » !"+(LORE[g]?"  ("+LORE[g]+")":""),"ai");earQuiz=null;}
-    else{const d=loreDemo(earQuiz.answer);if(d)playGroups(d.groups,d.gap,d.hold);log("[ 👂 ❌ ] pas tout à fait — réécoute. (clique ?"+earQuiz.answer+" pour la réponse)","err");}}
+    else{playQuiz(earQuiz);log("[ 👂 ❌ ] pas tout à fait — réécoute. (clique ?"+earQuiz.answer+" pour la réponse)","err");}}
   function loreDemo(term){
     const IV={octave:12,quinte:7,quarte:5,tierce:4,triton:6,seconde:2,sixte:9,septieme:11},
       CH={maj7:[0,4,7,11],m7:[0,3,7,10],dim:[0,3,6],sus4:[0,5,7],"7":[0,4,7,10]};
@@ -6013,7 +6019,7 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
     log("[ 🧬× ] enfant : ton morceau × "+Bname.toUpperCase()+" (↩ annuler · reclique pour un autre)","ai");
     lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+12000;}
   {const cb=$("crossBtn");if(cb)cb.addEventListener("click",crossPiece);}
-  {const eb=$("earBtn");if(eb)eb.addEventListener("click",()=>{if(earQuiz){const d=loreDemo(earQuiz.answer);if(d)playGroups(d.groups,d.gap,d.hold);log("[ 👂 ] réécoute…","ai");}else earRound();});}
+  {const eb=$("earBtn");if(eb)eb.addEventListener("click",()=>{if(earQuiz){playQuiz(earQuiz);log("[ 👂 ] réécoute…","ai");}else earRound();});}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;
