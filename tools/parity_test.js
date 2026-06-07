@@ -99,6 +99,7 @@ const pieces = {
   'develop (motivic arc)': 'seed: 1\nkey: c major\nlead: 1 2 3 5 | develop\nhh: x . x x . x . x | develop',
   'rythmes du monde': 'kick: tresillo\nhat: bembe\nclap: son\nperc: baiao',
   'sieve (Xenakis)': 'kick: sieve(16,3:0,5:2)\nhat: sieve(13,2:0,3:1)\nperc: sieve(12,4:1,6:3)',
+  '1/f pink': 'seed: 5\nkey: c minor\nmel: pink(16)\nmel2: 1f(13)',
 };
 
 let total = 0, bad = 0;

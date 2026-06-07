@@ -678,6 +678,27 @@ fn expand_drunk_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
     }
     Some(out)
 }
+/// `pink(n)` / `1f(n)` — 1/f (pink) noise melody (Voss): sum of octaves that hold
+/// for 2^k steps -> a fractal, "natural" contour. Bit-identical to the JS engine.
+fn expand_1f_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("pink(").or_else(|| tok.strip_prefix("1f("))?.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse().ok()?;
+    let range: i64 = it.next().and_then(|s| s.trim().parse().ok()).unwrap_or(7).max(2);
+    let b = 5usize;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let mut s = 0.0f64;
+        for k in 0..b {
+            let block = (i / (1usize << k)) as i64;
+            s += js_rng(seed as u32, bar, &format!("1f:{}", k), block);
+        }
+        let v = s / b as f64;
+        out.push((((v * range as f64).floor() as i64) + 1).clamp(1, range).to_string());
+    }
+    Some(out)
+}
+
 /// Resolve a voice's effective tokens for a given bar (all verbs + bar-aware
 /// generative expansions applied).
 pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
@@ -694,6 +715,7 @@ fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<Stri
         else if let Some(seq) = expand_walk_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_drunk_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_perlin_token(&tok, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_1f_token(&tok, bar, seed) { out.extend(seq); }
         else { out.push(tok); }
     }
     out
@@ -2646,6 +2668,9 @@ mod tests {
         // reference values produced by the actual JS engine (seed=5)
         assert_eq!(expand_walk_token("walk(8)", 2, 5).unwrap().join(" "), "1 3 1 2 1 1 1 2");
         assert_eq!(expand_drunk_token("drunk(16)", 0, 5).unwrap().join(""), "x...xxxxx.......");
+        // pink/1f reference values (computed from the JS engine's exact RNG)
+        assert_eq!(expand_1f_token("pink(8)", 0, 5).unwrap().join(" "), "4 4 4 4 5 4 5 6");
+        assert_eq!(expand_1f_token("1f(8)", 1, 5).unwrap().join(" "), "3 5 5 5 5 5 5 6");
     }
 
     #[test]
