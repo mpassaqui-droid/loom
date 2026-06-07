@@ -246,6 +246,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button class="tiny go" id="tapBtn" title="tape le rythme pour régler le tempo">&#9678; TAP</button>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
     <span id="vu" title="niveau master (vert→ambre→rouge=saturation)" style="display:inline-block;width:90px;height:13px;border:1px solid var(--dim);border-radius:3px;overflow:hidden;vertical-align:middle"><span id="vuBar" style="display:block;height:100%;width:0;background:var(--cyan);transition:width .06s"></span></span>
+    <span id="lufs" class="opt" title="loudness (LUFS~, cible streaming ≈ -14) · crête dB · rouge = écrêtage" style="font-size:14px;margin-left:6px;vertical-align:middle;min-width:130px;display:inline-block">LUFS~ −∞ · pk −∞</span>
   </div>
 
   <div class="knobs">
@@ -350,7 +351,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
-  let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave";
+  let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave",_pkHold=0;
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
@@ -1840,8 +1841,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     drawPlayBoxes($("editGlow"),$("editor"),cph);
     if(stageOn)drawPlayBoxes($("stageGlow"),$("stageEditor"),cph);
     drawScope();if(rollOn)drawRoll();if(stageOn)drawStage();
-    if(analyser){const tb=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(tb);let peak=0;for(let i=0;i<tb.length;i+=2){const a=Math.abs(tb[i]-128)/128;if(a>peak)peak=a;}
-      const bar=$("vuBar");if(bar){bar.style.width=Math.min(100,peak*140)+"%";bar.style.background=peak>0.98?"#ff5a5a":peak>0.72?"var(--amber)":"var(--cyan)";}}
+    if(analyser){const tb=new Uint8Array(analyser.fftSize);analyser.getByteTimeDomainData(tb);let peak=0,ms=0;
+      for(let i=0;i<tb.length;i++){const a=(tb[i]-128)/128;if(Math.abs(a)>peak)peak=Math.abs(a);ms+=a*a;}ms/=tb.length;
+      const bar=$("vuBar");if(bar){bar.style.width=Math.min(100,peak*140)+"%";bar.style.background=peak>0.98?"#ff5a5a":peak>0.72?"var(--amber)":"var(--cyan)";}
+      _pkHold=Math.max(peak,_pkHold*0.95);  // peak-hold with slow decay
+      const el=$("lufs");if(el){const lufs=ms>1e-7?(-0.691+10*Math.log10(ms)):-99,pkdb=peak>1e-4?20*Math.log10(peak):-99;
+        el.textContent="LUFS~ "+(lufs<=-90?"−∞":Math.round(lufs))+" · pk "+(pkdb<=-90?"−∞":Math.round(pkdb))+"dB";
+        el.style.color=_pkHold>0.99?"#ff5a5a":(lufs>-9?"var(--amber)":"var(--dim)");}}
     requestAnimationFrame(animate);}
   // --- SCÈNE : immersive fullscreen reactive visualizer ---
   let vjOn=false,sceneMap={},rollOn=false,loopSec=null;
