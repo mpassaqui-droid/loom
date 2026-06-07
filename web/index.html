@@ -5706,6 +5706,15 @@ air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.1
   // SURPRISE METER: how much does the music actually CHANGE? Schedules several
   // bars via the real engine and measures (a) per-voice bar-to-bar variety,
   // (b) pitch entropy, (c) rhythm entropy. Flags voices that repeat identically.
+  // ACOUSTICS — sensory dissonance (Plomp-Levelt / Sethares): two partials beat
+  // when their distance is a fraction of the critical band. Sum over all partial
+  // pairs of a chord -> roughness. Low = consonant (octave/fifth), high = harsh.
+  function partialRoughness(f1,f2){if(f1>f2){const t=f1;f1=f2;f2=t;}
+    const s=0.24/(0.0207*f1+18.96),x=f2-f1;return Math.exp(-3.5*s*x)-Math.exp(-5.75*s*x);}
+  function chordRoughness(freqs,nh){nh=nh||6;const p=[];
+    for(const f of freqs)for(let k=1;k<=nh;k++)p.push([f*k,Math.pow(0.88,k-1)]);
+    let d=0,n=0;for(let i=0;i<p.length;i++)for(let j=i+1;j<p.length;j++){const w=p[i][1]*p[j][1];
+      d+=w*partialRoughness(p[i][0],p[j][0]);n+=w;}return n>0?d/n:0;}
   function noveltyReport(text){
     const song=parseSong(text);
     const total=song.length?song.reduce((a,s)=>a+s[1],0):8;
@@ -5751,6 +5760,12 @@ air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.1
       out.push("   microtonal : des notes « entre les touches » (quarts de ton / EDO) — couleur hors du piano. ?microtonal");
     else if(tune&&tune!=="equal")
       out.push("   accordage "+tune+" : intervalles aux ratios purs → plus consonant, « plus juste ». ?pythagore");
+    // ACOUSTIQUE : consonance calculée (Plomp-Levelt) de l'accord de tonique
+    if(k){let triad=["1","3","5"].map(d=>tokenToFreq(d,k)).filter(f=>f&&isFinite(f));
+      if(triad.length>=2){const lo=Math.min(...triad);triad=triad.map(f=>f*261.63/lo); // register-normalise -> judge the CHORD, not its octave
+        const r=chordRoughness(triad),cons=Math.round(100*(1-Math.min(1,r/0.02)));
+        const lbl=cons>=75?"très consonant (reposé)":cons>=50?"consonant, doux":cons>=30?"tendu":"dissonant, âpre";
+        out.push("[ acoustique ] accord de tonique (1·3·5) : consonance "+cons+"/100 — "+lbl+" · rugosité = battements des partiels dans la bande critique (?pythagore)");}}
     const why=[];
     if(/\b(drone|tanpura|bourdon|pad|sub|sa)\s*[:@]/i.test(text)||/\|\s*bow\b/.test(text)||/\|\s*gate\s+[2-9]/.test(text))
       why.push("un bourdon/nappe tenu ancre l'oreille (le repos)");
@@ -5866,7 +5881,7 @@ air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.1
     const cl=cycleLen,out=_cap.map(o=>({voice:o.v,phase:o.t/cl,tok:o.tok,drum:o.drum,pan:o.pan}));
     _cap=prev;return out;
   }
-  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>
