@@ -594,6 +594,25 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
         }
         Some("markov") => {
             if tokens.len() < 2 { return tokens.to_vec(); }
+            // markov N: order-N (context = last N tokens). N>=2 only; N=1 keeps the original.
+            let ord = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(1).max(1);
+            if ord >= 2 {
+                let o = ord.min(tokens.len() - 1);
+                let mut tr: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+                for i in 0..tokens.len() {
+                    let key = (0..o).map(|j| tokens[(i + j) % tokens.len()].clone()).collect::<Vec<_>>().join(",");
+                    tr.entry(key).or_default().push(tokens[(i + o) % tokens.len()].clone());
+                }
+                let mut out = tokens[0..o].to_vec();
+                let mut ctx = tokens[0..o].to_vec();
+                for i in o..tokens.len() {
+                    let key = ctx.join(",");
+                    let opts = tr.get(&key).cloned().unwrap_or_else(|| tokens.to_vec());
+                    let idx = ((js_rng(seed as u32, bar, &format!("mk:{}", verb), i as i64) * (opts.len() as f64)).floor() as usize) % opts.len();
+                    out.push(opts[idx].clone()); ctx.push(opts[idx].clone()); ctx.remove(0);
+                }
+                return out;
+            }
             let mut trans: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
             for i in 0..tokens.len() { let a = tokens[i].clone(); let b = tokens[(i + 1) % tokens.len()].clone(); trans.entry(a).or_default().push(b); }
             let mut out = Vec::with_capacity(tokens.len());
@@ -2704,6 +2723,17 @@ mod tests {
         assert_eq!(apply_verb(&q, "invert", 0, 5).join(" "), "1 7, 6, 4,");
         let s3: Vec<String> = "1 2 3".split_whitespace().map(|s| s.to_string()).collect();
         assert_eq!(apply_verb(&s3, "sequence 2", 0, 5).join(" "), "1 2 3 3 4 5");
+    }
+
+    #[test]
+    fn markov_order_n() {
+        let t: Vec<String> = "1 2 3 1 2 4 1 2 5".split_whitespace().map(|s| s.to_string()).collect();
+        let a = apply_verb(&t, "markov 2", 3, 5);
+        assert_eq!(a, apply_verb(&t, "markov 2", 3, 5));  // deterministic
+        assert_eq!(a.len(), t.len());
+        // order-1 (no arg) unchanged — regression
+        let q: Vec<String> = "1 2 3 5 6 5 3 2".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&q, "markov", 3, 5).join(" "), "1 2 1 2 1 2 3 5");
     }
 
     #[test]
