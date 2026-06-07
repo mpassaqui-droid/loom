@@ -1702,12 +1702,13 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.title=key==="mute"?"couper":"isoler";
       b.style.cssText="font:11px monospace;padding:1px 5px;margin-right:3px;border:1px solid var(--dim);border-radius:3px;background:transparent;color:var(--dim);cursor:pointer";
       const refresh=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};refresh();
-      b.addEventListener("click",e=>{e.stopPropagation();v[key]=!v[key];refresh();});return b;};
+      b.addEventListener("click",e=>{e.stopPropagation();v[key]=!v[key];refresh();setVoiceParam(v,key,v[key]);});return b;};
     nm.appendChild(mk("M","mute","#ff6a6a"));nm.appendChild(mk("S","solo","#ffd24a"));
     // live mixer: per-voice volume fader (sets v.gain in real time)
     const vol=document.createElement("input");vol.type="range";vol.min="0";vol.max="1";vol.step="0.01";vol.value=(v.gain!=null?v.gain:0.25);
     vol.title="volume";vol.style.cssText="width:58px;vertical-align:middle;margin:0 5px;cursor:pointer";
-    vol.addEventListener("input",e=>{e.stopPropagation();v.gain=parseFloat(vol.value);});nm.appendChild(vol);
+    vol.addEventListener("input",e=>{e.stopPropagation();v.gain=parseFloat(vol.value);});
+    vol.addEventListener("change",e=>{e.stopPropagation();setVoiceParam(v,"gain",parseFloat(vol.value));});nm.appendChild(vol);
     const lbl=document.createElement("span");lbl.textContent=v.name;lbl.style.marginLeft="4px";nm.appendChild(lbl);
     const cells=document.createElement("div");cells.className="cells";v.cells=[];
     v.tokens.forEach((tok,i)=>{const c=document.createElement("span");c.className="cell";
@@ -1730,10 +1731,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       const sl=(min,max,stp,val,title,oninput)=>{const s=document.createElement("input");s.type="range";s.min=min;s.max=max;s.step=stp;s.value=val;s.title=title;s.style.cssText="width:56px;cursor:pointer;margin:1px 0";s.addEventListener("input",()=>oninput(parseFloat(s.value)));return s;};
       if(isMaster){mx._masterBar=bar;col.appendChild(sl(0,100,1,$("vol").value,"volume master",x=>{$("vol").value=x;$("vol").dispatchEvent(new Event("input"));}));}
       else{v._mxBar=bar;
-        const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.style.cssText="font:10px monospace;padding:1px 4px;margin:1px;border:1px solid var(--dim);border-radius:2px;background:transparent;color:var(--dim);cursor:pointer";const rf=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};rf();b.addEventListener("click",()=>{v[key]=!v[key];rf();});return b;};
+        const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.style.cssText="font:10px monospace;padding:1px 4px;margin:1px;border:1px solid var(--dim);border-radius:2px;background:transparent;color:var(--dim);cursor:pointer";const rf=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};rf();b.addEventListener("click",()=>{v[key]=!v[key];rf();setVoiceParam(v,key,v[key]);});return b;};
         const bt=document.createElement("div");bt.appendChild(mk("M","mute","#ff6a6a"));bt.appendChild(mk("S","solo","#ffd24a"));col.appendChild(bt);
-        col.appendChild(sl(0,1,0.01,(v.gain!=null?v.gain:0.25),"volume",x=>v.gain=x));
-        col.appendChild(sl(-1,1,0.05,(v.pan!=null?v.pan:0),"pan (gauche↔droite)",x=>v.pan=x));
+        const gs=sl(0,1,0.01,(v.gain!=null?v.gain:0.25),"volume",x=>v.gain=x);gs.addEventListener("change",()=>setVoiceParam(v,"gain",parseFloat(gs.value)));col.appendChild(gs);
+        const ps=sl(-1,1,0.05,(v.pan!=null?v.pan:0),"pan (gauche↔droite)",x=>v.pan=x);ps.addEventListener("change",()=>setVoiceParam(v,"pan",parseFloat(ps.value)));col.appendChild(ps);
         const pl=document.createElement("div");pl.textContent="L◀▶R";pl.style.cssText="font-size:9px;color:var(--dim)";col.appendChild(pl);}
       return col;};
     for(const v of voices){if(v.section)continue;mx.appendChild(strip(v,false));}
@@ -1746,6 +1747,20 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function toggleMelStep(v,i,c,dir){const n=MEL_CYCLE.length;let idx=MEL_CYCLE.indexOf(v.tokens[i]);if(idx<0)idx=0;
     idx=(((idx+(dir||1))%n)+n)%n;const t=MEL_CYCLE[idx];v.tokens[i]=t;
     c.classList.toggle("on",t!=="."&&t!=="~");c.textContent=(t==="."||t.length>3)?"":t;c.style.fontSize="9px";syncVoiceToEditor(v);}
+  // DAW mix persistence: write a per-voice param back into the editor line so mixer
+  // moves (gain/pan/mute/solo) survive recompile, save, export and reload. Mirrors
+  // syncVoiceToEditor; preserves any trailing « # comment ». Flags (mute/solo) are
+  // bare segments added/removed; numeric params replace any existing « key N ».
+  function setVoiceParam(v,key,val){const lines=editor.value.split("\n");
+    for(let li=0;li<lines.length;li++){const raw=lines[li];const idx=raw.indexOf(":");if(idx<0)continue;
+      if(raw.slice(0,idx).trim().toLowerCase()!==v.name)continue;
+      let body=raw,comment="";const cm=body.search(/\s#/);if(cm>=0){comment=body.slice(cm);body=body.slice(0,cm);}
+      const head=body.slice(0,idx);let segs=body.slice(idx+1).split("|").map(s=>s.trim());
+      segs=segs.filter((s,i)=>i===0||s.split(/\s+/)[0]!==key);          // drop existing occurrence
+      const isFlag=(key==="mute"||key==="solo");
+      if(isFlag){if(val)segs.push(key);}else{segs.push(key+" "+(Math.round(val*1000)/1000));}
+      lines[li]=head+": "+segs.join(" | ")+(comment?" "+comment.trim():"");break;}
+    editor.value=lines.join("\n");}
   function syncVoiceToEditor(v){const lines=editor.value.split("\n");
     for(let li=0;li<lines.length;li++){const idx=lines[li].indexOf(":");if(idx<0)continue;
       if(lines[li].slice(0,idx).trim().toLowerCase()!==v.name)continue;
