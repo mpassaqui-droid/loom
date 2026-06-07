@@ -1,0 +1,98 @@
+# ================================================================
+#  LOOM — « AE × AFX » : ~10 minutes. Autechre rencontre Aphex Twin.
+#
+#  Le pari sonore :
+#   • SYNTHÈSE ADDITIVE (partials / organ) + SOUSTRACTIVE (saw+filtre) pour des
+#     timbres qui n'existent PAS — des instruments inventés, qui évoluent.
+#   • Aucune progression classique : une GAMME MICROTONALE inventée (quarts de
+#     ton) qui MODULE à chaque section.
+#   • POLYRYTHMIE Reich/Glass : des cellules identiques en cycles PREMIERS ENTRE
+#     EUX (poly 11/12/13/16/17) qui se déphasent (Reich) + des arpèges répétés
+#     qui mutent lentement (Glass).
+#   • Batterie GLITCH (ca · drunk · euclide · ratchets · crush) qui ne se répète
+#     jamais, et des LEADS qui se DÉVELOPPENT sur les 10 minutes.
+#
+#  > RUN, plein écran (SCÈNE), laisse couler. seed: 18/19/20 = autre univers.
+# ================================================================
+
+title:  AE × AFX
+bpm:    124
+tune:   equal
+seed:   17
+duck:   26
+feel:   24
+warmth: 0.5
+meter:  4/4
+accel:  120 132
+
+# --- gammes microtonales inventées, une couleur par section (modulation) ---
+key:            d 0 1.5 3 4 6 7.5 9 10
+key@weave:      a 0 2 3.5 5 7 8.5 10
+key@grind:      c 0 1 3 4.5 6 7 9 10.5
+key@bloom:      g 0 2.5 4 5 7.5 9 11
+key@fracture:   e 0 1.5 5 6.5 7 10
+key@glass:      f 0 2 3 5 7 9 10
+key@swarm:      b 0 1 4 6 7.5 9 11
+key@dissolve:   d 0 1.5 4 6 7 9.5
+
+scene:           gwarp
+scene@weave:     gtorus
+scene@grind:     gcells
+scene@bloom:     gaurora
+scene@fracture:  gmandel
+scene@glass:     lissa3d
+scene@swarm:     gfractal
+scene@dissolve:  nebula
+film:   square
+
+# ~310 mesures ≈ 10 min @124->132 bpm
+song:  emerge*16 weave*44 grind*48 bloom*40 fracture*40 glass*48 swarm*40 dissolve*34
+
+# ---------- LE LIT : sous-basse + bourdon additif (présents partout) ----------
+sub:    1 . . . . . . . . . . . . . . . | sine | oct 1 | sub 0.7 | env 1.5 1 0.9 3 | gain 0.2 | hue 220
+drone:  1 . . . . . . . . . . . . . . . | saw | partials 1 0 0.5 0 0.3 0 0.2 0 0.15 | unison 3 | detune 8 | lp 900 | fold 0..0.5 | over 8 | ir cathedral 0.5 | reverb 0.8 | gate 4 | gain 0.05 | hue 160
+
+# ---------- INSTRUMENTS ADDITIFS « impossibles » (spectres inventés) ----------
+# partials = amplitudes des harmoniques -> des timbres qui n'existent pas.
+glassoid@emerge:  1 . . . 5 . . . 6 . . . 4 . . . | sine | partials 1 0 0.6 0 0.4 0 0.25 0 0.18 0 0.12 | detune 4 | reverb 0.7 | delay 0.4 | echo 8 0.4 | gate 1.4 | gain 0.07 | hue 300
+metalloid@bloom:  1 . 3 . 6 . 4 . 7 . 5 . 1' . 6 . | sine | partials 1 0.7 0.1 0.5 0.2 0.4 0.1 0.3 | ring 140 | fold 0..0.6 | over 8 | reverb 0.6 | delay 0.3 | gate 0.7 | develop | gain 0.07 | hue 60
+organoid@swarm:   1 4 6 3 5 1' 6 4 | saw | organ 808600420 | unison 4 | detune 10 | lp 2200 | reverb 0.5 | gate 0.6 | develop | gain 0.06 | hue 180
+breathoid@dissolve: 1 . . . 6 . . . | sine | partials 1 0 0 0.4 0 0 0.3 0 0 0.2 | grain 0.5 | vowel a | reverb 0.85 | echo 8 0.55 | gate 2 | gain 0.05 | hue 280
+
+# ---------- REICH PHASING : la MÊME cellule en cycles premiers entre eux ----------
+# poly 12 vs 13 vs 17 -> elles se déphasent en continu (jamais alignées).
+ph1@weave:  1 4 6 3 5 1' | poly 12 | sine | partials 1 0 0.5 0 0.35 0 0.2 | reverb 0.5 | gate 0.5 | pan -0.4 | gain 0.06 | hue 200
+ph2@weave:  1 4 6 3 5 1' | poly 13 | sine | partials 1 0 0.5 0 0.35 0 0.2 | reverb 0.5 | gate 0.5 | pan 0.4 | gain 0.06 | hue 320
+ph3@weave:  1 4 6 3 5 1' | poly 17 | pluck 0.6 | reverb 0.5 | gate 0.5 | gain 0.05 | hue 100
+ph1@swarm:  3 5 6 1' 7 4 | poly 11 | sine | partials 1 0.4 0 0.5 0 0.3 | reverb 0.5 | gate 0.5 | pan -0.35 | gain 0.05 | hue 240
+ph2@swarm:  3 5 6 1' 7 4 | poly 16 | sine | partials 1 0.4 0 0.5 0 0.3 | reverb 0.5 | gate 0.5 | pan 0.35 | gain 0.05 | hue 40
+
+# ---------- GLASS : arpèges rapides répétés qui mutent lentement ----------
+glass1@glass: 1 3 5 6 5 3 1 3 5 6 5 3 1' 6 5 3 | pulse | lp 2400 q 4 | every 4 add 1 | reverb 0.4 | delay 0.3 | gate 0.5 | gain 0.07 | hue 280
+glass2@glass: 5 6 1' 3' 1' 6 5 6 1' 3' 1' 6 5 6 1' 6 | tri | lp 2000 | poly 15 | every 6 rot 2 | reverb 0.4 | gate 0.5 | pan 0.3 | gain 0.06 | hue 200
+gbass@glass:  1 . . 5, . . 1 . . 4, . . 6, . 5, . | saw | oct 2 | lp 600 q 6 | slide | develop | gain 0.13 | hue 0
+
+# ---------- ACID soustractif (Aphex) : 303 microtonal qui se réécrit ----------
+acid@grind:   1 . 1' . 5 . 1 . 4 . 1 . 6 . 7 . | saw | oct 2 | slide | lp 520 q 10 | fenv 0.7 | drive 0.4 | every 4 rev | mutate 25 | gain 0.13 | hue 0
+acid@fracture:1 1 . 1' 5 . 1 . 4 . 1' . 6 . 5 1 | saw | oct 2 | slide | lp 600 q 9 | fenv 0.6 | drive 0.5 | shuffle | gain 0.13 | hue 0
+lead@grind:   walk(16) | sync 4 | lp 2600 | delay 0.25 | echo 6 0.4 | gate 0.5 | humanize 35 | develop | gain 0.08 | hue 20
+lead@bloom:   walk(14) | sine | fm 2 3 | wow 0.3 | reverb 0.5 | delay 0.4 | echo 8 0.45 | develop | humanize 40 | gain 0.08 | hue 90
+lead@fracture:logistic(16) | tri | ring 220 | fold 0..0.7 | over 8 | lp 2400 | delay 0.2 | gate 0.5 | gain 0.07 | hue 0
+
+# ---------- BATTERIE GLITCH (Autechre) : jamais deux fois pareille ----------
+kick:   x . . x . . x . x . . . x . x*3 . | sample bd | gain 0.5 | comp 0.5 | every 8 fast 2 | in weave grind bloom fracture swarm
+snare:  . . . . x! . . x?40 . . . . x . x*4> . | sample sd | shift 0.01 | gain 0.4 | in grind bloom fracture swarm
+hat:    ca(110,16) | sample hh | gain 0.11 | swing 56 | degrade 18 | orbit 0.25 | stereo 1.4 | chance 0.9 | in weave grind bloom fracture swarm dissolve
+glitch@grind:    bin(214) | sample glass | redux 6 | crush 4 | pan -0.3 | gain 0.11
+glitch@fracture: drunk(16) | sample perc | reson 330 0.4 | crush 6 | mutate 30 | pan 0.3 | chance 0.7 | gain 0.12
+zap@swarm:       {1 6}*2 . . . {4 1'}*3 . . | tri | sync 3 | fold 0..0.7 | over 8 | redux 4 | gain 0.06 | hue 100
+break@fracture:  {1 2} . [3 3 1] 2 1 . {2 4}*2 . 1 . [2 1] 3 1 . | sample amen | chop 8 | redux 4 | crush 4 | shuffle | gain 0.22
+
+# ---------- AIR : souffle filtré qui respire avec l'accel ----------
+air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.15 0.5 sine | reverb 0.7 | gate 2 | gain 0.03 | in emerge bloom glass dissolve
+
+# ----------------------------------------------------------------
+#  Additif (partials/organ) = les timbres inventés · poly premiers entre eux =
+#  le phasing Reich · arpèges mutants = Glass · ca/drunk/mutate = Autechre.
+#  Essaie : seed: 18 · tune: 24edo · meter: 7/8 · enlève accel: pour figer.
+# ----------------------------------------------------------------
