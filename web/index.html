@@ -368,7 +368,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   "use strict";
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
-  let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null,buses={};
+  let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null,buses={},busCfg={};
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave",_pkHold=0;
   let midiLearn=false,learnTarget=null,ccMap={};  // MIDI CC mapping (learn -> control)
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
@@ -407,7 +407,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // build the whole audio graph into the current `ctx` (reused for offline render)
   function buildGraph(){
     masterSat=null;masterWLim=null;  // fresh per graph (live vs offline contexts)
-    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();buses={};
+    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();buses={};busCfg=parseBuses(editor.value);
     // ping-pong delay: `delay` is the mono INPUT, then two cross-fed delay lines
     // panned hard L/R so each echo bounces side to side. fb = feedback amount.
     delay=ctx.createGain();
@@ -1440,7 +1440,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
-    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"].includes(name))continue;
+    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"].includes(name))continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
@@ -1745,9 +1745,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       col.style.cssText="display:inline-block;vertical-align:top;width:62px;text-align:center;margin:0 3px;font:12px monospace";
       const nm=document.createElement("div");nm.textContent="▣ "+bn;
       nm.style.cssText="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;color:#ffd24a";col.appendChild(nm);
-      const s=document.createElement("input");s.type="range";s.min=0;s.max=1.5;s.step=0.01;s.value=(buses[bn]?buses[bn].gain.value:1);
+      const s=document.createElement("input");s.type="range";s.min=0;s.max=1.5;s.step=0.01;
+      s.value=(buses[bn]?buses[bn].gain.value:(busCfg[bn]&&busCfg[bn].gain!=null?busCfg[bn].gain:1));
       s.title="bus « "+bn+" » — gain de groupe";s.style.cssText="width:56px;cursor:pointer;margin:1px 0";
       s.addEventListener("input",()=>{if(ctx&&bus)busFor(bn).gain.value=parseFloat(s.value);});
+      s.addEventListener("change",()=>setBusGain(bn,parseFloat(s.value)));   // persist to the bus: directive
       col.appendChild(s);mx.appendChild(col);}
     mx.appendChild(strip({},true));}
   // clickable step sequencer: toggle a drum cell -> live change + sync to editor
@@ -1837,9 +1839,38 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const f=noteToFreq(tok);return f?[f]:[];}
   let _cap=null;  // when set to an array, trigger() records instead of sounding (parity capture; off in normal play)
   let _barTrig=0;const VOICE_CAP=220;  // per-bar note budget: a safety valve against CPU blow-up / dropouts on pathologically dense bars
-  // DAW submix bus: lazily make a named sub-bus (a GainNode) that feeds the global
-  // bus, so a group of voices (e.g. all drums) share one fader/FX point.
-  function busFor(name){if(!ctx||!bus)return bus;if(!buses[name]){const g=ctx.createGain();g.gain.value=1;g.connect(bus);buses[name]=g;}return buses[name];}
+  // DAW submix bus: lazily make a named sub-bus that feeds the global bus, so a group
+  // of voices (e.g. all drums) share one fader/FX point. Config comes from a `bus:`
+  // directive (busCfg): gain, lp/hp (+q) shared filter, and a reverb send. Voices
+  // connect to the bus INPUT gain; the filtered tail feeds the global bus + reverb.
+  function busFor(name){if(!ctx||!bus)return bus;
+    if(!buses[name]){const c=busCfg[name]||{};
+      const g=ctx.createGain();g.gain.value=(c.gain!=null?c.gain:1);let tail=g;
+      if(c.lp!=null||c.hp!=null){const f=ctx.createBiquadFilter();f.type=(c.hp!=null?"highpass":"lowpass");f.frequency.value=(c.hp!=null?c.hp:c.lp);f.Q.value=(c.q!=null?c.q:1);tail.connect(f);tail=f;}
+      tail.connect(bus);
+      if(c.reverb!=null&&conv){const s=ctx.createGain();s.gain.value=Math.min(1,c.reverb);tail.connect(s);s.connect(conv);}
+      buses[name]=g;}
+    return buses[name];}
+  // parse `bus: NAME gain G lp F hp F q Q reverb R` directives into busCfg
+  function parseBuses(text){const m={};for(const raw of text.split("\n")){const line=raw.replace(/\s#.*$/,"").trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()!=="bus")continue;
+    const w=line.slice(i+1).trim().split(/\s+/),name=(w[0]||"").toLowerCase();if(!name)continue;
+    const c=m[name]||(m[name]={});
+    for(let k=1;k<w.length-1;k++){const key=w[k].toLowerCase(),val=parseFloat(w[k+1]);if(isNaN(val))continue;
+      if(key==="gain")c.gain=Math.max(0,Math.min(2,val));
+      else if(key==="lp")c.lp=val;else if(key==="hp")c.hp=val;else if(key==="q")c.q=val;
+      else if(key==="reverb"||key==="rev")c.reverb=val;else continue;k++;}}
+    return m;}
+  // persist a bus fader move back into its `bus:` directive line (create if absent)
+  function setBusGain(name,val){const lines=editor.value.split("\n"),g=Math.round(val*1000)/1000;
+    for(let li=0;li<lines.length;li++){const raw=lines[li],idx=raw.indexOf(":");if(idx<0)continue;
+      if(raw.slice(0,idx).trim().toLowerCase()!=="bus")continue;
+      let body=raw,comment="";const cm=body.search(/\s#/);if(cm>=0){comment=body.slice(cm);body=body.slice(0,cm);}
+      const w=body.slice(idx+1).trim().split(/\s+/);if((w[0]||"").toLowerCase()!==name)continue;
+      const out=[w[0]];let had=false;for(let k=1;k<w.length;k++){if(w[k].toLowerCase()==="gain"){out.push("gain",String(g));k++;had=true;}else out.push(w[k]);}
+      if(!had)out.push("gain",String(g));
+      lines[li]="bus: "+out.join(" ")+(comment?" "+comment.trim():"");editor.value=lines.join("\n");return;}
+    lines.push("bus: "+name+" gain "+g);editor.value=lines.join("\n");}
   // bus routing wrapper: a | bus NAME voice temporarily redirects the global `bus`
   // (which every drum/synth/sample node connects to synchronously) to its sub-bus.
   // try/finally guarantees the global bus is always restored, even on early returns.
@@ -5695,7 +5726,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
     "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",
     "- Markov melodies: | markov regenerates a voice's line from its OWN note-to-note transitions (a seeded Markov walk) — same notes, new order that still 'sounds like' the original. e.g. lead: 1 2 3 5 6 5 3 2 | markov. Use | markov N (N>=2) for higher-order chains that follow longer phrases more faithfully (more like the source), e.g. | markov 2.",
-    "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords. DAW BUSES: | bus NAME routes a voice into a shared submix bus (e.g. put | bus drums on kick/snare/hat to group them) — one fader controls the group in the MIX panel. Great for balancing drums vs synths.",
+    "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords. DAW BUSES: | bus NAME routes a voice into a shared submix bus (e.g. put | bus drums on kick/snare/hat to group them) — one fader controls the group in the MIX panel. Great for balancing drums vs synths. Configure a bus with a bus: directive: bus: drums gain 0.8 lp 1500 reverb 0.3 (gain, lp/hp shared filter +q, reverb send) — persisted in the code.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
     "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",
@@ -6217,7 +6248,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // vary the drums, bump the seed — instant novelty without writing code. Undoable.
   function developAll(){
     if(!editor.value.trim()){log("[ ✨ ] écris ou charge d'abord un morceau","err");return;}
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"]);
     const hasVar=s=>/\|\s*(develop|mutate|shuffle|every|iter|markov|stutter)\b/.test(s)||/\b(walk|drunk|ca|logistic|perlin|lsys|recaman|cantor)\s*\(/.test(s);
     let nMel=0,nDr=0;
     const out=editor.value.split("\n").map(line=>{
@@ -6248,7 +6279,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     const GENS=["walk","drunk","pink","perlin","gendy","logistic"];
     const RHY=["tresillo","cinquillo","son","rumba","bossa","bembe","baiao","maqsum","ayoub","samba","montuno","shiko"];
     const VERBS=["| develop","| rev","| every 2 rot 3","| mutate 30","| shuffle","| jux rev","| palindrome"];
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"]);
     const R=Math.random,pick=a=>a[Math.floor(R()*a.length)];
     const mutLine=(code,head)=>{let L=code;
       L=L.replace(/\b(walk|drunk|pink|perlin|gendy|logistic)\(/g,m=>R()<0.5?pick(GENS)+"(":m);   // swap a generator
@@ -6271,7 +6302,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // 🧬× CROISER : enfant = ce morceau (parent A) × un autre (parent B), voix/réglages piochés chez l'un ou l'autre
   function crossPiece(){
     if(!editor.value.trim()){log("[ 🧬× ] écris ou charge d'abord un morceau","err");return;}
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"]);
     const keys=Object.keys(PRESETS||{});if(!keys.length){log("[ 🧬× ] aucun second parent disponible","err");return;}
     const Bname=keys[Math.floor(Math.random()*keys.length)];
     const split=txt=>{const dirs={},voices={};for(const raw of txt.split("\n")){const t=raw.trim();if(!t||t.startsWith("#"))continue;

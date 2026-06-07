@@ -124,9 +124,9 @@ pub struct Event {
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 19] = [
+const DIRECTIVES: [&str; 20] = [
     "key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune",
-    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop",
+    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus",
 ];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
