@@ -695,6 +695,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const r=ctx.createBuffer(b.numberOfChannels,b.length,b.sampleRate);
     for(let ch=0;ch<b.numberOfChannels;ch++){const src=b.getChannelData(ch),dst=r.getChannelData(ch),L=src.length;for(let i=0;i<L;i++)dst[i]=src[L-1-i];}
     sbufRev[name]=r;return r;}
+  // WARP / time-stretch: granular OLA — fit a sample to `dur` seconds keeping pitch
+  function playSampleWarp(name,t,gain,dur,v){const b=sbuf[name];if(!b||!ctx)return false;
+    const L=b.duration;if(L<0.02||!(dur>0.03))return playSample(name,t,gain,1,v);
+    const grain=0.10,hop=0.05,ratio=L/dur;let out=0,rd=0,n=0;
+    while(out<dur&&n<400){const gl=Math.min(grain,L-rd);if(gl<=0.006)break;
+      const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain(),gt=t+out;
+      g.gain.setValueAtTime(0.0001,gt);g.gain.linearRampToValueAtTime(gain!=null?gain:0.9,gt+gl*0.5);g.gain.linearRampToValueAtTime(0.0001,gt+gl);
+      s.connect(g).connect(bus);connectFx(g,v);try{s.start(gt,rd,gl+0.02);}catch(_){}
+      out+=hop;rd+=hop*ratio;n++;if(rd>=L)break;}
+    return true;}
   function playSample(name,t,gain,rate,v){const b=sbuf[name];if(!b)return false;
     if(v&&v.grain)return grainSample(name,t,gain,rate,v);
     const s=ctx.createBufferSource();s.buffer=(v&&v.revsamp)?revBuffer(name):b;s.playbackRate.value=rate||1;
@@ -1410,7 +1420,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1438,6 +1448,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="voicing"||p[0]==="voice")voicing=p[1]||"open";
       else if(p[0]==="cresc")dyn=1;else if(p[0]==="dim"||p[0]==="decresc")dyn=-1;
       else if(p[0]==="reverse"||p[0]==="rev?")revsamp=true;
+      else if(p[0]==="warp"||p[0]==="stretch")warp=true;
       else if(p[0]==="begin")sbeg=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="end")sfin=Math.max(0,Math.min(1,parseFloat(p[1])!=null&&!isNaN(parseFloat(p[1]))?parseFloat(p[1]):1));
       else if(p[0]==="autopan")autopan=Math.max(0.02,Math.min(20,parseFloat(p[1])||1));
@@ -1499,7 +1510,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -1774,6 +1785,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     if(v.type==="drum"){const n=v.name;
       if(v.midi&&midiOut){const gm={kick:36,bd:36,snare:38,sd:38,hat:42,hh:42,clap:39,cp:39}[n]||37;sendMidi(v.midi,gm,Math.round(110*vm),t,0.1);return;}
       if((n==="kick"||n==="bd")&&duckAmt>0)duckPump(t);
+      if(v.sample&&v.warp){playSampleWarp(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),durOverride||cycleLen,v);return;}
       if(v.sample&&playSample(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),1,v))return;
       if(n==="kick"||n==="bd")kick(t);else if(n==="snare"||n==="sd")snare(t);
       else if(n==="hat"||n==="hh")hat(t);else if(n==="clap"||n==="cp")clap(t);
@@ -1786,6 +1798,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(v.chord)fr=fr.flatMap(f=>v.chord.map(iv=>f*Math.pow(2,iv/12)));
       if(v.semi)fr=fr.map(f=>f*Math.pow(2,v.semi/12));
       if(v.midi&&midiOut){for(const f of fr)sendMidi(v.midi,freqToMidi(f),Math.round(96*vm),t,dur);return;}
+      if(v.sample&&v.warp){playSampleWarp(v.sample,t,(v.gain!=null?v.gain:0.22)*vm,dur,v);return;}
       if(v.sample){const bc=noteToFreq(v.root||"c3")||noteToFreq("c3"),gm=Math.min(1,(v.gain||0.22)*3*vm);
         for(const f of fr)playSample(v.sample,t,gm,f/bc,v);return;}
       const g=(fr.length>1?v.gain*0.7:v.gain)*vm;
@@ -5914,7 +5927,7 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
   const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
-    "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","begin","end","root","sample","midi","viz","hue","width",
+    "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","warp","stretch","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
     "major","minor","dorian","phrygian","lydian","mixolydian","locrian","pentatonic","harmonic_minor","melodic_minor","blues","chromatic","hijaz","bhairav","bhairavi","yaman","pelog","slendro","bayati","rast","saba","kurd","nahawand","malkauns","ryukyu",
     "organ","warm","rich","soft","up","down","updown","downup","converge","diverge","thumb","pinky","open","drop2","wide","lead","just","pyth","werck","kirn","meantone","cutoff","pitch","reso","hall","room","plate","spring","cathedral","auto",
