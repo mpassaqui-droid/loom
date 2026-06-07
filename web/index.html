@@ -5490,11 +5490,17 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   $("randTheme").addEventListener("click",()=>{const all=Object.keys(THEMES);applyTheme(all[Math.floor(Math.random()*all.length)]);});
   try{const saved=localStorage.getItem("loom-theme");applyTheme(saved&&THEMES[saved]?saved:"crt");}catch(_){applyTheme("crt");}
 
-  function captureState(){return {c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value};}
+  function captureState(){return {c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value,
+    eql:$("eqLow")&&$("eqLow").value,eqm:$("eqMid")&&$("eqMid").value,eqh:$("eqHigh")&&$("eqHigh").value,mb:multibandOn?1:0};}
   function applyState(st){if(st.c!=null)editor.value=st.c;
     if(st.bpm)$("bpm").value=st.bpm;if(st.sw){$("swing").value=st.sw;$("vSwing").textContent=st.sw;}
     if(st.ec){$("echo").value=st.ec;$("vEcho").textContent=st.ec;}if(st.sp){$("space").value=st.sp;$("vSpace").textContent=st.sp;}
-    if(st.vo){$("vol").value=st.vo;$("vVol").textContent=st.vo;}run();}
+    if(st.vo){$("vol").value=st.vo;$("vVol").textContent=st.vo;}
+    if(st.eql!=null&&$("eqLow")){$("eqLow").value=st.eql;$("vEqLow").textContent=st.eql;}
+    if(st.eqm!=null&&$("eqMid")){$("eqMid").value=st.eqm;$("vEqMid").textContent=st.eqm;}
+    if(st.eqh!=null&&$("eqHigh")){$("eqHigh").value=st.eqh;$("vEqHigh").textContent=st.eqh;}
+    if(st.mb!=null){multibandOn=!!st.mb;const b=$("mbandBtn");if(b)b.classList.toggle("on",multibandOn);}
+    run();}
   function exportCode(){try{$("shareIn").value="LOOM1:"+btoa(unescape(encodeURIComponent(JSON.stringify(captureState()))));$("shareIn").select();log("[ export ] code ready - copy it","ai");}catch(e){log("[ export ] "+e.message,"err");}}
   function importCode(){let s=$("shareIn").value.trim();if(s.startsWith("LOOM1:"))s=s.slice(6);
     try{applyState(JSON.parse(decodeURIComponent(escape(atob(s)))));log("[ import ] loaded","ai");}catch(e){log("[ import ] invalid code","err");}}
