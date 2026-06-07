@@ -43,6 +43,12 @@ pub struct Voice {
     /// `| off N <verb>`: add a quieter copy shifted N steps later (canon/echo),
     /// optionally with `<verb>` applied. Holds `(shift_in_steps, optional_verb)`.
     pub off: Option<(f32, Option<String>)>,
+    /// `| degrade N`: randomly drop a fraction (0..0.95) of this voice's hits each
+    /// bar (seeded, so reproducible). 0 = no dropping.
+    pub degrade: f32,
+    /// `| chance N`: the whole voice plays only on a fraction (0..1) of bars
+    /// (seeded). `None` = always plays.
+    pub chance: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -318,6 +324,8 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut pan = None;
         let mut jux = None;
         let mut off = None;
+        let mut degrade = 0.0_f32;
+        let mut chance = None;
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -354,6 +362,13 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 let n = parts.next().and_then(|x| x.parse::<f32>().ok()).unwrap_or(1.0);
                 let verb = parts.collect::<Vec<_>>().join(" ");
                 off = Some((n, if verb.is_empty() { None } else { Some(verb) }));
+            } else if head == "degrade" {
+                let mut nn = parts.next().and_then(|x| x.parse::<f32>().ok()).unwrap_or(50.0);
+                if nn > 1.0 { nn /= 100.0; }
+                degrade = nn.clamp(0.0, 0.95);
+            } else if head == "chance" {
+                let c2 = parts.next().and_then(|x| x.parse::<f32>().ok()).unwrap_or(0.5);
+                chance = Some((if c2 > 1.0 { c2 / 100.0 } else { c2 }).clamp(0.0, 1.0));
             } else if head == "in" {
                 let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
                 if !secs.is_empty() { sections = Some(secs); }
@@ -361,7 +376,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance });
     }
     out
 }
@@ -679,6 +694,10 @@ fn step_offset(i: usize, n: usize, v: &Voice, groove: &[f32]) -> f32 {
 fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64, groove: &[f32]) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
+        // `| chance N`: the whole voice sits this bar out on a fraction of bars (seeded).
+        if let Some(c) = v.chance {
+            if rand01(seed, bar, &format!("{}chc", v.name), 0) >= c { continue; }
+        }
         // Effective key for this voice: a `| oct N` overrides the key's octave.
         let voice_key: Option<Key> = key.map(|k| match v.octave {
             Some(o) => Key { tonic: k.tonic, scale: k.scale.clone(), octave: o },
@@ -736,6 +755,8 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                 let n = toks.len();
                 if n == 0 { continue; }
                 for (i, raw) in toks.iter().enumerate() {
+                    // `| degrade N`: randomly drop this hit (seeded, same as JS).
+                    if lv.degrade > 0.0 && rand01(seed, bar, &format!("{}dg", lv.name), i) < lv.degrade { continue; }
                     let off = step_offset(i, n, lv, groove) + shift / n as f32;
                     let p0 = i as f32 / n as f32 + off;
                     let p1 = (i + 1) as f32 / n as f32 + off;
@@ -2319,6 +2340,20 @@ mod tests {
         assert_eq!(copy.len(), 2);
         assert!((base[0].phase - 0.0).abs() < 1e-6);
         assert!((copy[0].phase - 0.5).abs() < 1e-6);  // shifted +1 step (= +1/2 bar)
+    }
+
+    #[test]
+    fn degrade_and_chance_drop_seeded() {
+        // degrade thins hits, deterministically (same seed/bar -> same result)
+        let full = schedule_bar_seeded(&parse("h: x x x x x x x x"), None, 0, 7);
+        assert_eq!(full.len(), 8);
+        let thin = schedule_bar_seeded(&parse("h: x x x x x x x x | degrade 50"), None, 0, 7);
+        assert!(thin.len() < 8 && !thin.is_empty());
+        let thin2 = schedule_bar_seeded(&parse("h: x x x x x x x x | degrade 50"), None, 0, 7);
+        assert_eq!(thin.len(), thin2.len());
+        // chance 0 = never plays, chance 1 = always plays (per bar)
+        assert_eq!(schedule_bar_seeded(&parse("h: x x | chance 0"), None, 0, 7).len(), 0);
+        assert_eq!(schedule_bar_seeded(&parse("h: x x | chance 1"), None, 5, 7).len(), 2);
     }
 
     #[test]

@@ -95,6 +95,7 @@ const pieces = {
   'swing+groove+nudge': 'groove: mpc\nh: x x x x x x x x | swing 50\nb: x x x x | shift 0.2',
   'degrees+roman+modulation': 'key: a minor\nkey@chorus: c minor\nsong: verse*2 chorus*2\nlead: 1 3 5 1\' 7 5 3 2\npad: I . IV . V . VI .',
   'ratchets+alternation+subseq': 'seed: 9\nm: 1 [2 3] <4/5> 1*3\nk: x*2 x x <x/.>',
+  'degrade+chance (seeded drops)': 'seed: 11\nh: x x x x x x x x x x x x x x x x | degrade 40\np: 1 3 5 1\' | chance 0.6\nk: x x x x | degrade 25',
 };
 
 let total = 0, bad = 0;
