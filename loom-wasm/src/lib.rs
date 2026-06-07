@@ -19,6 +19,8 @@ struct JsEvent {
     vel: f32,
     /// Exact frequency in Hz for pitched notes (None for drums / unresolved).
     freq: Option<f32>,
+    /// Stereo pan (-1..1) for this event's layer (jux/off split, `| pan N`).
+    pan: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -52,7 +54,7 @@ pub fn schedule_bar_json(src: &str, bar: i32) -> String {
         let freq = e.freq.or_else(|| if e.is_drum { None } else { loom_core::note_to_freq(&e.token) });
         JsEvent {
             phase: e.phase, voice: e.voice, wave: wave_name(e.wave).to_string(),
-            gain: e.gain, is_drum: e.is_drum, vel: e.vel, freq, token: e.token,
+            gain: e.gain, is_drum: e.is_drum, vel: e.vel, freq, pan: e.pan, token: e.token,
         }
     }).collect();
     serde_json::to_string(&js).unwrap_or_else(|_| "[]".to_string())

@@ -35,6 +35,14 @@ pub struct Voice {
     /// Polymeter (`| poly N`): this voice runs its OWN loop of N steps per bar and
     /// drifts against the bar grid when its token count != N (Reich-style phasing).
     pub poly: Option<u32>,
+    /// Stereo position (`| pan N`, -1 left … 1 right). `None` = centre.
+    pub pan: Option<f32>,
+    /// `| jux <verb>`: play the original hard-left plus a `<verb>`-transformed copy
+    /// hard-right (a stereo split). Holds the verb to apply to the right copy.
+    pub jux: Option<String>,
+    /// `| off N <verb>`: add a quieter copy shifted N steps later (canon/echo),
+    /// optionally with `<verb>` applied. Holds `(shift_in_steps, optional_verb)`.
+    pub off: Option<(f32, Option<String>)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +112,9 @@ pub struct Event {
     /// the rounded `token` name can't (e.g. quarter-tones from custom scales).
     /// `None` for drums and tokens that don't resolve to a pitch.
     pub freq: Option<f32>,
+    /// Stereo pan (-1 left … 1 right) for this event's layer. `None` = centre.
+    /// Set by `| pan N` and by the `jux`/`off` layers. Carries the stereo split.
+    pub pan: Option<f32>,
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
@@ -304,6 +315,9 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut swing = 0.0_f32;
         let mut nudge = 0.0_f32;
         let mut poly = None;
+        let mut pan = None;
+        let mut jux = None;
+        let mut off = None;
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -331,6 +345,15 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 }
             } else if head == "poly" {
                 poly = Some(parts.next().and_then(|x| x.parse::<u32>().ok()).unwrap_or(16).max(1));
+            } else if head == "pan" {
+                pan = parts.next().and_then(|x| x.parse::<f32>().ok()).map(|p| p.clamp(-1.0, 1.0));
+            } else if head == "jux" {
+                let verb = parts.collect::<Vec<_>>().join(" ");
+                if !verb.is_empty() { jux = Some(verb); }
+            } else if head == "off" {
+                let n = parts.next().and_then(|x| x.parse::<f32>().ok()).unwrap_or(1.0);
+                let verb = parts.collect::<Vec<_>>().join(" ");
+                off = Some((n, if verb.is_empty() { None } else { Some(verb) }));
             } else if head == "in" {
                 let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
                 if !secs.is_empty() { sections = Some(secs); }
@@ -338,7 +361,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off });
     }
     out
 }
@@ -684,15 +707,41 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
         // stacks: each `;`-separated line plays simultaneously (a single line = one stack)
         let lines: &[Vec<String>] = if v.stacks.len() > 1 { &v.stacks } else { std::slice::from_ref(&v.tokens) };
         for line in lines {
-        let eff = effective_of(line, v, bar, seed);
-        let n = eff.len();
-        if n == 0 { continue; }
-        for (i, raw) in eff.iter().enumerate() {
-            let off = step_offset(i, n, v, groove);
-            let p0 = i as f32 / n as f32 + off;
-            let p1 = (i + 1) as f32 / n as f32 + off;
-            emit_token(&mut events, raw, p0, p1, v, voice_key.as_ref(), base_oct, bar, seed, i, prog);
-        }
+            let eff = effective_of(line, v, bar, seed);
+            if eff.is_empty() { continue; }
+            // Pattern algebra layers (mirrors the JS engine):
+            //  jux <verb> : original hard-left + a <verb>-copy hard-right (stereo split)
+            //  off N <verb>: for each layer, an extra copy shifted N steps later, quieter
+            // Each layer is (voice-with-pan/gain overrides, tokens, shift-in-steps).
+            let mut layers: Vec<(Voice, Vec<String>, f32)> = Vec::new();
+            if let Some(jverb) = &v.jux {
+                let mut left = v.clone();  left.pan = Some(-0.82);
+                let mut right = v.clone(); right.pan = Some(0.82);
+                let rtoks = apply_verb(&eff, jverb, bar, seed);
+                layers.push((left, eff.clone(), 0.0));
+                layers.push((right, rtoks, 0.0));
+            } else {
+                layers.push((v.clone(), eff.clone(), 0.0));
+            }
+            if let Some((shift, overb)) = &v.off {
+                let extra: Vec<(Voice, Vec<String>, f32)> = layers.iter().map(|(lv, le, sh)| {
+                    let mut ov = lv.clone();
+                    ov.gain = lv.gain * 0.6;
+                    let toks = match overb { Some(vb) => apply_verb(le, vb, bar, seed), None => le.clone() };
+                    (ov, toks, sh + shift)
+                }).collect();
+                layers.extend(extra);
+            }
+            for (lv, toks, shift) in &layers {
+                let n = toks.len();
+                if n == 0 { continue; }
+                for (i, raw) in toks.iter().enumerate() {
+                    let off = step_offset(i, n, lv, groove) + shift / n as f32;
+                    let p0 = i as f32 / n as f32 + off;
+                    let p1 = (i + 1) as f32 / n as f32 + off;
+                    emit_token(&mut events, raw, p0, p1, lv, voice_key.as_ref(), base_oct, bar, seed, i, prog);
+                }
+            }
         }
     }
     events
@@ -775,7 +824,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
             let m = ord.len();
             for (j, note) in ord.iter().enumerate() {
                 events.push(Event { phase: p0 + (j as f32 / m as f32) * span, voice: v.name.clone(),
-                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note) });
+                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note), pan: v.pan });
             }
             return;
         }
@@ -785,7 +834,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
         let vel = accent * ramp_factor(j, ratchet, ramp_dir);
         for note in &notes {
             events.push(Event { phase, voice: v.name.clone(), token: note.clone(),
-                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note) });
+                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note), pan: v.pan });
         }
     }
 }
@@ -2240,6 +2289,36 @@ mod tests {
         let e1 = schedule_bar_seeded(&v, k.as_ref(), 1, 0);
         assert_eq!(e1.len(), 13);
         assert_eq!(e1[0].token, "f3");
+    }
+
+    #[test]
+    fn jux_splits_into_two_panned_layers() {
+        // jux rev: original hard-left + reversed copy hard-right.
+        let v = parse("m: 1 2 | jux rev");
+        assert_eq!(v[0].jux.as_deref(), Some("rev"));
+        let k = parse_key("key: c major");
+        let ev = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
+        assert_eq!(ev.len(), 4);
+        let left: Vec<&str> = ev.iter().filter(|e| e.pan.map_or(false, |p| (p + 0.82).abs() < 1e-6)).map(|e| e.token.as_str()).collect();
+        let right: Vec<&str> = ev.iter().filter(|e| e.pan.map_or(false, |p| (p - 0.82).abs() < 1e-6)).map(|e| e.token.as_str()).collect();
+        assert_eq!(left, ["c3", "d3"]);   // original, hard left
+        assert_eq!(right, ["d3", "c3"]);  // reversed, hard right
+    }
+
+    #[test]
+    fn off_adds_shifted_quieter_copy() {
+        // off 1: a copy one step later, at 0.6x gain.
+        let v = parse("m: 1 2 | off 1");
+        assert!(matches!(v[0].off, Some((s, None)) if (s - 1.0).abs() < 1e-6));
+        let k = parse_key("key: c major");
+        let ev = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
+        assert_eq!(ev.len(), 4);
+        let base: Vec<&Event> = ev.iter().filter(|e| (e.gain - 0.22).abs() < 1e-6).collect();
+        let copy: Vec<&Event> = ev.iter().filter(|e| (e.gain - 0.22 * 0.6).abs() < 1e-4).collect();
+        assert_eq!(base.len(), 2);
+        assert_eq!(copy.len(), 2);
+        assert!((base[0].phase - 0.0).abs() < 1e-6);
+        assert!((copy[0].phase - 0.5).abs() < 1e-6);  // shifted +1 step (= +1/2 bar)
     }
 
     #[test]
