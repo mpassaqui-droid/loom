@@ -5601,10 +5601,23 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
     slendro:"gamelan",pelog:"gamelan",chinese:"wuxing",pentatonic:"pentatonique",minpent:"pentatonique",egyptian:"pentatonique",
     blues:"blues",major:"modes",minor:"modes",dorian:"modes",phrygian:"modes",lydian:"modes",mixolydian:"modes",locrian:"modes"};
   const deburr=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  // UNIVERSITÉ VIVANTE : le prof JOUE le concept (intervalle, accord, gamme, cadence)
+  function playGroups(groups,gap,hold){if(!ctx)initAudio();if(!ctx)return;if(ctx.state==="suspended")ctx.resume();
+    gap=gap||0.4;hold=hold||0.5;
+    groups.forEach((g,i)=>setTimeout(()=>{g.forEach(m=>liveNoteOn(m,86));setTimeout(()=>g.forEach(m=>liveNoteOff(m)),hold*1000);},i*gap*1000));}
+  function loreDemo(term){
+    const IV={octave:12,quinte:7,quarte:5,tierce:4,triton:6,seconde:2,sixte:9,septieme:11},
+      CH={maj7:[0,4,7,11],m7:[0,3,7,10],dim:[0,3,6],sus4:[0,5,7],"7":[0,4,7,10]};
+    if(IV[term]!=null)return{groups:[[60],[60+IV[term]],[60,60+IV[term]]],gap:0.42,hold:0.55};
+    if(CH[term])return{groups:[CH[term].map(s=>60+s)],gap:0.5,hold:1.2};
+    if(term==="ii-v-i")return{groups:[[62,65,69,72],[67,71,74,77],[60,64,67,71]],gap:0.7,hold:0.75};
+    if(term==="cadence")return{groups:[[67,71,74,77],[60,64,67,72]],gap:0.7,hold:0.85};
+    if(typeof SCALES!=="undefined"&&SCALES[term])return{groups:SCALES[term].concat([12]).map(x=>[60+x]),gap:0.28,hold:0.32};
+    return null;}
   async function lookup(term){term=(term||"").toLowerCase().trim();if(!term){log("[ ? ] pose une question : ?raga, ?maqam, ?gamelan, ?modes, ?pythagore, ?dorian, ?quinte, ou ?comment rendre ça plus triste","ai");return;}
     const tk=deburr(term);if(TRADITION_LORE[tk]){TRADITION_LORE[tk].forEach(l=>log(l,"ai"));return;}
-    if(typeof SCALE_LORE!=="undefined"&&SCALE_LORE[term]){log("[ ? ] "+term+" — "+SCALE_LORE[term],"ai");return;}
-    if(LORE[term]){log("[ ? ] "+term+" — "+LORE[term],"ai");return;}
+    if(typeof SCALE_LORE!=="undefined"&&SCALE_LORE[term]){const d=loreDemo(term);if(d)playGroups(d.groups,d.gap,d.hold);log("[ ? ] "+term+" — "+SCALE_LORE[term]+(d?"  ♪ (écoute)":""),"ai");return;}
+    if(LORE[term]){const d=loreDemo(term);if(d)playGroups(d.groups,d.gap,d.hold);log("[ ? ] "+term+" — "+LORE[term]+(d?"  ♪ (écoute)":""),"ai");return;}
     const hit=(typeof REF!=="undefined")&&REF.find(r=>(r[1]+" "+r[0]).toLowerCase().includes(term));
     if(hit){log("[ ? ] "+hit[1].replace(/</g,"&lt;")+" — "+hit[2],"ai");return;}
     // unknown -> ask the AI teacher (prose), free brain
