@@ -32,6 +32,9 @@ pub struct Voice {
     /// Per-voice timing nudge (`| shift N` / `| nudge N`): shifts the whole voice
     /// by a fraction of a step (-0.5..0.5). Positive = laid back (late), negative = pushed.
     pub nudge: f32,
+    /// Polymeter (`| poly N`): this voice runs its OWN loop of N steps per bar and
+    /// drifts against the bar grid when its token count != N (Reich-style phasing).
+    pub poly: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,6 +303,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut sections: Option<Vec<String>> = None;
         let mut swing = 0.0_f32;
         let mut nudge = 0.0_f32;
+        let mut poly = None;
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -325,6 +329,8 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 if let Some(nn) = parts.next().and_then(|x| x.parse::<f32>().ok()) {
                     nudge = nn.clamp(-0.5, 0.5);
                 }
+            } else if head == "poly" {
+                poly = Some(parts.next().and_then(|x| x.parse::<u32>().ok()).unwrap_or(16).max(1));
             } else if head == "in" {
                 let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
                 if !secs.is_empty() { sections = Some(secs); }
@@ -332,7 +338,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly });
     }
     out
 }
@@ -656,6 +662,25 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
             None => k.clone(),
         });
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
+        // polymeter (`| poly N`): run an independent N-step loop indexed by the
+        // GLOBAL step count (bar*N + i), so a token list of length != N drifts
+        // against the bar grid each bar (Reich phasing). Mirrors the JS engine.
+        if let Some(spb) = v.poly {
+            let spb = spb.max(1) as usize;
+            let nn = v.tokens.len();
+            if nn > 0 {
+                for i in 0..spb {
+                    let s = bar * spb as i64 + i as i64;
+                    let idx = s.rem_euclid(nn as i64) as usize;
+                    let off = step_offset(i, spb, v, groove);
+                    let p0 = i as f32 / spb as f32 + off;
+                    let p1 = (i + 1) as f32 / spb as f32 + off;
+                    emit_token(&mut events, &v.tokens[idx], p0, p1, v, voice_key.as_ref(),
+                               base_oct, bar, seed, s.max(0) as usize, prog);
+                }
+            }
+            continue;
+        }
         // stacks: each `;`-separated line plays simultaneously (a single line = one stack)
         let lines: &[Vec<String>] = if v.stacks.len() > 1 { &v.stacks } else { std::slice::from_ref(&v.tokens) };
         for line in lines {
@@ -2196,6 +2221,25 @@ mod tests {
         // their phases line up only at 0.0 (the downbeat)
         assert!((e3[1].phase - 1.0/3.0).abs() < 1e-6);
         assert!((e4[1].phase - 0.25).abs() < 1e-6);
+    }
+
+    #[test]
+    fn poly_runs_own_loop_and_drifts() {
+        // `| poly 13` over a 6-token list: 13 steps/bar, indexed by the GLOBAL
+        // step (bar*13 + i), so the start drifts each bar (Reich phasing).
+        let v = parse("fil: 1 4 6 3 5 1' | poly 13");
+        assert_eq!(v[0].poly, Some(13));
+        let k = parse_key("key: c major");
+        let e0 = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
+        assert_eq!(e0.len(), 13);                                  // N steps, not 6
+        assert!((e0[1].phase - 1.0 / 13.0).abs() < 1e-6);         // even N-grid
+        let toks0: Vec<&str> = e0.iter().map(|e| e.token.as_str()).collect();
+        assert_eq!(&toks0[..6], &["c3", "f3", "a3", "e3", "g3", "c4"]);
+        assert_eq!(toks0[6], "c3");                                // loop wraps at 6
+        // bar 1 starts at global step 13 -> idx 13%6 = 1 -> "4" = f3 (it drifted)
+        let e1 = schedule_bar_seeded(&v, k.as_ref(), 1, 0);
+        assert_eq!(e1.len(), 13);
+        assert_eq!(e1[0].token, "f3");
     }
 
     #[test]
