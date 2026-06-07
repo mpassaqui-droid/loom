@@ -228,6 +228,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="stemsBtn" class="go" title="exporter chaque voix en WAV séparé (stems)">&#11015; STEMS</button>
     <button id="midiBtn" class="go" title="exporter en fichier MIDI (.mid) pour ton DAW">&#127926; MIDI</button>
     <button id="syncBtn" class="go" title="émettre une horloge MIDI (start + clock 24ppqn) pour synchroniser Ableton/hardware sur le tempo de LOOM — via le port IAC">&#9201; SYNC</button>
+    <button id="followBtn" class="go" title="SUIVRE une horloge MIDI externe : LOOM se cale sur le tempo et le transport (start/stop) d'Ableton/hardware">&#9201; SUIVRE</button>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
@@ -346,7 +347,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
-  let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,analyser=null,scopeMode="wave";
+  let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave";
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
@@ -686,7 +687,14 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     }).catch(()=>log("[ midi ] accès refusé","err"));}
   // MIDI IN: play the LOOM synth live from a keyboard (uses the 'lead' voice's timbre, or a default saw)
   const liveVoices={};
-  function onMidiIn(e){const d=e.data,cmd=d[0]&0xf0;if(cmd===0x90&&d[2]>0)liveNoteOn(d[1],d[2]);else if(cmd===0x80||(cmd===0x90&&d[2]===0))liveNoteOff(d[1]);}
+  function onMidiIn(e){const d=e.data,s=d[0];
+    // system real-time: follow an external MIDI clock (Ableton/hardware as master)
+    if(s===0xF8){if(!midiFollow)return;const now=performance.now();clkTimes.push(now);if(clkTimes.length>25)clkTimes.shift();
+      if(clkTimes.length>=9){const span=clkTimes[clkTimes.length-1]-clkTimes[0],bpm=60000/(span/(clkTimes.length-1)*24);
+        if(bpm>30&&bpm<300){baseBpm=Math.round(bpm);cycleLen=(60/baseBpm)*meterBeats;const el=$("bpm");if(el)el.value=baseBpm;}}return;}
+    if(s===0xFA||s===0xFB){if(midiFollow){clkTimes=[];if(!playing)run();}return;}  // start / continue
+    if(s===0xFC){if(midiFollow&&playing)stop();return;}                            // stop
+    const cmd=s&0xf0;if(cmd===0x90&&d[2]>0)liveNoteOn(d[1],d[2]);else if(cmd===0x80||(cmd===0x90&&d[2]===0))liveNoteOff(d[1]);}
   function liveNoteOn(note,vel){if(!ctx)return;if(ctx.state==="suspended")ctx.resume();liveNoteOff(note);
     const v=voices.find(x=>x.name==="lead"&&x.type!=="drum")||voices.find(x=>x.type!=="drum")||{wave:"sawtooth",gain:0.22};
     const now=ctx.currentTime,freq=440*Math.pow(2,(note-69)/12),g=ctx.createGain();
@@ -1713,7 +1721,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const songOn=song.length>0,sec=songOn?sectionAtBar(song,bar):null;
     if(sec&&sceneMap[sec])sceneMode=sceneMap[sec];  // scene@section: visual follows the song structure
     if(songOn&&playing&&(!lintUntil||(((typeof performance!=="undefined"&&performance.now)?performance.now():9e15)>lintUntil)))log("[ playing ] "+(sec||"-")+" · bar "+bar,"ai");
-    if(accel||(tempoMap&&Object.keys(tempoMap).length))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (guarded: nothing set = unchanged)
+    if(!midiFollow&&(accel||(tempoMap&&Object.keys(tempoMap).length)))cycleLen=cycleLenForBar(bar);  // per-section tempo / accel (skipped when following an external clock)
     // MIDI CLOCK out (sync Ableton/hardware to LOOM): 24 pulses per quarter-note
     if(midiClock&&midiOut){const P=Math.max(1,Math.round(24*meterBeats));
       for(let i=0;i<P;i++){const ct=barT+i/P*cycleLen;midiOut.send([0xF8],performance.now()+Math.max(0,(ct-ctx.currentTime)*1000));}}
@@ -5648,6 +5656,11 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
       if(playing&&ctx)midiOut.send([0xFA]);  // Start now if already playing
     } else { if(midiOut)try{midiOut.send([0xFC]);}catch(_){}; log("[ sync ] horloge MIDI OFF","ai"); }
   });
+  // ⏱ SUIVRE : LOOM se cale sur une horloge MIDI externe (Ableton/hardware = maître)
+  $("followBtn").addEventListener("click",()=>{initMidi();midiFollow=!midiFollow;clkTimes=[];
+    const b=$("followBtn");if(b)b.classList.toggle("on",midiFollow);
+    if(midiFollow)log("[ suivre ] LOOM suit l'horloge MIDI externe · dans Ableton : EXT, et active l'horloge MIDI Out vers ce port (IAC). Lance Ableton.","ai");
+    else log("[ suivre ] suivi externe OFF","ai");});
   $("linkBtn").addEventListener("click",shareLink);
   // --- interface translation (Google widget, 100+ languages). The LOOM language/code is excluded (notranslate). ---
   let gtLoaded=false;
