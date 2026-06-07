@@ -368,7 +368,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   "use strict";
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
-  let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
+  let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null,buses={};
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave",_pkHold=0;
   let midiLearn=false,learnTarget=null,ccMap={};  // MIDI CC mapping (learn -> control)
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
@@ -407,7 +407,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   // build the whole audio graph into the current `ctx` (reused for offline render)
   function buildGraph(){
     masterSat=null;masterWLim=null;  // fresh per graph (live vs offline contexts)
-    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();
+    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();buses={};
     // ping-pong delay: `delay` is the mono INPUT, then two cross-fed delay lines
     // panned hard L/R so each echo bounces side to side. fb = feedback amount.
     delay=ctx.createGain();
@@ -1448,7 +1448,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null;const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1523,6 +1523,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="wow"||p[0]==="flutter"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.4;if(nn>1)nn/=100;wow=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="mute")mute=true;
       else if(p[0]==="solo")solo=true;
+      else if(p[0]==="bus")vbus=(p[1]||"main").toLowerCase();   // DAW submix routing: send this voice to a named bus
       else if(p[0]==="comp"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.5;if(nn>1)nn/=100;comp=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="double"||p[0]==="octup"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.5;if(nn>1)nn/=100;double=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="bow")bow=true;
@@ -1539,7 +1540,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -1738,6 +1739,16 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         const pl=document.createElement("div");pl.textContent="L◀▶R";pl.style.cssText="font-size:9px;color:var(--dim)";col.appendChild(pl);}
       return col;};
     for(const v of voices){if(v.section)continue;mx.appendChild(strip(v,false));}
+    // bus group faders (DAW submix): one fader per named bus (| bus NAME)
+    const busNames=[...new Set(voices.filter(v=>v.bus).map(v=>v.bus))];
+    for(const bn of busNames){const col=document.createElement("div");
+      col.style.cssText="display:inline-block;vertical-align:top;width:62px;text-align:center;margin:0 3px;font:12px monospace";
+      const nm=document.createElement("div");nm.textContent="▣ "+bn;
+      nm.style.cssText="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;color:#ffd24a";col.appendChild(nm);
+      const s=document.createElement("input");s.type="range";s.min=0;s.max=1.5;s.step=0.01;s.value=(buses[bn]?buses[bn].gain.value:1);
+      s.title="bus « "+bn+" » — gain de groupe";s.style.cssText="width:56px;cursor:pointer;margin:1px 0";
+      s.addEventListener("input",()=>{if(ctx&&bus)busFor(bn).gain.value=parseFloat(s.value);});
+      col.appendChild(s);mx.appendChild(col);}
     mx.appendChild(strip({},true));}
   // clickable step sequencer: toggle a drum cell -> live change + sync to editor
   function toggleStep(v,i,c){const on=v.tokens[i]!=="."&&v.tokens[i]!=="~";v.tokens[i]=on?".":"x";
@@ -1826,7 +1837,18 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const f=noteToFreq(tok);return f?[f]:[];}
   let _cap=null;  // when set to an array, trigger() records instead of sounding (parity capture; off in normal play)
   let _barTrig=0;const VOICE_CAP=220;  // per-bar note budget: a safety valve against CPU blow-up / dropouts on pathologically dense bars
+  // DAW submix bus: lazily make a named sub-bus (a GainNode) that feeds the global
+  // bus, so a group of voices (e.g. all drums) share one fader/FX point.
+  function busFor(name){if(!ctx||!bus)return bus;if(!buses[name]){const g=ctx.createGain();g.gain.value=1;g.connect(bus);buses[name]=g;}return buses[name];}
+  // bus routing wrapper: a | bus NAME voice temporarily redirects the global `bus`
+  // (which every drum/synth/sample node connects to synchronously) to its sub-bus.
+  // try/finally guarantees the global bus is always restored, even on early returns.
   function trigger(v,tok,t,durOverride,velMul,isFlam){
+    if(!(v&&v.bus&&ctx&&bus))return _trigVoice(v,tok,t,durOverride,velMul,isFlam);
+    const _sb=bus;bus=busFor(v.bus);
+    try{return _trigVoice(v,tok,t,durOverride,velMul,isFlam);}finally{bus=_sb;}
+  }
+  function _trigVoice(v,tok,t,durOverride,velMul,isFlam){
     if(_cap){if(tok!=="."&&tok!=="~")_cap.push({v:v.name,t,tok,drum:v.type==="drum",pan:v.pan==null?null:+v.pan.toFixed(3)});return;}
     const vm=velMul||1;if(tok==="."||tok==="~")return;
     if(_barTrig++>VOICE_CAP){if(_barTrig===VOICE_CAP+2)log("[ ! ] mesure très dense — voix limitées (anti-coupure)","err");return;}
@@ -5673,7 +5695,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
     "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",
     "- Markov melodies: | markov regenerates a voice's line from its OWN note-to-note transitions (a seeded Markov walk) — same notes, new order that still 'sounds like' the original. e.g. lead: 1 2 3 5 6 5 3 2 | markov. Use | markov N (N>=2) for higher-order chains that follow longer phrases more faithfully (more like the source), e.g. | markov 2.",
-    "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords.",
+    "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords. DAW BUSES: | bus NAME routes a voice into a shared submix bus (e.g. put | bus drums on kick/snare/hat to group them) — one fader controls the group in the MIX panel. Great for balancing drums vs synths.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
     "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",
@@ -6050,7 +6072,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
-  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket",
+  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
     "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","warp","stretch","freeze","adaptive","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
