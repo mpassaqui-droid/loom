@@ -673,6 +673,10 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
             let stp = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(2);
             let mut r = tokens.to_vec(); r.extend(tokens.iter().map(|t| transpose_deg(t, stp))); r
         }
+        // complement rhythm (tiling-canon primitive): hits<->rests. A voice + its
+        // | hocket copy tile the bar — every step covered once (interlock).
+        Some("hocket") | Some("complement") =>
+            tokens.iter().map(|t| if t == "." || t == "~" { "x".to_string() } else { ".".to_string() }).collect(),
         // motivic development: an arc of transformations picked by the bar, so a
         // section EVOLVES instead of repeating. Reuses parity-tested verbs.
         Some("develop") | Some("dev") => {
@@ -2802,6 +2806,14 @@ mod tests {
         assert_eq!(parse("h: tonnetz(4,C,PLR)")[0].tokens.join(" "), "C Cm Ab Fm");
         assert_eq!(parse("h: tonnetz(3,A,P)")[0].tokens.join(" "), "A Am A");  // P flips back and forth
         assert_eq!(parse("h: tonnetz(2,Eb)")[0].tokens.len(), 2);
+    }
+
+    #[test]
+    fn hocket_complement() {
+        // complement: hits<->rests. A voice + its | hocket copy tile the bar.
+        let v = |s: &str| s.split_whitespace().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(apply_verb(&v("x . x ."), "hocket", 0, 0).join(" "), ". x . x");
+        assert_eq!(apply_verb(&v("x . . x . . x ."), "hocket", 0, 0).join(" "), ". x x . x x . x");
     }
 
     #[test]

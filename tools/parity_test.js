@@ -105,6 +105,7 @@ const pieces = {
   'gendy (Xenakis)': 'seed: 5\nkey: c minor\nm: gendy(16)\nm2: gendy(11)',
   'spectrum (Grisey)': 'm: spectrum(12,c1)\nm2: spectrum(8,e2) | bell',
   'tonnetz (neo-Riemann)': 'h: tonnetz(8,C,PLR) | saw\nh2: tonnetz(6,Am,LR) | sine',
+  'hocket (tiling canon)': 'a: x . . x . . x . | hocket\nb: e(5,16) | hocket\nc: tresillo | hocket',
 };
 
 let total = 0, bad = 0;
