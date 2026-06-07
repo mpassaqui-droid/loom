@@ -5493,11 +5493,44 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
   {const chips=$("aiChips");if(chips)chips.addEventListener("click",e=>{const b=e.target.closest("[data-ai]");if(!b)return;
     $("vibeIn").value=b.getAttribute("data-ai");vibe();});}
   // AI music teacher: explain the current piece in plain words (uses the free brain; prose, not code)
+  // OFFLINE "why it sounds like this": read the code and explain it instantly,
+  // using the knowledge base — works with no internet. Returns lines for the log.
+  function analyzePiece(text){
+    const NN=["do","do#","ré","ré#","mi","fa","fa#","sol","sol#","la","la#","si"];
+    const out=[],has=re=>re.test(text);
+    const k=parseKey(text),sn=currentScaleName(text);
+    if(k){let s="[ analyse ] tonalité : "+NN[((k.tonic%12)+12)%12]+(sn?" "+sn:"");
+      if(sn&&SCALE_LORE[sn])s+=" — "+SCALE_LORE[sn];out.push(s);
+      if(sn&&TRAD_OF[sn])out.push("   tradition : "+TRAD_OF[sn]+" (tape ?"+TRAD_OF[sn]+" pour l'histoire & le sens)");}
+    const tune=parseTune(text);
+    if(/key:\s*\S+\s+-?[\d.]+\s+-?[\d.]+/.test(text)||/\b(\d+edo|maqam|bayati|rast|saba|sikah|huzam)\b/.test(tune||""))
+      out.push("   microtonal : des notes « entre les touches » (quarts de ton / EDO) — couleur hors du piano. ?microtonal");
+    else if(tune&&tune!=="equal")
+      out.push("   accordage "+tune+" : intervalles aux ratios purs → plus consonant, « plus juste ». ?pythagore");
+    const why=[];
+    if(/\b(drone|tanpura|bourdon|pad|sub|sa)\s*[:@]/i.test(text)||/\|\s*bow\b/.test(text)||/\|\s*gate\s+[2-9]/.test(text))
+      why.push("un bourdon/nappe tenu ancre l'oreille (le repos)");
+    if(/\|\s*(slide|bend|wow)\b/.test(text)) why.push("les glissés/ornements (slide·bend) rendent les notes expressives, vivantes");
+    if(has(/\b(walk|drunk|ca|lsys|pi|perlin|logistic|fib|morse|bin|recaman|cantor)\s*\(/)) why.push("des suites génératives font varier le motif à chaque mesure (jamais figé)");
+    if(has(/\be\(\d/)) why.push("des rythmes euclidiens répartissent les coups régulièrement-irrégulièrement (groove du monde)");
+    const pr=(()=>{const sk=key,sp=prog;key=parseKey(text);prog=parseProg(text);const r=progRoman();key=sk;prog=sp;return r;})();
+    if(pr) why.push("la progression "+pr+" crée un cycle tension→détente");
+    if(/\|\s*(swing|groove:)/.test(text)||/^groove:/m.test(text)) why.push("le swing/groove décale les temps → ça balance (humain, pas robotique)");
+    const mt=parseMeter(text); if(mt&&Math.abs(mt-4)>0.01) why.push("une métrique inhabituelle ("+mt+" temps) déstabilise joliment le pas");
+    if(parseAccel(text)) why.push("le tempo accélère/respire au fil du morceau");
+    if(why.length) out.push("[ pourquoi ça sonne ] "+why.join(" · ")+".");
+    const song=parseSong(text); if(song&&song.length) out.push("[ forme ] "+song.map(s=>s[0]).join(" → "));
+    if(!out.length) out.push("[ analyse ] morceau libre (pas de tonalité déclarée) — les notes sont absolues.");
+    return out;
+  }
   async function explain(){if(!editor.value.trim()){log("[ prof ] écris ou génère d'abord un morceau","err");return;}
-    log("[ prof ] j'analyse ton morceau…","ai");
+    // 1) instant, offline analysis from the knowledge base
+    analyzePiece(editor.value).forEach(l=>log(l,"ai"));
+    // 2) the AI brain elaborates (bonus, needs internet)
+    log("[ prof ] j'approfondis… (le cerveau IA)","ai");
     const p="Tu es un professeur de musique bienveillant et clair. En français, en 3 ou 4 phrases simples (pas de code, pas de listes, pas de markdown), explique ce morceau écrit en langage LOOM : son ambiance, la gamme/tonalité et POURQUOI il sonne ainsi, et un conseil pour l'améliorer.\n\nCODE:\n"+editor.value;
-    try{const t=await callFree(p);const s=String(t||"").replace(/\s+/g," ").trim();log("[ prof ] "+(s.slice(0,650)||"(pas de réponse, réessaie)"),"ai");}
-    catch(_){log("[ prof ] indisponible — il faut une connexion internet","err");}}
+    try{const t=await callFree(p);const s=String(t||"").replace(/\s+/g," ").trim();if(s)log("[ prof ] "+s.slice(0,650),"ai");}
+    catch(_){log("[ prof ] (analyse hors-ligne ci-dessus ; le cerveau IA demande une connexion)","ai");}}
   {const eb=$("explainBtn");if(eb)eb.addEventListener("click",explain);}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
@@ -5549,7 +5582,7 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
     const cl=cycleLen,out=_cap.map(o=>({voice:o.v,phase:o.t/cl,tok:o.tok,drum:o.drum,pan:o.pan}));
     _cap=prev;return out;
   }
-  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>
