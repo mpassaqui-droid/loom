@@ -233,6 +233,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="syncBtn" class="go" title="émettre une horloge MIDI (start + clock 24ppqn) pour synchroniser Ableton/hardware sur le tempo de LOOM — via le port IAC">&#9201; SYNC</button>
     <button id="followBtn" class="go" title="SUIVRE une horloge MIDI externe : LOOM se cale sur le tempo et le transport (start/stop) d'Ableton/hardware">&#9201; SUIVRE</button>
     <button id="learnBtn" class="go" title="MIDI LEARN : clique un potard (VOL/EQ/SWING/ECHO/SPACE) puis bouge un CC de ton contrôleur pour le lier">&#127919; LEARN</button>
+    <button id="mbandBtn" class="go" title="compresseur multibande de mastering (grave/médium/aigu) sur le bus master — colle le mix">&#9776; MULTI</button>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="mixBtn" class="go" title="mixeur : fader/pan/mute/solo + mètre par voix">&#127899; MIX</button>
@@ -457,8 +458,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     master.connect(hpf);hpf.connect(comp);comp.connect(mEqLow);  // -> mEqLow -> mEqMid -> shelf(high)
     // master warmth: an oversampled tanh saturator (AudioWorklet) for analog glue/anti-aliased drive.
     // Inserted only if the worklet is registered on this ctx; otherwise the dry chain is used (fallback).
-    masterShelf=shelf;masterLimiter=limiter;let preLim=shelf;
-    if(ctx._satReady&&ctx.audioWorklet){try{const sat=new AudioWorkletNode(ctx,"loom-sat",{parameterData:{drive:warmth}});shelf.connect(sat);preLim=sat;masterSat=sat;}catch(_){}}
+    // optional 3-band multiband compressor (mastering glue) — OFF by default
+    let chainEnd=shelf;
+    if(multibandOn){const sum=ctx.createGain();
+      const band=(filters,thr)=>{let n=shelf;for(const[ty,fr]of filters){const bq=ctx.createBiquadFilter();bq.type=ty;bq.frequency.value=fr;n.connect(bq);n=bq;}
+        const cp=ctx.createDynamicsCompressor();cp.threshold.value=thr;cp.knee.value=6;cp.ratio.value=3;cp.attack.value=0.006;cp.release.value=0.16;n.connect(cp);cp.connect(sum);};
+      band([["lowpass",250]],-26);band([["highpass",250],["lowpass",3500]],-22);band([["highpass",3500]],-20);
+      chainEnd=sum;}
+    masterShelf=chainEnd;masterLimiter=limiter;let preLim=chainEnd;
+    if(ctx._satReady&&ctx.audioWorklet){try{const sat=new AudioWorkletNode(ctx,"loom-sat",{parameterData:{drive:warmth}});chainEnd.connect(sat);preLim=sat;masterSat=sat;}catch(_){}}
     preLim.connect(limiter);let last=limiter;
     // true lookahead brick-wall limiter (worklet) as the final stage, when available
     if(ctx._satReady&&ctx.audioWorklet){try{const wl=new AudioWorkletNode(ctx,"loom-lim");limiter.connect(wl);last=wl;masterWLim=wl;}catch(_){}}
@@ -1990,7 +1998,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const SCENES=["codemap","radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple","grid","petals","dna","mandala","spectrum3d","ribbon","fireworks","vortex","lattice","tiles","starsphere","bubbles","comet","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora","gcells","gwater","gmandel","nebula","scan","rings","checker"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let spectroCv=null;  // persistent offscreen for the scrolling spectrogram scene
-  let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3,mEqLow=null,mEqMid=null,mEqHigh=null;
+  let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3,mEqLow=null,mEqMid=null,mEqHigh=null,multibandOn=false;
   let mediaRec=null,filmChunks=[],filming=false,filmCountdown=0,filmFormat="wide",filmCv=null,filmCtx2=null,filmTitle="LOOM",filmStartMs=0;  // master worklet (saturator + limiter) refs
   let codeView=[],showCode=true;  // live "code playhead": boxes the active token in each voice line
   // tokenize a pattern string but record each token's absolute COLUMN in the source line
@@ -6187,6 +6195,9 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   // MIDI LEARN : clic sur un potard pour l'armer, puis bouge un CC pour le lier
   for(const id of ["vol","swing","echo","space","eqLow","eqMid","eqHigh","bpm"]){const el=$(id);
     if(el)el.addEventListener("click",()=>{if(midiLearn){learnTarget=id;log("[ learn ] bouge un potard MIDI pour lier « "+id+" »","ai");}});}
+  {const mbb=$("mbandBtn");if(mbb)mbb.addEventListener("click",()=>{multibandOn=!multibandOn;mbb.classList.toggle("on",multibandOn);
+    log("[ master ] multibande "+(multibandOn?"ON — compression par bandes (colle le mix)":"OFF"),"ai");
+    if(playing)run();else if(ctx){const sv=master&&master.gain.value;buildGraph();if(master&&sv!=null)master.gain.value=sv;}});}
   {const lb=$("learnBtn");if(lb)lb.addEventListener("click",()=>{initMidi();midiLearn=!midiLearn;learnTarget=null;lb.classList.toggle("on",midiLearn);
     log(midiLearn?"[ learn ] ON — clique un potard (VOL/EQ/SWING/ECHO/SPACE/BPM) puis bouge un CC pour le lier":"[ learn ] OFF — les CC liés pilotent les potards","ai");});}
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
