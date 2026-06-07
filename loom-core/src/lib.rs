@@ -524,6 +524,13 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
             let stp = parts.get(1).and_then(|x| x.parse::<i64>().ok()).unwrap_or(2);
             let mut r = tokens.to_vec(); r.extend(tokens.iter().map(|t| transpose_deg(t, stp))); r
         }
+        // motivic development: an arc of transformations picked by the bar, so a
+        // section EVOLVES instead of repeating. Reuses parity-tested verbs.
+        Some("develop") | Some("dev") => {
+            const CY: [&str; 8] = ["", "rot 1", "add 2", "rev", "add -2", "rot 3", "invert", "add 4"];
+            let op = CY[bar.rem_euclid(CY.len() as i64) as usize];
+            if op.is_empty() { tokens.to_vec() } else { apply_verb(tokens, op, bar, seed) }
+        }
         _ => tokens.to_vec(),
     }
 }
@@ -2556,6 +2563,20 @@ mod tests {
         assert_eq!(apply_verb(&q, "invert", 0, 5).join(" "), "1 7, 6, 4,");
         let s3: Vec<String> = "1 2 3".split_whitespace().map(|s| s.to_string()).collect();
         assert_eq!(apply_verb(&s3, "sequence 2", 0, 5).join(" "), "1 2 3 3 4 5");
+    }
+
+    #[test]
+    fn develop_evolves_each_bar() {
+        // a section that develops: the material transforms bar by bar (an arc of
+        // rot/add/rev/invert), so it never just repeats.
+        let t: Vec<String> = "1 2 3".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&t, "develop", 0, 0).join(" "), "1 2 3");   // original
+        assert_eq!(apply_verb(&t, "develop", 1, 0).join(" "), "2 3 1");   // rot 1
+        assert_eq!(apply_verb(&t, "develop", 2, 0).join(" "), "3 4 5");   // add 2 (sequence up)
+        assert_eq!(apply_verb(&t, "develop", 3, 0).join(" "), "3 2 1");   // rev (retrograde)
+        // consecutive bars differ -> genuine evolution
+        let bars: Vec<String> = (0..6).map(|b| apply_verb(&t, "develop", b, 0).join(" ")).collect();
+        assert!(bars.iter().collect::<std::collections::HashSet<_>>().len() >= 5);
     }
 
     #[test]
