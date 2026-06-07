@@ -199,6 +199,7 @@
       <span style="color:var(--cyan);font-size:15px;margin:0 2px 0 8px;align-self:center">outils &#9656;</span>
       <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10067; explique</button>
       <button class="tiny" id="developBtn" title="développe le morceau HORS-LIGNE : ajoute du développement aux mélodies, varie les batteries, change le seed (annulable)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10024; développe</button>
+      <button class="tiny" id="muterBtn" title="engendre un DESCENDANT du morceau (mute générateurs/rythmes/paramètres) — évolution par sélection : reclique, garde, ou ↩ annule" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516; muter</button>
       <button class="tiny" id="undoBtn" title="annuler la dernière action" style="display:none;border-color:var(--amber);color:var(--amber)">&#8617; annuler</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
@@ -5942,6 +5943,32 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   }
   {const db=$("developBtn");if(db)db.addEventListener("click",developAll);}
   {const ub=$("undoBtn");if(ub)ub.addEventListener("click",doUndo);}
+  // 🧬 MUTER : engendre un DESCENDANT du morceau (évolution par sélection — reclique, garde, ↩ annule)
+  function mutatePiece(){
+    if(!editor.value.trim()){log("[ 🧬 ] écris ou charge d'abord un morceau","err");return;}
+    const GENS=["walk","drunk","pink","perlin","gendy","logistic"];
+    const RHY=["tresillo","cinquillo","son","rumba","bossa","bembe","baiao","maqsum","ayoub","samba","montuno","shiko"];
+    const VERBS=["| develop","| rev","| every 2 rot 3","| mutate 30","| shuffle","| jux rev","| palindrome"];
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"]);
+    const R=Math.random,pick=a=>a[Math.floor(R()*a.length)];
+    const mutLine=(code,head)=>{let L=code;
+      L=L.replace(/\b(walk|drunk|pink|perlin|gendy|logistic)\(/g,m=>R()<0.5?pick(GENS)+"(":m);   // swap a generator
+      L=L.replace(/\b(tresillo|cinquillo|son|rumba|bossa|bembe|baiao|maqsum|ayoub|samba|montuno|shiko)\b/g,m=>R()<0.5?pick(RHY):m);  // swap a world rhythm
+      L=L.replace(/gain (\d*\.?\d+)/g,(m,g)=>"gain "+Math.max(0.03,Math.min(0.5,(+g)*(0.75+R()*0.5))).toFixed(2));  // nudge gains
+      if(!DIR.has(head)&&R()<0.3&&!/\|\s*(develop|every|mutate|shuffle|palindrome)\b/.test(L))L=L.replace(/\s*$/,"")+" "+pick(VERBS);  // sometimes add a verb
+      return L;};
+    const out=editor.value.split("\n").map(line=>{const t=line.trim();if(!t||t.startsWith("#"))return line;
+      const i=line.indexOf(":");if(i<0)return line;const head=line.slice(0,i).trim().toLowerCase().split("@")[0];
+      if(head==="song"||head==="title")return line;  // keep structure & title
+      const cm=line.search(/[ \t]#/),code=cm>=0?line.slice(0,cm):line,com=cm>=0?line.slice(cm):"";
+      return mutLine(code,head)+com;});
+    let txt=out.join("\n");
+    if(/^\s*seed:/m.test(txt))txt=txt.replace(/^(\s*seed:\s*)(\d+)(.*)$/m,(m,a,n,c)=>a+((+n)+1+Math.floor(R()*8))+c);
+    else txt="seed: "+(1+Math.floor(R()*99))+"\n"+txt;
+    pushUndo();editor.value=txt;liveEdit();run();
+    log("[ 🧬 ] mutation — un descendant du morceau (↩ annuler · reclique pour un autre)","ai");
+    lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+12000;}
+  {const mb=$("muterBtn");if(mb)mb.addEventListener("click",mutatePiece);}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;
