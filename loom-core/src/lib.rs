@@ -729,6 +729,27 @@ fn expand_1f_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
     Some(out)
 }
 
+/// `gendy(n)` — Xenakis dynamic-stochastic (GENDYN): a random walk that REFLECTS
+/// off the scale boundaries (triangle fold), giving a bouncing contour. Seeded;
+/// bit-identical to the JS engine.
+fn expand_gendy_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("gendy(")?.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse().ok()?;
+    let range: f64 = it.next().and_then(|s| s.trim().parse::<f64>().ok()).unwrap_or(7.0).max(2.0);
+    let span = (range - 1.0).max(1.0);
+    let mut d = 1.0 + span / 2.0;
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        out.push((d.round() as i64).clamp(1, range as i64).to_string());
+        d += (js_rng(seed as u32, bar, "gendy", i as i64) - 0.5) * 3.0;
+        let m = 2.0 * span;
+        let t = (d - 1.0).rem_euclid(m);
+        d = 1.0 + if t <= span { t } else { m - t };
+    }
+    Some(out)
+}
+
 /// Resolve a voice's effective tokens for a given bar (all verbs + bar-aware
 /// generative expansions applied).
 pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
@@ -746,6 +767,7 @@ fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<Stri
         else if let Some(seq) = expand_drunk_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_perlin_token(&tok, seed) { out.extend(seq); }
         else if let Some(seq) = expand_1f_token(&tok, bar, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_gendy_token(&tok, bar, seed) { out.extend(seq); }
         else { out.push(tok); }
     }
     out
@@ -2724,6 +2746,9 @@ mod tests {
         // pink/1f reference values (computed from the JS engine's exact RNG)
         assert_eq!(expand_1f_token("pink(8)", 0, 5).unwrap().join(" "), "4 4 4 4 5 4 5 6");
         assert_eq!(expand_1f_token("1f(8)", 1, 5).unwrap().join(" "), "3 5 5 5 5 5 5 6");
+        // gendy reference values (Xenakis bouncing walk)
+        assert_eq!(expand_gendy_token("gendy(8)", 0, 5).unwrap().join(" "), "4 4 5 4 5 4 4 5");
+        assert_eq!(expand_gendy_token("gendy(8)", 1, 5).unwrap().join(" "), "4 3 4 4 3 4 4 3");
     }
 
     #[test]

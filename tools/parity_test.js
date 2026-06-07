@@ -102,6 +102,7 @@ const pieces = {
   '1/f pink': 'seed: 5\nkey: c minor\nmel: pink(16)\nmel2: 1f(13)',
   'contours arc/rise/fall': 'key: c major\nm1: arc(8)\nm2: rise(6)\nm3: fall(10)',
   'commentaires en ligne': 'key: c minor\nsong: a*2 b*2 # forme\nlead: 1 2 3 5 | saw # une ligne\nkick: x . x . # beat\nbass: 1 7# 1 . # garde le 7#',
+  'gendy (Xenakis)': 'seed: 5\nkey: c minor\nm: gendy(16)\nm2: gendy(11)',
 };
 
 let total = 0, bad = 0;

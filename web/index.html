@@ -1559,6 +1559,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     for(let i=0;i<n;i++){let s=0;for(let k=0;k<B;k++){const block=Math.floor(i/Math.pow(2,k));s+=rng(seed,bar,"1f:"+k,block);}
       const v=s/B;out.push(String(Math.max(1,Math.min(range,Math.floor(v*range)+1))));}
     return out;}
+  // gendy(n): Xenakis dynamic-stochastic (GENDYN) — random walk that reflects off the scale edges
+  function expandGendy(tok,bar){const m=/^gendy\((\d+)(?:,(\d+))?\)$/.exec(tok);if(!m)return null;
+    const n=+m[1],range=Math.max(2,m[2]?+m[2]:7),span=Math.max(1,range-1);let d=1+span/2;const out=[];
+    for(let i=0;i<n;i++){out.push(String(Math.max(1,Math.min(range,Math.round(d)))));d+=(rng(seed,bar,"gendy",i)-0.5)*3;
+      const mm=2*span;let t=(((d-1)%mm)+mm)%mm;d=1+(t<=span?t:mm-t);}return out;}
   // lsys(n): a Lindenmayer system -> self-similar melodic sequence (algorithmic composition)
   function expandLsys(tok){const m=/^lsys\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
     const rules={"1":["1","2"],"2":["3","1"],"3":["5","2"],"5":["6","3"],"6":["1'","5"],"1'":["3'","1"]};
@@ -1601,7 +1606,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const f=Math.max(2,n/6);let o=[];for(let i=0;i<n;i++){const x=i/f,x0=Math.floor(x),tt=x-x0,sm=tt*tt*(3-2*tt),val=h(x0)*(1-sm)+h(x0+1)*sm;
       o.push(String(Math.min(7,Math.max(1,Math.floor(val*7)+1))));}return o;}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
-    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok)||expandPi(tok)||expandGolden(tok)||expandCollatz(tok)||expandRecaman(tok)||expandLogistic(tok)||expandCantor(tok)||expandTrib(tok)||expandPerlin(tok)||expand1f(tok,bar);if(c)out.push(...c);else out.push(tok);}
+    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok)||expandPi(tok)||expandGolden(tok)||expandCollatz(tok)||expandRecaman(tok)||expandLogistic(tok)||expandCantor(tok)||expandTrib(tok)||expandPerlin(tok)||expand1f(tok,bar)||expandGendy(tok,bar);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
@@ -5730,7 +5735,7 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
-  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall",
+  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
     "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
