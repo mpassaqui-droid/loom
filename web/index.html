@@ -190,6 +190,8 @@
       <button class="tiny go" data-ai="continue et développe ce morceau avec une suite cohérente (nouvelle section)">&#9654; continuer</button>
       <button class="tiny go" data-ai="corrige les erreurs et améliore ce morceau pour qu'il sonne bien">&#129657; corriger</button>
       <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)">&#10067; explique</button>
+      <button class="tiny" id="developBtn" title="développe le morceau HORS-LIGNE : ajoute du développement aux mélodies, varie les batteries, change le seed (annulable)">&#10024; développe</button>
+      <button class="tiny" id="undoBtn" title="annuler la dernière action" style="display:none">&#8617; annuler</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
     <div class="opt">laisse la clé vide pour le cerveau gratuit &middot; &#127908; = parle, ça écrit et ça génère.</div>
@@ -1170,7 +1172,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function expandFib(tok){const m=/^fib\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
     let s=[0];while(s.length<n){let nx=[];for(const c of s){if(c===0){nx.push(0,1);}else nx.push(0);}s=nx;}
     return s.slice(0,n).map(c=>c===0?"x":".");}
-  function expandGen(tok){return expandEuclid(tok)||expandMorse(tok)||expandFib(tok);}
+  // world-rhythm bank: named timelines -> x/. patterns (same table as loom-core)
+  const RHYTHMS={tresillo:"x . . x . . x .",cinquillo:"x . x x . x x .",
+    son:"x . . x . . x . . . x . x . . .",rumba:"x . . x . . . x . . x . x . . .",
+    bossa:"x . . x . . x . . . x . . x . .",bembe:"x . x x . x . x x . x .",
+    baiao:"x . . x . . x . x . . x . . x .",maqsum:"x x . x x . x .",ayoub:"x . . x x . x .",
+    samba:"x . x . . x . x x . x . . x . x",montuno:". . x . . x . . . . x . . x . .",
+    shiko:"x . . . x . x . . . x . x . . ."};
+  function expandRhythm(tok){return RHYTHMS[tok]?RHYTHMS[tok].split(/\s+/):null;}
+  function expandGen(tok){return expandEuclid(tok)||expandMorse(tok)||expandFib(tok)||expandRhythm(tok);}
   // chords: UPPERCASE root = chord (Cm7, F, G7); lowercase stays a single note
   const CHORDS={"":[0,4,7],maj:[0,4,7],M:[0,4,7],m:[0,3,7],min:[0,3,7],"-":[0,3,7],"5":[0,7],
     dim:[0,3,6],o:[0,3,6],aug:[0,4,8],"+":[0,4,8],sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],
@@ -5640,6 +5650,40 @@ kick:   x . . . . . . . x . . . . . x . | sample bd | gain 0.26 | comp 0.3
       log(offline+(s?"<br>[ prof ] "+s.slice(0,650):"<br>[ prof ] (pas de réponse du cerveau IA, mais l'analyse ci-dessus tient)"),"ai");}
     catch(_){log(offline+"<br>[ prof ] (cerveau IA hors-ligne — l'analyse ci-dessus marche sans internet)","ai");}}
   {const eb=$("explainBtn");if(eb)eb.addEventListener("click",explain);}
+  // one-slot undo for big destructive actions (develop, later: preset/AI)
+  let _undo=null;
+  function pushUndo(){_undo=editor.value;const u=$("undoBtn");if(u)u.style.display="";}
+  function doUndo(){if(_undo==null)return;editor.value=_undo;_undo=null;const u=$("undoBtn");if(u)u.style.display="none";
+    liveEdit();if(playing)run();log("[ ↩ ] action annulée","ai");}
+  // OFFLINE "develop the whole piece": add motivic development to melodic voices,
+  // vary the drums, bump the seed — instant novelty without writing code. Undoable.
+  function developAll(){
+    if(!editor.value.trim()){log("[ ✨ ] écris ou charge d'abord un morceau","err");return;}
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"]);
+    const hasVar=s=>/\|\s*(develop|mutate|shuffle|every|iter|markov|stutter)\b/.test(s)||/\b(walk|drunk|ca|logistic|perlin|lsys|recaman|cantor)\s*\(/.test(s);
+    let nMel=0,nDr=0;
+    const out=editor.value.split("\n").map(line=>{
+      const t=line.trim();if(!t||t.startsWith("#"))return line;
+      const i=t.indexOf(":");if(i<0)return line;
+      const head=t.slice(0,i).trim().toLowerCase().split("@")[0];
+      if(DIR.has(head)||hasVar(t))return line;
+      const pat=t.slice(i+1).split("|")[0];
+      const drum=DRUMS.has(head);
+      const melodic=/[1-7]|\^|[a-gA-G][#b]?\d|[A-G][#mb0-9]/.test(pat);
+      if(!drum&&melodic){nMel++;return line.replace(/\s+$/,"")+" | develop";}
+      if(drum){nDr++;return line.replace(/\s+$/,"")+" | every 4 rot 3";}
+      return line;
+    });
+    let txt=out.join("\n");
+    if(/^\s*seed:/m.test(txt))txt=txt.replace(/^(\s*seed:\s*)(\d+)(.*)$/m,(m,a,n,c)=>a+((+n+1))+c);
+    else txt="seed: 7\n"+txt;
+    if(nMel+nDr===0){log("[ ✨ ] tout varie déjà — rien à développer (essaie un seed différent)","ai");return;}
+    pushUndo();editor.value=txt;liveEdit();run();
+    log("[ ✨ ] développé : "+nMel+" mélodie(s) + "+nDr+" batterie(s) · seed changé — ↩ annuler","ai");
+    lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+12000;
+  }
+  {const db=$("developBtn");if(db)db.addEventListener("click",developAll);}
+  {const ub=$("undoBtn");if(ub)ub.addEventListener("click",doUndo);}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;

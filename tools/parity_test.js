@@ -97,6 +97,7 @@ const pieces = {
   'ratchets+alternation+subseq': 'seed: 9\nm: 1 [2 3] <4/5> 1*3\nk: x*2 x x <x/.>',
   'degrade+chance (seeded drops)': 'seed: 11\nh: x x x x x x x x x x x x x x x x | degrade 40\np: 1 3 5 1\' | chance 0.6\nk: x x x x | degrade 25',
   'develop (motivic arc)': 'seed: 1\nkey: c major\nlead: 1 2 3 5 | develop\nhh: x . x x . x . x | develop',
+  'rythmes du monde': 'kick: tresillo\nhat: bembe\nclap: son\nperc: baiao',
 };
 
 let total = 0, bad = 0;

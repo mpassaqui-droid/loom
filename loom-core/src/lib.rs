@@ -263,6 +263,29 @@ fn expand_bin_token(tok: &str) -> Option<Vec<String>> {
     Some(format!("{:b}", v).chars().map(|c| if c == '1' { "x".into() } else { ".".into() }).collect())
 }
 /// Expand bar/seed-INDEPENDENT generative tokens in place.
+/// World-rhythm bank: named timelines (clave, tresillo, bembe…) expand to x/.
+/// patterns. The SAME table lives in the JS engine, so parity is automatic.
+pub fn world_rhythm(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "tresillo"  => "x . . x . . x .",
+        "cinquillo" => "x . x x . x x .",
+        "son"       => "x . . x . . x . . . x . x . . .",
+        "rumba"     => "x . . x . . . x . . x . x . . .",
+        "bossa"     => "x . . x . . x . . . x . . x . .",
+        "bembe"     => "x . x x . x . x x . x .",
+        "baiao"     => "x . . x . . x . x . . x . . x .",
+        "maqsum"    => "x x . x x . x .",
+        "ayoub"     => "x . . x x . x .",
+        "samba"     => "x . x . . x . x x . x . . x . x",
+        "montuno"   => ". . x . . x . . . . x . . x . .",
+        "shiko"     => "x . . . x . x . . . x . x . . .",
+        _ => return None,
+    })
+}
+fn expand_rhythm_token(tok: &str) -> Option<Vec<String>> {
+    world_rhythm(tok).map(|p| p.split_whitespace().map(|s| s.to_string()).collect())
+}
+
 fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
     let mut out = Vec::with_capacity(tokens.len());
     for t in tokens {
@@ -279,6 +302,7 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
         else if let Some(seq) = expand_logistic_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_trib_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_bin_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_rhythm_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -2577,6 +2601,17 @@ mod tests {
         // consecutive bars differ -> genuine evolution
         let bars: Vec<String> = (0..6).map(|b| apply_verb(&t, "develop", b, 0).join(" ")).collect();
         assert!(bars.iter().collect::<std::collections::HashSet<_>>().len() >= 5);
+    }
+
+    #[test]
+    fn world_rhythms_expand() {
+        // named timelines expand to x/. patterns at parse time
+        let v = parse("k: tresillo");
+        assert_eq!(v[0].tokens.join(" "), "x . . x . . x .");
+        let s = parse("k: son");
+        assert_eq!(s[0].tokens.len(), 16);
+        assert_eq!(world_rhythm("bembe").unwrap().split_whitespace().count(), 12);
+        assert!(world_rhythm("pas_un_rythme").is_none());
     }
 
     #[test]
