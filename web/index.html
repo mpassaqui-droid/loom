@@ -28,12 +28,16 @@
     body{max-width:1320px;}
     /* desktop workspace: a clean 2-col grid — small panels share a row,
        key blocks (editor, scope, grid, console…) span the full width. */
-    #ws{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+    /* editor + sidebar : main column (editor/transport/knobs) | side (presets/songs/custom),
+       and full-width blocks (scope/grid/console/learn) span both below. */
+    #ws{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start;}
+    #wsMain,#wsSide{display:flex;flex-direction:column;gap:16px;min-width:0;}
     #ws>*{margin-bottom:0;}
+    #wsMain>*,#wsSide>*{margin-bottom:0;}
     #ws>.wide{grid-column:1 / -1;}
     textarea{height:300px;}
   }
-  @media (min-width:1500px){ body{max-width:1500px;} textarea{height:340px;} }
+  @media (min-width:1500px){ body{max-width:1560px;} textarea{height:340px;} }
   h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
     text-shadow:0 0 12px var(--green);letter-spacing:3px;margin-bottom:6px;}
   .sub{color:var(--dim);font-size:20px;margin-bottom:20px;}
@@ -173,6 +177,7 @@
   </div>
 
   <div id="ws">
+  <div id="wsMain">
   <div class="card cyan wide">
     <div class="head">vibe &mdash; describe it, ai writes it (free)</div>
     <div class="vibe-row">
@@ -244,6 +249,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <div class="knob"><div class="lbl">VOL <b id="vVol">60</b></div><input type="range" id="vol" min="0" max="100" value="60"></div>
   </div>
 
+  </div><!-- /#wsMain -->
+
+  <div id="wsSide">
   <div class="presets" style="align-items:center">
     <span style="color:var(--dim);font-size:16px;margin-right:2px">presets &#9656;</span>
     <select id="presetSel" class="menu" title="charger un preset" style="flex:1;min-width:140px"></select>
@@ -277,6 +285,8 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     </div>
     <div id="customList" class="opt" style="margin-top:7px">aucun &mdash; dépose des fichiers audio, puis utilise-les avec | sample &lt;nom&gt;</div>
   </div>
+
+  </div><!-- /#wsSide -->
 
   <div id="timeline" class="wide" style="display:none"></div>
   <canvas id="roll" class="wide" title="piano-roll : tes mélodies en blocs" style="width:100%;height:140px;display:none;border:1px solid var(--dim);border-radius:3px;margin:6px 0 0"></canvas>
