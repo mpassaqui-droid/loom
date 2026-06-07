@@ -104,6 +104,7 @@ const pieces = {
   'commentaires en ligne': 'key: c minor\nsong: a*2 b*2 # forme\nlead: 1 2 3 5 | saw # une ligne\nkick: x . x . # beat\nbass: 1 7# 1 . # garde le 7#',
   'gendy (Xenakis)': 'seed: 5\nkey: c minor\nm: gendy(16)\nm2: gendy(11)',
   'spectrum (Grisey)': 'm: spectrum(12,c1)\nm2: spectrum(8,e2) | bell',
+  'tonnetz (neo-Riemann)': 'h: tonnetz(8,C,PLR) | saw\nh2: tonnetz(6,Am,LR) | sine',
 };
 
 let total = 0, bad = 0;

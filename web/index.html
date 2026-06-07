@@ -1270,7 +1270,19 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function expandSpectrum(tok){const m=/^spectrum\((\d+)(?:,([a-gA-G][#b]?-?\d))?\)$/.exec(tok);if(!m)return null;
     const n=+m[1];if(!(n>0&&n<=64))return null;const f0=noteToFreq((m[2]||"c2").toLowerCase());if(!f0)return null;
     const out=[];for(let k=1;k<=n;k++)out.push(midiToName(Math.round(69+12*Math.log2(f0*k/440))));return out;}
-  function expandGen(tok){return expandEuclid(tok)||expandMorse(tok)||expandFib(tok)||expandRhythm(tok)||expandSieve(tok)||expandShape(tok)||expandSpectrum(tok);}
+  // tonnetz(n[,start[,moves]]): neo-Riemannian P/L/R walk -> n triads (smooth voice-leading)
+  function expandTonnetz(tok){const m=/^tonnetz\((\d+)(?:,([A-Ga-g][#b]?m?))?(?:,([PLRplr]+))?\)$/.exec(tok);if(!m)return null;
+    const n=+m[1];if(!(n>0&&n<=256))return null;const start=m[2]||"C";
+    let mv=(m[3]||"PLR").toUpperCase().split("").filter(c=>"PLR".includes(c));if(!mv.length)mv=["P","L","R"];
+    let root={C:0,D:2,E:4,F:5,G:7,A:9,B:11}[start[0].toUpperCase()],rest=start.slice(1);
+    if(rest[0]==="#"){root++;rest=rest.slice(1);}else if(rest[0]==="b"){root--;rest=rest.slice(1);}
+    let minr=rest.toLowerCase().startsWith("m");root=((root%12)+12)%12;
+    const NM=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"],out=[];
+    for(let k=0;k<n;k++){out.push(NM[root]+(minr?"m":""));const mo=mv[k%mv.length];
+      if(mo==="P")minr=!minr;else if(mo==="R"){if(minr){root=(root+3)%12;minr=false;}else{root=(root+9)%12;minr=true;}}
+      else if(mo==="L"){if(minr){root=(root+8)%12;minr=false;}else{root=(root+4)%12;minr=true;}}}
+    return out;}
+  function expandGen(tok){return expandEuclid(tok)||expandMorse(tok)||expandFib(tok)||expandRhythm(tok)||expandSieve(tok)||expandShape(tok)||expandSpectrum(tok)||expandTonnetz(tok);}
   // chords: UPPERCASE root = chord (Cm7, F, G7); lowercase stays a single note
   const CHORDS={"":[0,4,7],maj:[0,4,7],M:[0,4,7],m:[0,3,7],min:[0,3,7],"-":[0,3,7],"5":[0,7],
     dim:[0,3,6],o:[0,3,6],aug:[0,4,8],"+":[0,4,8],sus2:[0,2,7],sus4:[0,5,7],sus:[0,5,7],
@@ -6021,7 +6033,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
-  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum",
+  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
     "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","warp","stretch","freeze","adaptive","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",

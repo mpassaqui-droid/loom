@@ -282,6 +282,38 @@ fn expand_shape_token(tok: &str) -> Option<Vec<String>> {
     }).collect())
 }
 
+/// `tonnetz(n[,start[,moves]])` -> neo-Riemannian walk: n triads from `start`
+/// (e.g. C, Am, F#m) transformed by P/L/R moves (default PLR), each chord sharing
+/// two notes with the next (smooth voice-leading). Emits chord symbols.
+fn expand_tonnetz_token(tok: &str) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("tonnetz(")?.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse().ok()?;
+    if n == 0 || n > 256 { return None; }
+    let start = it.next().map(|s| s.trim()).filter(|s| !s.is_empty()).unwrap_or("C");
+    let mv: Vec<char> = it.next().map(|s| s.trim().to_uppercase()).unwrap_or_default()
+        .chars().filter(|c| *c == 'P' || *c == 'L' || *c == 'R').collect();
+    let mv = if mv.is_empty() { vec!['P', 'L', 'R'] } else { mv };
+    let b = start.as_bytes();
+    let base: i32 = match b.first()?.to_ascii_uppercase() { b'C'=>0,b'D'=>2,b'E'=>4,b'F'=>5,b'G'=>7,b'A'=>9,b'B'=>11,_=>return None };
+    let mut i = 1; let mut root = base;
+    match b.get(1) { Some(b'#') => { root += 1; i = 2; } Some(b'b') => { root -= 1; i = 2; } _ => {} }
+    let mut minr = start[i..].to_lowercase().starts_with('m');
+    root = root.rem_euclid(12);
+    const NM: [&str; 12] = ["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+    let mut out = Vec::with_capacity(n);
+    for k in 0..n {
+        out.push(format!("{}{}", NM[root as usize], if minr { "m" } else { "" }));
+        match mv[k % mv.len()] {
+            'P' => minr = !minr,
+            'R' => if minr { root = (root + 3) % 12; minr = false; } else { root = (root + 9) % 12; minr = true; },
+            'L' => if minr { root = (root + 8) % 12; minr = false; } else { root = (root + 4) % 12; minr = true; },
+            _ => {}
+        }
+    }
+    Some(out)
+}
+
 /// `spectrum(n[,fund])` -> the first n harmonics of `fund` (default c2) as the
 /// nearest note names: the overtone series = spectral harmony (Grisey/Murail).
 fn expand_spectrum_token(tok: &str) -> Option<Vec<String>> {
@@ -366,6 +398,7 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
         else if let Some(seq) = expand_sieve_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_shape_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_spectrum_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_tonnetz_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -2761,6 +2794,14 @@ mod tests {
         // song / meter ignore the trailing comment
         assert_eq!(parse_song("song: a*2 b*2 # forme").iter().map(|(n,_)|n.clone()).collect::<Vec<_>>(), ["a","b"]);
         assert_eq!(parse_meter("meter: 7/8 # boiteux"), 3.5);
+    }
+
+    #[test]
+    fn tonnetz_walk() {
+        // C with PLR: C -> P -> Cm -> L -> Ab -> R -> Fm
+        assert_eq!(parse("h: tonnetz(4,C,PLR)")[0].tokens.join(" "), "C Cm Ab Fm");
+        assert_eq!(parse("h: tonnetz(3,A,P)")[0].tokens.join(" "), "A Am A");  // P flips back and forth
+        assert_eq!(parse("h: tonnetz(2,Eb)")[0].tokens.len(), 2);
     }
 
     #[test]
