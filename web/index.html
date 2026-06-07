@@ -232,6 +232,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <button id="midiBtn" class="go" title="exporter en fichier MIDI (.mid) pour ton DAW">&#127926; MIDI</button>
     <button id="syncBtn" class="go" title="émettre une horloge MIDI (start + clock 24ppqn) pour synchroniser Ableton/hardware sur le tempo de LOOM — via le port IAC">&#9201; SYNC</button>
     <button id="followBtn" class="go" title="SUIVRE une horloge MIDI externe : LOOM se cale sur le tempo et le transport (start/stop) d'Ableton/hardware">&#9201; SUIVRE</button>
+    <button id="learnBtn" class="go" title="MIDI LEARN : clique un potard (VOL/EQ/SWING/ECHO/SPACE) puis bouge un CC de ton contrôleur pour le lier">&#127919; LEARN</button>
     <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="mixBtn" class="go" title="mixeur : fader/pan/mute/solo + mètre par voix">&#127899; MIX</button>
@@ -368,6 +369,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const editor=$("editor"),grid=$("grid"),con=$("console");
   let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null;
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave",_pkHold=0;
+  let midiLearn=false,learnTarget=null,ccMap={};  // MIDI CC mapping (learn -> control)
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
@@ -729,7 +731,11 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         if(bpm>30&&bpm<300){baseBpm=Math.round(bpm);cycleLen=(60/baseBpm)*meterBeats;const el=$("bpm");if(el)el.value=baseBpm;}}return;}
     if(s===0xFA||s===0xFB){if(midiFollow){clkTimes=[];if(!playing)run();}return;}  // start / continue
     if(s===0xFC){if(midiFollow&&playing)stop();return;}                            // stop
-    const cmd=s&0xf0;if(cmd===0x90&&d[2]>0)liveNoteOn(d[1],d[2]);else if(cmd===0x80||(cmd===0x90&&d[2]===0))liveNoteOff(d[1]);}
+    const cmd=s&0xf0;
+    if(cmd===0xB0){const cc=d[1],val=d[2];  // control change
+      if(midiLearn&&learnTarget){ccMap[cc]=learnTarget;log("[ learn ] CC"+cc+" → "+learnTarget,"ai");learnTarget=null;return;}
+      const id=ccMap[cc];if(id){const el=$(id);if(el){const mn=+el.min||0,mx=(el.max!==undefined&&el.max!=="")?+el.max:127;el.value=mn+(val/127)*(mx-mn);try{el.dispatchEvent(new Event("input"));}catch(_){}}}return;}
+    if(cmd===0x90&&d[2]>0)liveNoteOn(d[1],d[2]);else if(cmd===0x80||(cmd===0x90&&d[2]===0))liveNoteOff(d[1]);}
   function liveNoteOn(note,vel){if(!ctx)return;if(ctx.state==="suspended")ctx.resume();liveNoteOff(note);
     const v=voices.find(x=>x.name==="lead"&&x.type!=="drum")||voices.find(x=>x.type!=="drum")||{wave:"sawtooth",gain:0.22};
     const now=ctx.currentTime,freq=440*Math.pow(2,(note-69)/12),g=ctx.createGain();
@@ -6178,6 +6184,11 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   bind("eqLow","vEqLow",v=>{if(mEqLow)mEqLow.gain.value=+v;});
   bind("eqMid","vEqMid",v=>{if(mEqMid)mEqMid.gain.value=+v;});
   bind("eqHigh","vEqHigh",v=>{if(mEqHigh)mEqHigh.gain.value=+v;});
+  // MIDI LEARN : clic sur un potard pour l'armer, puis bouge un CC pour le lier
+  for(const id of ["vol","swing","echo","space","eqLow","eqMid","eqHigh","bpm"]){const el=$(id);
+    if(el)el.addEventListener("click",()=>{if(midiLearn){learnTarget=id;log("[ learn ] bouge un potard MIDI pour lier « "+id+" »","ai");}});}
+  {const lb=$("learnBtn");if(lb)lb.addEventListener("click",()=>{initMidi();midiLearn=!midiLearn;learnTarget=null;lb.classList.toggle("on",midiLearn);
+    log(midiLearn?"[ learn ] ON — clique un potard (VOL/EQ/SWING/ECHO/SPACE/BPM) puis bouge un CC pour le lier":"[ learn ] OFF — les CC liés pilotent les potards","ai");});}
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   // expose pure language functions for unit testing (harmless in the browser)
   // Parity hook: resolve ONE bar to events via the REAL scheduler (capture mode),
