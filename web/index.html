@@ -255,6 +255,9 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     <div class="knob"><div class="lbl">ECHO <b id="vEcho">15</b></div><input type="range" id="echo" min="0" max="100" value="15"></div>
     <div class="knob"><div class="lbl">SPACE <b id="vSpace">20</b></div><input type="range" id="space" min="0" max="100" value="20"></div>
     <div class="knob"><div class="lbl">VOL <b id="vVol">60</b></div><input type="range" id="vol" min="0" max="100" value="60"></div>
+    <div class="knob"><div class="lbl">EQ&nbsp;GRAVE <b id="vEqLow">0</b></div><input type="range" id="eqLow" min="-12" max="12" step="0.5" value="0" title="EQ master : graves (±12 dB @120 Hz)"></div>
+    <div class="knob"><div class="lbl">EQ&nbsp;MÉDIUM <b id="vEqMid">0</b></div><input type="range" id="eqMid" min="-12" max="12" step="0.5" value="0" title="EQ master : médiums (±12 dB @1 kHz)"></div>
+    <div class="knob"><div class="lbl">EQ&nbsp;AIGU <b id="vEqHigh">2</b></div><input type="range" id="eqHigh" min="-12" max="12" step="0.5" value="2" title="EQ master : aigus (±12 dB @8 kHz)"></div>
   </div>
 
   </div><!-- /#wsMain -->
@@ -430,10 +433,15 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     // master chain: high-pass (remove subsonic mud) -> glue comp -> presence
     // shelf -> brick-wall limiter -> out. Makes the mix cleaner & louder.
     const hpf=ctx.createBiquadFilter();hpf.type="highpass";hpf.frequency.value=28;hpf.Q.value=0.7;
-    const shelf=ctx.createBiquadFilter();shelf.type="highshelf";shelf.frequency.value=8000;shelf.gain.value=2.5;
+    // master 3-band EQ (mastering): low shelf · mid peak · high shelf — user-controllable
+    const eqv=id=>{const e=$(id);return e?(+e.value||0):0;};
+    mEqLow=ctx.createBiquadFilter();mEqLow.type="lowshelf";mEqLow.frequency.value=120;mEqLow.gain.value=eqv("eqLow");
+    mEqMid=ctx.createBiquadFilter();mEqMid.type="peaking";mEqMid.frequency.value=1000;mEqMid.Q.value=0.9;mEqMid.gain.value=eqv("eqMid");
+    const shelf=ctx.createBiquadFilter();shelf.type="highshelf";shelf.frequency.value=8000;shelf.gain.value=$("eqHigh")?eqv("eqHigh"):2.5;
+    mEqHigh=shelf;mEqLow.connect(mEqMid);mEqMid.connect(shelf);
     const limiter=ctx.createDynamicsCompressor();
     limiter.threshold.value=-2;limiter.knee.value=0;limiter.ratio.value=20;limiter.attack.value=0.001;limiter.release.value=0.09;
-    master.connect(hpf);hpf.connect(comp);comp.connect(shelf);
+    master.connect(hpf);hpf.connect(comp);comp.connect(mEqLow);  // -> mEqLow -> mEqMid -> shelf(high)
     // master warmth: an oversampled tanh saturator (AudioWorklet) for analog glue/anti-aliased drive.
     // Inserted only if the worklet is registered on this ctx; otherwise the dry chain is used (fallback).
     masterShelf=shelf;masterLimiter=limiter;let preLim=shelf;
@@ -1902,7 +1910,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   const SCENES=["codemap","radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple","grid","petals","dna","mandala","spectrum3d","ribbon","fireworks","vortex","lattice","tiles","starsphere","bubbles","comet","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora","gcells","gwater","gmandel","nebula","scan","rings","checker"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let spectroCv=null;  // persistent offscreen for the scrolling spectrogram scene
-  let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3;
+  let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3,mEqLow=null,mEqMid=null,mEqHigh=null;
   let mediaRec=null,filmChunks=[],filming=false,filmCountdown=0,filmFormat="wide",filmCv=null,filmCtx2=null,filmTitle="LOOM",filmStartMs=0;  // master worklet (saturator + limiter) refs
   let codeView=[],showCode=true;  // live "code playhead": boxes the active token in each voice line
   // tokenize a pattern string but record each token's absolute COLUMN in the source line
@@ -6092,6 +6100,9 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   bind("echo","vEcho",v=>{if(echoSend)echoSend.gain.value=v/100;});
   bind("space","vSpace",v=>{if(spaceSend)spaceSend.gain.value=v/100*0.9;});
   bind("vol","vVol",v=>{if(master)master.gain.value=v/100*0.8;});
+  bind("eqLow","vEqLow",v=>{if(mEqLow)mEqLow.gain.value=+v;});
+  bind("eqMid","vEqMid",v=>{if(mEqMid)mEqMid.gain.value=+v;});
+  bind("eqHigh","vEqHigh",v=>{if(mEqHigh)mEqHigh.gain.value=+v;});
   editor.addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){e.preventDefault();run();}});
   // expose pure language functions for unit testing (harmless in the browser)
   // Parity hook: resolve ONE bar to events via the REAL scheduler (capture mode),
