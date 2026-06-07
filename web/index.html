@@ -5524,13 +5524,17 @@ naghma@gat: 1 . . . 5 . . . 1 . . . 4 . . . | bow | unison 2 | lp 1400 | reverb 
     return out;
   }
   async function explain(){if(!editor.value.trim()){log("[ prof ] écris ou génère d'abord un morceau","err");return;}
+    // log() REPLACES the console, so build ONE multi-line message (<br>) and re-log it.
     // 1) instant, offline analysis from the knowledge base
-    analyzePiece(editor.value).forEach(l=>log(l,"ai"));
+    const offline=analyzePiece(editor.value).join("<br>");
+    // keep it on screen (the per-bar "[ playing ]" log would otherwise overwrite it)
+    lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+25000;
+    log(offline+"<br>[ prof ] j'approfondis… (le cerveau IA)","ai");
     // 2) the AI brain elaborates (bonus, needs internet)
-    log("[ prof ] j'approfondis… (le cerveau IA)","ai");
     const p="Tu es un professeur de musique bienveillant et clair. En français, en 3 ou 4 phrases simples (pas de code, pas de listes, pas de markdown), explique ce morceau écrit en langage LOOM : son ambiance, la gamme/tonalité et POURQUOI il sonne ainsi, et un conseil pour l'améliorer.\n\nCODE:\n"+editor.value;
-    try{const t=await callFree(p);const s=String(t||"").replace(/\s+/g," ").trim();if(s)log("[ prof ] "+s.slice(0,650),"ai");}
-    catch(_){log("[ prof ] (analyse hors-ligne ci-dessus ; le cerveau IA demande une connexion)","ai");}}
+    try{const t=await callFree(p);const s=String(t||"").replace(/\s+/g," ").trim();
+      log(offline+(s?"<br>[ prof ] "+s.slice(0,650):"<br>[ prof ] (pas de réponse du cerveau IA, mais l'analyse ci-dessus tient)"),"ai");}
+    catch(_){log(offline+"<br>[ prof ] (cerveau IA hors-ligne — l'analyse ci-dessus marche sans internet)","ai");}}
   {const eb=$("explainBtn");if(eb)eb.addEventListener("click",explain);}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
