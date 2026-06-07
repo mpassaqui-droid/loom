@@ -175,3 +175,66 @@ progressions tonales pop, formes courtes. **Ce qu'on ajoute :**
 
 > Chaque ligne ci-dessus peut devenir une « vague » concrète, testée et commitée —
 > exactement comme on a procédé jusqu'ici.
+
+---
+
+## I. IDÉES SUPPLÉMENTAIRES (au-delà du cœur du plan)
+
+### I1. 🧬 Faire ÉVOLUER la musique (remède direct au « toujours pareil »)
+- 🔨 **Mètre de surprise** (théorie de l'info) : mesure la prévisibilité d'un morceau →
+  un curseur « plus surprenant / plus cohérent ». *(= vague en cours, étape 1)*
+- 🌠 **ADN du morceau** : un seed compact = une pièce entière ; **croiser** deux pièces
+  (crossover génétique) → des « enfants » ; **sélection par le goût** (« j'aime → 8 variantes »).
+- 🌠 **Musique adaptative** (audio de jeu) : réagit à un état (couches verticales, reséquençage).
+
+### I2. 🤲 Le corps & le geste (l'expressivité)
+- 🧪 **Webcam → contrôle** (suivi mains/corps, MediaPipe). 🔨 **Téléphone/tablette** comme
+  contrôleur (inclinaison, multitouch, accéléromètre). 🧪 **Voix/souffle** comme contrôleur
+  continu (chante → pilote des paramètres). 🔨 **Haptique** sur les basses.
+
+### I3. 🎓 L'université vivante (le propriétaire est PROF — sous-exploité)
+- 🔨 Cursus interactif : oreille, théorie, rythme, **exercices générés depuis TES morceaux**.
+- 🌠 **Tuteur IA socratique** qui écoute ce que tu fais et enseigne en contexte.
+- 🔨 Défis/énigmes (« reproduis ce rythme », harmoniser, dictées), chaque concept démontré en son.
+
+### I4. 🎻 Le pont vers les musiciens acoustiques
+- 🔨 **Export notation** (MusicXML / Lilypond) → un ensemble réel peut jouer ta pièce.
+- 🌠 **Orchestration générative**. 🔨 **Import MIDI/MusicXML** pour analyser & re-générer.
+
+### I5. 🌐 Sonifier le monde
+- 🔨 Sonifier données/météo/**EEG-biosignaux**/astro/texte/**image→son**.
+- 🧪 **Écoacoustique / paysages sonores** (Schafer, Oliveros) ; chant d'oiseaux comme matériau.
+
+### I6. 🧠 IA profonde (au-delà de composer)
+- 🧪 **Audio→code** (chante/joue → transcription LOOM). 🧪 **Séparation de stems** → code.
+- 🌠 **Transfert de style** (« à la manière de… »). 🔨 **Continuation/remplissage** de section.
+- 🌠 **Compositeur conversationnel** avec mémoire du projet ; 🧪 option **modèle local** hors-ligne.
+
+### I7. 🎚️ Moteurs de composition savante
+- 🌠 **Contrepoint** (espèces, canon, **fugue**, harmoniser une mélodie). 🔨 **Réharmoniseur**
+  (substitutions, dominantes secondaires). 🌠 **Solveur sous contraintes**.
+- 🧪 **Labo microtonal** : import **Scala (.scl)**, lattices, comma pumps, **intonation juste
+  adaptative** (accords ré-accordés en ratios purs à la volée — son sublime).
+
+### I8. 🔊 Espace & immersion
+- 🧪 **Binaural/HRTF** (3D au casque), 🌠 **ambisonique** (multi-HP). 🔨 **Pièces evergreen**
+  (génératives infinies, jamais répétées). 🌠 **Réactives au temps/lieu/météo** (installation).
+  🌠 **VR/AR** (composer dans l'espace).
+
+### I9. 🤝 Musique en réseau
+- 🌠 **Jam collaboratif temps réel** (multi-utilisateurs, orchestre de laptops).
+- 🌠 **Participation du public** (chaque téléphone = une voix). 🔨 **Galerie/communauté** (partage, fork, remix).
+
+### I10. 🎛️ Scène, live & monde physique
+- 🔨 **Mode Algorave** (gros visuels, historique, panique, crossfade, **looper**, **pad de morphing**).
+- 🧪 **Score following** (façon Antescofo) : tu joues, LOOM te suit. 🌠 **Sortie CV/Eurorack**, capteurs.
+
+### I11. ✨ Le savoir incarné (l'âme, unique à LOOM)
+- 🌠 Un morceau qui EST partition + explication + visuel + leçon ; une musique **qui se connaît**.
+- 🌠 **Moteur de fusion** des traditions (maqâm + gamelan + jazz, *avec* le savoir pour le faire juste).
+
+### Priorité personnelle conseillée (impact sur le propriétaire)
+1. **Évolution génétique + mètre de surprise** (I1) — règle « j'entends toujours la même chose ».
+2. **Université vivante** (I3) — il est prof ; personne d'autre n'a ça.
+3. **Corps/geste/voix** (I2) — l'expressivité, le souffle humain.
+4. **Intonation juste adaptative** (I7) — le son devient magnifique sans rien changer d'autre.
