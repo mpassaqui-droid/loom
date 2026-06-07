@@ -200,6 +200,7 @@
       <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10067; explique</button>
       <button class="tiny" id="developBtn" title="développe le morceau HORS-LIGNE : ajoute du développement aux mélodies, varie les batteries, change le seed (annulable)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10024; développe</button>
       <button class="tiny" id="muterBtn" title="engendre un DESCENDANT du morceau (mute générateurs/rythmes/paramètres) — évolution par sélection : reclique, garde, ou ↩ annule" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516; muter</button>
+      <button class="tiny" id="crossBtn" title="CROISE ce morceau avec un autre (voix/réglages des deux parents) — un enfant inattendu (↩ annule)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516;&#10005; croiser</button>
       <button class="tiny" id="undoBtn" title="annuler la dernière action" style="display:none;border-color:var(--amber);color:var(--amber)">&#8617; annuler</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
@@ -5969,6 +5970,23 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
     log("[ 🧬 ] mutation — un descendant du morceau (↩ annuler · reclique pour un autre)","ai");
     lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+12000;}
   {const mb=$("muterBtn");if(mb)mb.addEventListener("click",mutatePiece);}
+  // 🧬× CROISER : enfant = ce morceau (parent A) × un autre (parent B), voix/réglages piochés chez l'un ou l'autre
+  function crossPiece(){
+    if(!editor.value.trim()){log("[ 🧬× ] écris ou charge d'abord un morceau","err");return;}
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title"]);
+    const keys=Object.keys(PRESETS||{});if(!keys.length){log("[ 🧬× ] aucun second parent disponible","err");return;}
+    const Bname=keys[Math.floor(Math.random()*keys.length)];
+    const split=txt=>{const dirs={},voices={};for(const raw of txt.split("\n")){const t=raw.trim();if(!t||t.startsWith("#"))continue;
+      const i=t.indexOf(":");if(i<0)continue;const full=t.slice(0,i).trim().toLowerCase(),head=full.split("@")[0];
+      (DIR.has(head)?dirs:voices)[full]=raw;}return{dirs,voices};};
+    const a=split(editor.value),b=split(PRESETS[Bname]),R=Math.random,out=[];
+    const merge=(ma,mb)=>{for(const k of new Set([...Object.keys(ma),...Object.keys(mb)])){
+      const x=ma[k],y=mb[k],ch=(x&&y)?(R()<0.5?x:y):(x||y);if(ch)out.push(ch);}};
+    merge(a.dirs,b.dirs);merge(a.voices,b.voices);
+    pushUndo();editor.value="# 🧬 croisement : (ce morceau) × « "+Bname+" »\n"+out.join("\n");liveEdit();run();
+    log("[ 🧬× ] enfant : ton morceau × "+Bname.toUpperCase()+" (↩ annuler · reclique pour un autre)","ai");
+    lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+12000;}
+  {const cb=$("crossBtn");if(cb)cb.addEventListener("click",crossPiece);}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;
