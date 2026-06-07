@@ -201,6 +201,7 @@
       <button class="tiny" id="developBtn" title="développe le morceau HORS-LIGNE : ajoute du développement aux mélodies, varie les batteries, change le seed (annulable)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10024; développe</button>
       <button class="tiny" id="muterBtn" title="engendre un DESCENDANT du morceau (mute générateurs/rythmes/paramètres) — évolution par sélection : reclique, garde, ou ↩ annule" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516; muter</button>
       <button class="tiny" id="crossBtn" title="CROISE ce morceau avec un autre (voix/réglages des deux parents) — un enfant inattendu (↩ annule)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516;&#10005; croiser</button>
+      <button class="tiny" id="earBtn" title="entraînement de l'oreille : le prof joue un intervalle, devine-le en l'écrivant dans VIBE" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#128066; oreille</button>
       <button class="tiny" id="undoBtn" title="annuler la dernière action" style="display:none;border-color:var(--amber);color:var(--amber)">&#8617; annuler</button>
     </div>
     <div class="keyrow"><input type="password" id="apiKey" placeholder="optional Anthropic key for sharper results"></div>
@@ -5605,6 +5606,13 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   function playGroups(groups,gap,hold){if(!ctx)initAudio();if(!ctx)return;if(ctx.state==="suspended")ctx.resume();
     gap=gap||0.4;hold=hold||0.5;
     groups.forEach((g,i)=>setTimeout(()=>{g.forEach(m=>liveNoteOn(m,86));setTimeout(()=>g.forEach(m=>liveNoteOff(m)),hold*1000);},i*gap*1000));}
+  // 👂 EAR-TRAINING : the teacher plays an interval, you guess (typed in VIBE)
+  let earQuiz=null;const EAR=["octave","quinte","quarte","tierce","triton","seconde","sixte"];
+  function earRound(){const pick=EAR[Math.floor(Math.random()*EAR.length)];earQuiz={answer:pick};
+    const d=loreDemo(pick);if(d)playGroups(d.groups,d.gap,d.hold);
+    log("[ 👂 ] devine l'intervalle — écris ta réponse dans VIBE (octave/quinte/quarte/tierce/triton/seconde/sixte) · 👂 reclique = réécoute","ai");}
+  function gradeEar(g){if(g===earQuiz.answer){log("[ 👂 ✅ ] bravo — c'était bien « "+g+" » !"+(LORE[g]?"  ("+LORE[g]+")":""),"ai");earQuiz=null;}
+    else{const d=loreDemo(earQuiz.answer);if(d)playGroups(d.groups,d.gap,d.hold);log("[ 👂 ❌ ] pas tout à fait — réécoute. (clique ?"+earQuiz.answer+" pour la réponse)","err");}}
   function loreDemo(term){
     const IV={octave:12,quinte:7,quarte:5,tierce:4,triton:6,seconde:2,sixte:9,septieme:11},
       CH={maj7:[0,4,7,11],m7:[0,3,7,10],dim:[0,3,6],sus4:[0,5,7],"7":[0,4,7,10]};
@@ -5627,6 +5635,7 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
     catch(_){log("[ prof ] indisponible (besoin d'internet)","err");}}
   async function vibe(){const req=$("vibeIn").value.trim();if(!req){log("[ vibe ] ecris d'abord ce que tu veux","err");return;}
     if(req[0]==="?"){lookup(req.slice(1));return;}
+    if(earQuiz&&EAR.includes(deburr(req.toLowerCase()))){gradeEar(deburr(req.toLowerCase()));$("vibeIn").value="";return;}  // ear-quiz answer
     const key=$("apiKey").value.trim();log("[ vibe ] reflexion... (jusqu'a 30s)","ai");
     const btn=$("vibeBtn");btn.disabled=true;const old=btn.textContent;btn.textContent="...";
     const userMsg="Current LOOM code:\n"+editor.value+"\n\nRequest: "+req+"\n\nReturn the full updated LOOM program. Code only.";
@@ -6000,6 +6009,7 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
     log("[ 🧬× ] enfant : ton morceau × "+Bname.toUpperCase()+" (↩ annuler · reclique pour un autre)","ai");
     lintUntil=((typeof performance!=="undefined"&&performance.now)?performance.now():0)+12000;}
   {const cb=$("crossBtn");if(cb)cb.addEventListener("click",crossPiece);}
+  {const eb=$("earBtn");if(eb)eb.addEventListener("click",()=>{if(earQuiz){const d=loreDemo(earQuiz.answer);if(d)playGroups(d.groups,d.gap,d.hold);log("[ 👂 ] réécoute…","ai");}else earRound();});}
   $("vibeIn").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();vibe();}});
   // voice control: speak -> transcribe -> let the AI generate
   let recog=null,listening=false;
