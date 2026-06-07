@@ -5,6 +5,12 @@
 > connaissance** — mais entièrement **au service de la musique**.
 > On y va en COUCHES, jamais tout d'un coup ; la connaissance vit dans le modèle
 > IA + le prompt + une langue qui grandit (on ne code pas « toute la musique » en dur).
+>
+> 📖 **Vision élargie** → voir [PLAN-MONDE.md](PLAN-MONDE.md) : les centres de
+> musique contemporaine du monde (IRCAM, GRAME, CCRMA Stanford, CNMAT, IEM Graz,
+> C4DM…), les disciplines à intégrer (maths, physique, biologie, philosophie), le
+> **lien visuel↔code vivant**, le **moteur de nouveauté musicale**, la **connexion
+> Ableton Live**, la **mise en page multi-panneaux** et les **vues de code alternatives**.
 
 Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / ambition
 
