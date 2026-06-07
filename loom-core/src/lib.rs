@@ -347,10 +347,20 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
 }
 
 /// Parse LOOM source text into voices.
+/// Strip an end-of-line comment: a `#` preceded by whitespace (or at line start)
+/// begins a comment. Preserves `7#`/`f#` accidentals (no space before the `#`).
+fn decomment(s: &str) -> &str {
+    let b = s.as_bytes();
+    for i in 0..b.len() {
+        if b[i] == b'#' && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b'\t') { return &s[..i]; }
+    }
+    s
+}
+
 pub fn parse(src: &str) -> Vec<Voice> {
     let mut out = Vec::new();
     for raw in src.lines() {
-        let line = raw.trim();
+        let line = decomment(raw).trim();
         if line.is_empty() || line.starts_with('#') { continue; }
         let Some(colon) = line.find(':') else { continue };
         let full = line[..colon].trim().to_lowercase();
@@ -1477,7 +1487,7 @@ const DEFAULT_SECTION_BARS: u32 = 4;
 /// `song: intro*4 verse*8 chorus*8 outro*4`. A bare `name` lasts 4 bars.
 pub fn parse_song(src: &str) -> Vec<(String, u32)> {
     for raw in src.lines() {
-        let line = raw.trim();
+        let line = decomment(raw).trim();
         let Some(colon) = line.find(':') else { continue };
         let head = line[..colon].trim().to_lowercase();
         if head != "song" && head != "arrange" { continue; }
@@ -1527,7 +1537,7 @@ pub fn parse_bpm(src: &str) -> f64 {
 /// a bare `meter: 3` -> 3 beats. Default 4.
 pub fn parse_meter(src: &str) -> f64 {
     for raw in src.lines() {
-        let line = raw.trim();
+        let line = decomment(raw).trim();
         let Some(colon) = line.find(':') else { continue };
         if line[..colon].trim().to_lowercase() != "meter" { continue; }
         let v = line[colon + 1..].trim();
@@ -1739,7 +1749,7 @@ fn parse_roman(tok: &str) -> Option<(i32, bool)> {
 /// (cycling), expanding `*N` durations. Keeps original case (chords are case-sensitive).
 pub fn parse_prog(src: &str) -> Vec<String> {
     for raw in src.lines() {
-        let line = raw.trim();
+        let line = decomment(raw).trim();
         let Some(colon) = line.find(':') else { continue };
         if line[..colon].trim().to_lowercase() == "prog" {
             let mut out = Vec::new();
@@ -2661,6 +2671,19 @@ mod tests {
         // consecutive bars differ -> genuine evolution
         let bars: Vec<String> = (0..6).map(|b| apply_verb(&t, "develop", b, 0).join(" ")).collect();
         assert!(bars.iter().collect::<std::collections::HashSet<_>>().len() >= 5);
+    }
+
+    #[test]
+    fn inline_comments_stripped() {
+        // a # after whitespace is a comment; the voice keeps its real tokens
+        let v = parse("lead: 1 2 3 5 # une ligne\nkick: x . x . # beat");
+        assert_eq!(v[0].tokens.join(" "), "1 2 3 5");
+        assert_eq!(v[1].tokens.join(" "), "x . x .");
+        // 7# accidental is NOT a comment (no space before #)
+        assert_eq!(parse("m: 1 7# 1")[0].tokens.join(" "), "1 7# 1");
+        // song / meter ignore the trailing comment
+        assert_eq!(parse_song("song: a*2 b*2 # forme").iter().map(|(n,_)|n.clone()).collect::<Vec<_>>(), ["a","b"]);
+        assert_eq!(parse_meter("meter: 7/8 # boiteux"), 3.5);
     }
 
     #[test]

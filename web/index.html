@@ -1259,7 +1259,10 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parseSeed(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="seed"){const n=parseInt(line.slice(i+1).trim(),10);if(!isNaN(n))return n;}}return 0;}
   // song arrangement: song: intro*4 verse*8 chorus*8 ...
-  function parseSong(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
+  // strip END-OF-LINE comments: a # preceded by whitespace starts a comment.
+  // (preserves 7# / f# accidentals, which have no space before the #)
+  function noComments(t){return t.replace(/[ \t]+#[^\n]*/g,"");}
+  function parseSong(text){text=noComments(text);for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     const h=line.slice(0,i).trim().toLowerCase();if(h!=="song"&&h!=="arrange")continue;
     return line.slice(i+1).trim().split(/\s+/).filter(Boolean).map(tok=>{const s=tok.split("*");
       const n=s[1]?parseInt(s[1],10):4;return [s[0].toLowerCase(),isNaN(n)?4:Math.max(1,n)];}).filter(p=>p[0]);}
@@ -1283,7 +1286,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   function parseLoop(text){for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="loop"){const w=line.slice(i+1).trim().toLowerCase();return w||null;}}return null;}
   // odd meters: meter: 7/8 -> a bar = 7 eighth-notes (= 3.5 quarters). meter: 3 = 3 beats.
-  function parseMeter(text){let mb=4;for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+  function parseMeter(text){text=noComments(text);let mb=4;for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="meter"){const v=line.slice(i+1).trim(),m=/^(\d+)\s*\/\s*(\d+)$/.exec(v);
       if(m){const N=+m[1],D=+m[2];if(N>0&&D>0)mb=N*4/D;}else{const n=parseFloat(v);if(!isNaN(n)&&n>0)mb=n;}}}return mb;}
   // modulation: key@SECTION: c minor  -> that section resolves degrees/chords in its own key
@@ -1307,7 +1310,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     blues:["I","I","I","I","IV","IV","I","I","V","IV","I","V"],folk:["I","IV","V","IV"],
     ballad:["I","iii","IV","V"],gospel:["I","IV","I","V"],
     cinematic:["i","III","VII","iv"],lofi:["ii","V","iii","vi"],edm:["vi","IV","I","V"],house:["I","I","IV","V"]};
-  function parseProg(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
+  function parseProg(text){text=noComments(text);for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="prog"){const out=[],toks=line.slice(i+1).trim().split(/\s+/).filter(Boolean);  // chords cycle one per bar; Am*4 = hold 4 bars
       if(toks[0]==="auto"){const st=(toks[1]||"pop").toLowerCase();  // prog: auto <style> -> ready-made progression
         if(st==="random"||st==="rand"){const pool=["I","ii","iii","IV","V","vi"];return [0,0,0,0].map(()=>pool[Math.floor((typeof Math!=="undefined"?Math.random():0)*pool.length)]);}
@@ -1354,7 +1357,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     let out=lines.join("\n");
     for(let i=0;i<4;i++){let ch=false;out=out.replace(/\$([A-Za-z_][\w]*)/g,(s,n)=>{if(defs[n]!=null){ch=true;return defs[n];}return s;});if(!ch)break;}
     return out;}
-  function parse(text){text=expandMacros(text);const out=[];for(let raw of text.split("\n")){const line=raw.trim();
+  function parse(text){text=noComments(expandMacros(text));const out=[];for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const full=line.slice(0,i).trim().toLowerCase();
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
@@ -4860,68 +4863,42 @@ air:    1 . . . . . . . | sine | noise 0.6 | hp 1000 | wow 0.25 | lfo cutoff 0.1
 `;
   PRESETS.nouveautes=`# ================================================================
 #  LOOM — « NOUVEAUTÉS » : tout ce qu'on a ajouté, en action.
-#  (Les commentaires sont sur leur PROPRE ligne : le moteur ne gère pas
-#   encore les commentaires en fin de ligne de code.)
+#  (Tu peux maintenant commenter EN FIN DE LIGNE — un # précédé d'un espace.)
 #
 #  ▶ Pendant que ça joue, essaie les NOUVEAUTÉS DE L'APP :
-#    • ❓ explique  -> analyse hors-ligne : tonalité, tradition, CADENCE,
-#         ACOUSTIQUE (consonance Plomp-Levelt) et NOUVEAUTÉ (mètre de surprise).
-#    • ✨ développe -> ajoute du développement/variation à tout, d'un clic (↩ annuler).
-#    • boîte VIBE  -> tape  ?sieve   ?pythagore   ?raga   ?ii-v-i   pour le savoir.
+#    • ❓ explique  -> tonalité, tradition, CADENCE, ACOUSTIQUE (consonance), NOUVEAUTÉ.
+#    • ✨ développe -> fait évoluer tout le morceau d'un clic (↩ annuler).
+#    • boîte VIBE  -> tape  ?sieve   ?pythagore   ?raga   ?ii-v-i
 # ================================================================
 
 title:  Nouveautés
 key:    c minor
-# tune: just -> intonation JUSTE (ratios purs) : plus consonant que 'equal'
-tune:   just
+tune:   just            # intonation JUSTE (ratios purs) : plus consonant que 'equal'
 bpm:    104
 feel:   22
 scene:  gaurora
-# 2 sections : montre que 'develop' continue d'évoluer partout
-song:   a*4 b*4
+song:   a*4 b*4         # 2 sections : 'develop' continue d'évoluer partout
 
-# ---------- RYTHMES DU MONDE : des timelines nommées (fini la grille x . . x) ----------
-# tresillo = 3-3-2 cubain (8 pas)
-kick:   tresillo
-# bembe = cloche africaine standard (12 pas) -> se déphase contre le kick
-hat:    bembe | gain 0.12 | swing 56
-# son = clave son 3-2 (arrive en section b)
-clap:   son | gain 0.3 | in b
+kick:   tresillo                              # RYTHME DU MONDE : 3-3-2 cubain
+hat:    bembe | gain 0.12 | swing 56          # cloche africaine (12) -> déphase contre le kick
+clap:   son | gain 0.3 | in b                 # clave son 3-2 (section b)
 
-# ---------- SIEVE (Xenakis) : rythme par théorie des nombres, non périodique ----------
-# coups là où i mod 3 == 0  OU  i mod 5 == 2 -> motif complexe qui ne se répète pas
-perc:   sieve(16,3:0,5:2) | reson 320 0.4 | crush 5 | pan -0.3 | gain 0.12
+perc:   sieve(16,3:0,5:2) | crush 5 | pan -0.3 | gain 0.12   # SIEVE de Xenakis (théorie des nombres)
 
-# ---------- CONTOURS FAÇONNÉS : tu décris la FORME, le moteur écrit la ligne ----------
-# arc = une ARCHE : monte vers un sommet puis RÉSOUT sur la tonique
-lead:   arc(8) | pluck 0.7 | reverb 0.5 | delay 0.3 | gate 0.6 | gain 0.13 | hue 200
-# fall = une descente qui résout sur la tonique
-bass:   fall(8) | saw | oct 2 | lp 700 q 5 | gain 0.15 | hue 0
+lead:   arc(8) | pluck 0.7 | reverb 0.5 | delay 0.3 | gate 0.6 | gain 0.13 | hue 200  # CONTOUR : arche qui résout
+bass:   fall(8) | saw | oct 2 | lp 700 q 5 | gain 0.15        # descente qui résout sur la tonique
 
-# ---------- BRUIT ROSE 1/f : une mélodie « naturelle » au profil fractal ----------
-# (Voss-Clarke : la statistique 1/f de la nature et de la vraie musique)
-glass:  pink(16) | sine | fm 1 1.5 | reverb 0.5 | echo 8 0.4 | gate 0.5 | gain 0.09 | hue 280
+glass:  pink(16) | sine | fm 1 1.5 | reverb 0.5 | echo 8 0.4 | gate 0.5 | gain 0.09 | hue 280  # BRUIT ROSE 1/f (naturel)
 
-# ---------- DEVELOP : un motif qui SE TRANSFORME à chaque mesure (ne boucle plus) ----------
-# original -> déplacement -> séquence -> rétrograde -> inversion... (un arc de développement)
-theme:  1 3 5 1' 5 3 | develop | bell | detune 4 | reverb 0.6 | delay 0.3 | gain 0.1 | hue 60
+theme:  1 3 5 1' 5 3 | develop | bell | detune 4 | reverb 0.6 | gain 0.1 | hue 60  # DEVELOP : se transforme chaque mesure
 
-# ---------- PHASING Reich : la MÊME cellule en cycles premiers entre eux ----------
-# poly 12 contre poly 13 -> elles se déphasent en continu (jamais alignées)
-ph1@b:  1 4 5 3 | poly 12 | sine | reverb 0.4 | pan -0.35 | gate 0.5 | gain 0.06 | hue 160
-ph2@b:  1 4 5 3 | poly 13 | sine | reverb 0.4 | pan 0.35 | gate 0.5 | gain 0.06 | hue 320
+ph1@b:  1 4 5 3 | poly 12 | sine | reverb 0.4 | pan -0.35 | gate 0.5 | gain 0.06   # PHASING Reich : poly 12
+ph2@b:  1 4 5 3 | poly 13 | sine | reverb 0.4 | pan 0.35 | gate 0.5 | gain 0.06    # contre poly 13 -> se déphasent
 
-# ---------- ADDITIF + bourdon : un timbre inventé (partials) qui ancre l'oreille ----------
-# partials = amplitudes des harmoniques -> un instrument qui n'existe pas
-drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | lp 900 | reverb 0.7 | gate 4 | gain 0.05 | hue 30
+drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | lp 900 | reverb 0.7 | gate 4 | gain 0.05  # ADDITIF (timbre inventé)
 
-# ----------------------------------------------------------------
-#  À essayer :
-#  - Compare les hasards :  pink(16)  vs  walk(16)  vs  perlin(16)
-#  - Compare les formes  :  arc(8)  vs  rise(8)  vs  fall(8)
-#  - Microtonal : remplace la ligne 'key:' par une gamme en quarts de ton
-#  - Clique  ✨ développe  puis  ❓ explique  pour voir le score de nouveauté monter
-# ----------------------------------------------------------------
+# À essayer : pink(16) vs walk(16) vs perlin(16) · arc(8) vs rise(8) vs fall(8)
+# Microtonal : remplace la ligne key: par une gamme en quarts de ton.
 `;
   const PRESET_GROUPS=[
     ["★ Vitrines",["nouveautes","aeafx","mycelium","yaman","ballade","afx","mixtape","gu","evolution","spaces","newmusic","odyssey","frontier","composer","additive","evolve","harmony","pulse","monologue","taqsim","raga","gamelan","expose","autechre","claviers","basses","design","nova","atlas","aurora"]],
