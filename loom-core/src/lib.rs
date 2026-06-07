@@ -282,6 +282,30 @@ fn expand_shape_token(tok: &str) -> Option<Vec<String>> {
     }).collect())
 }
 
+/// `spectrum(n[,fund])` -> the first n harmonics of `fund` (default c2) as the
+/// nearest note names: the overtone series = spectral harmony (Grisey/Murail).
+fn expand_spectrum_token(tok: &str) -> Option<Vec<String>> {
+    fn note_midi(s: &str) -> Option<i32> {
+        let b = s.as_bytes();
+        let base = match b.first()?.to_ascii_lowercase() { b'c'=>0,b'd'=>2,b'e'=>4,b'f'=>5,b'g'=>7,b'a'=>9,b'b'=>11,_=>return None };
+        let mut i = 1; let mut semi = base as i32;
+        match b.get(1) { Some(b'#') => { semi += 1; i = 2; } Some(b'b') => { semi -= 1; i = 2; } _ => {} }
+        let oct: i32 = std::str::from_utf8(&b[i..]).ok()?.parse().ok()?;
+        Some(12 * (oct + 1) + semi)
+    }
+    let inner = tok.strip_prefix("spectrum(")?.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse().ok()?;
+    if n == 0 || n > 64 { return None; }
+    let fund = it.next().map(|s| s.trim()).filter(|s| !s.is_empty()).unwrap_or("c2");
+    let f0 = 440.0_f64 * 2f64.powf((note_midi(fund)? - 69) as f64 / 12.0);
+    Some((1..=n).map(|k| {
+        let freq = f0 * k as f64;
+        let midi = (69.0 + 12.0 * (freq / 440.0).log2()).round() as i32;
+        midi_to_name(midi)
+    }).collect())
+}
+
 /// `sieve(N,M:R,M:R,…)` -> Xenakis sieve: N steps, a hit where ANY residual class
 /// matches (i mod M == R). Number theory -> complex, non-periodic rhythms.
 fn expand_sieve_token(tok: &str) -> Option<Vec<String>> {
@@ -341,6 +365,7 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
         else if let Some(seq) = expand_rhythm_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_sieve_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_shape_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_spectrum_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -2706,6 +2731,14 @@ mod tests {
         // song / meter ignore the trailing comment
         assert_eq!(parse_song("song: a*2 b*2 # forme").iter().map(|(n,_)|n.clone()).collect::<Vec<_>>(), ["a","b"]);
         assert_eq!(parse_meter("meter: 7/8 # boiteux"), 3.5);
+    }
+
+    #[test]
+    fn spectrum_overtones() {
+        // the overtone series of c2 as nearest note names (spectral harmony)
+        assert_eq!(parse("m: spectrum(8,c2)")[0].tokens.join(" "), "c2 c3 g3 c4 e4 g4 bb4 c5");
+        assert_eq!(parse("m: spectrum(6,e2)")[0].tokens.join(" "), "e2 e3 b3 e4 ab4 b4");
+        assert_eq!(parse("m: spectrum(8)")[0].tokens.len(), 8); // default fund c2
     }
 
     #[test]
