@@ -106,7 +106,7 @@ const pieces = {
   'spectrum (Grisey)': 'm: spectrum(12,c1)\nm2: spectrum(8,e2) | bell',
   'tonnetz (neo-Riemann)': 'h: tonnetz(8,C,PLR) | saw\nh2: tonnetz(6,Am,LR) | sine',
   'hocket (tiling canon)': 'a: x . . x . . x . | hocket\nb: e(5,16) | hocket\nc: tresillo | hocket',
-  'bus routing (no-op onsets)': 'bus: drums gain 0.8 lp 1500 reverb 0.3\nkick: x . x . | bus drums\nsnare: . . x . | bus drums\nlead: 1 3 5 1\' | saw | bus synths',
+  'bus routing (no-op onsets)': 'room: fdn 0.85 4200\nbus: drums gain 0.8 lp 1500 reverb 0.3\nkick: x . x . | bus drums\nsnare: . . x . | bus drums\nlead: 1 3 5 1\' | saw | bus synths',
 };
 
 let total = 0, bad = 0;

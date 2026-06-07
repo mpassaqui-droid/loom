@@ -423,23 +423,42 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       delayL.connect(pL);pL.connect(echoSend);delayR.connect(pR);pR.connect(echoSend);}
     else{delayL.connect(echoSend);delayR.connect(echoSend);}
     bus.connect(delay);echoSend.connect(master);
-    // Algorithmic reverb (Schroeder/Moorer): 4 damped comb filters in parallel
-    // -> 2 all-pass diffusers in series. Richer & cheaper than the old convolver.
-    // `conv` stays the single input node (per-voice reverb sends connect to it).
+    // Algorithmic space reverb. Default = Schroeder/Moorer (4 damped combs -> 2
+    // all-pass). `room: fdn` upgrades to a Feedback Delay Network (Jot) — smoother
+    // and denser. `conv` stays the single input node (per-voice reverb sends + the
+    // SPACE knob both feed it). A Schroeder allpass diffuser, shared by both engines.
     conv=ctx.createGain();
-    const combSum=ctx.createGain(),combTimes=[0.0297,0.0371,0.0411,0.0437],combFb=0.8;
-    for(const ct of combTimes){const d=ctx.createDelay(1);d.delayTime.value=ct;
-      const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=3800;  // damping: highs decay faster (natural)
-      const g=ctx.createGain();g.gain.value=combFb;
-      conv.connect(d);d.connect(combSum);d.connect(lp);lp.connect(g);g.connect(d);}
+    spaceSend=ctx.createGain();spaceSend.gain.value=+$("space").value/100*0.9;
     const allpass=(time,gg)=>{const inp=ctx.createGain(),outp=ctx.createGain(),
       d=ctx.createDelay(1);d.delayTime.value=time;const fbk=ctx.createGain();fbk.gain.value=gg;
       const ffd=ctx.createGain();ffd.gain.value=-gg;
       inp.connect(d);inp.connect(ffd);ffd.connect(outp);d.connect(outp);d.connect(fbk);fbk.connect(d);
       return{input:inp,output:outp};};
-    let revNode=combSum;for(const ap of[[0.005,0.5],[0.0017,0.5]]){const a=allpass(ap[0],ap[1]);revNode.connect(a.input);revNode=a.output;}
-    spaceSend=ctx.createGain();spaceSend.gain.value=+$("space").value/100*0.9;
-    bus.connect(conv);revNode.connect(spaceSend);spaceSend.connect(master);
+    const room=parseRoom(editor.value);
+    if(room.type==="fdn"){
+      // Feedback Delay Network (Jot/Stautner-Puckette): N delay lines fed back through
+      // an ORTHOGONAL Hadamard matrix (lossless mixing) scaled by `decay`, each line
+      // damped by a lowpass (highs decay faster). Energy-preserving -> long, smooth,
+      // colourless tail. Output diffused by 2 all-passes. decay 0-0.97, damp in Hz.
+      const N=8,dt=[0.0431,0.0530,0.0617,0.0727,0.0843,0.0937,0.1051,0.1153];
+      const decay=Math.max(0,Math.min(0.97,room.decay!=null?room.decay:0.84)),damp=(room.damp!=null?room.damp:4200),norm=1/Math.sqrt(N);
+      const dl=[],lp=[],outSum=ctx.createGain();
+      const sign=(i,j)=>{let b=i&j,p=0;while(b){p^=1;b&=b-1;}return p?-1:1;};  // Hadamard sign = parity of (i AND j)
+      for(let i=0;i<N;i++){const d=ctx.createDelay(1);d.delayTime.value=dt[i];dl.push(d);
+        const f=ctx.createBiquadFilter();f.type="lowpass";f.frequency.value=damp;d.connect(f);lp.push(f);
+        d.connect(outSum);const ig=ctx.createGain();ig.gain.value=norm;conv.connect(ig);ig.connect(d);}
+      for(let i=0;i<N;i++)for(let j=0;j<N;j++){const g=ctx.createGain();g.gain.value=sign(i,j)*norm*decay;lp[i].connect(g);g.connect(dl[j]);}
+      let rev=outSum;for(const ap of[[0.0047,0.5],[0.0019,0.5]]){const a=allpass(ap[0],ap[1]);rev.connect(a.input);rev=a.output;}
+      bus.connect(conv);rev.connect(spaceSend);spaceSend.connect(master);
+    } else {
+      const combSum=ctx.createGain(),combTimes=[0.0297,0.0371,0.0411,0.0437],combFb=0.8;
+      for(const ct of combTimes){const d=ctx.createDelay(1);d.delayTime.value=ct;
+        const lpf=ctx.createBiquadFilter();lpf.type="lowpass";lpf.frequency.value=3800;  // damping: highs decay faster (natural)
+        const g=ctx.createGain();g.gain.value=combFb;
+        conv.connect(d);d.connect(combSum);d.connect(lpf);lpf.connect(g);g.connect(d);}
+      let revNode=combSum;for(const ap of[[0.005,0.5],[0.0017,0.5]]){const a=allpass(ap[0],ap[1]);revNode.connect(a.input);revNode=a.output;}
+      bus.connect(conv);revNode.connect(spaceSend);spaceSend.connect(master);
+    }
     scGain=ctx.createGain();scGain.gain.value=1;bus.connect(scGain);scGain.connect(master);
     // master glue: a gentle compressor/limiter so the mix sounds cohesive & loud
     comp=ctx.createDynamicsCompressor();
@@ -1440,7 +1459,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
-    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"].includes(name))continue;
+    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"].includes(name))continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
@@ -1851,6 +1870,12 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       if(c.reverb!=null&&conv){const s=ctx.createGain();s.gain.value=Math.min(1,c.reverb);tail.connect(s);s.connect(conv);}
       buses[name]=g;}
     return buses[name];}
+  // parse `room: TYPE [decay] [dampHz]` (space-reverb engine). type "fdn" -> FDN.
+  function parseRoom(text){const r={type:null};for(const raw of text.split("\n")){const line=raw.replace(/\s#.*$/,"").trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()!=="room")continue;
+    const w=line.slice(i+1).trim().split(/\s+/);r.type=(w[0]||"").toLowerCase();
+    const a=parseFloat(w[1]);if(!isNaN(a))r.decay=a;const b=parseFloat(w[2]);if(!isNaN(b))r.damp=b;}
+    return r;}
   // parse `bus: NAME gain G lp F hp F q Q reverb R` directives into busCfg
   function parseBuses(text){const m={};for(const raw of text.split("\n")){const line=raw.replace(/\s#.*$/,"").trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()!=="bus")continue;
@@ -5726,7 +5751,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
     "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",
     "- Markov melodies: | markov regenerates a voice's line from its OWN note-to-note transitions (a seeded Markov walk) — same notes, new order that still 'sounds like' the original. e.g. lead: 1 2 3 5 6 5 3 2 | markov. Use | markov N (N>=2) for higher-order chains that follow longer phrases more faithfully (more like the source), e.g. | markov 2.",
-    "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords. DAW BUSES: | bus NAME routes a voice into a shared submix bus (e.g. put | bus drums on kick/snare/hat to group them) — one fader controls the group in the MIX panel. Great for balancing drums vs synths. Configure a bus with a bus: directive: bus: drums gain 0.8 lp 1500 reverb 0.3 (gain, lp/hp shared filter +q, reverb send) — persisted in the code.",
+    "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords. DAW BUSES: | bus NAME routes a voice into a shared submix bus (e.g. put | bus drums on kick/snare/hat to group them) — one fader controls the group in the MIX panel. Great for balancing drums vs synths. Configure a bus with a bus: directive: bus: drums gain 0.8 lp 1500 reverb 0.3 (gain, lp/hp shared filter +q, reverb send) — persisted in the code. SPACE REVERB ENGINE: add room: fdn 0.85 4200 for a lush Feedback-Delay-Network hall (Jot — smoother/denser than the default Schroeder); decay 0-0.97, damp in Hz. The SPACE knob and per-voice | reverb sends feed it.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
     "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",
@@ -6103,7 +6128,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
-  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus",
+  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus","room",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
     "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","warp","stretch","freeze","adaptive","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
@@ -6248,7 +6273,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // vary the drums, bump the seed — instant novelty without writing code. Undoable.
   function developAll(){
     if(!editor.value.trim()){log("[ ✨ ] écris ou charge d'abord un morceau","err");return;}
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"]);
     const hasVar=s=>/\|\s*(develop|mutate|shuffle|every|iter|markov|stutter)\b/.test(s)||/\b(walk|drunk|ca|logistic|perlin|lsys|recaman|cantor)\s*\(/.test(s);
     let nMel=0,nDr=0;
     const out=editor.value.split("\n").map(line=>{
@@ -6279,7 +6304,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     const GENS=["walk","drunk","pink","perlin","gendy","logistic"];
     const RHY=["tresillo","cinquillo","son","rumba","bossa","bembe","baiao","maqsum","ayoub","samba","montuno","shiko"];
     const VERBS=["| develop","| rev","| every 2 rot 3","| mutate 30","| shuffle","| jux rev","| palindrome"];
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"]);
     const R=Math.random,pick=a=>a[Math.floor(R()*a.length)];
     const mutLine=(code,head)=>{let L=code;
       L=L.replace(/\b(walk|drunk|pink|perlin|gendy|logistic)\(/g,m=>R()<0.5?pick(GENS)+"(":m);   // swap a generator
@@ -6302,7 +6327,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // 🧬× CROISER : enfant = ce morceau (parent A) × un autre (parent B), voix/réglages piochés chez l'un ou l'autre
   function crossPiece(){
     if(!editor.value.trim()){log("[ 🧬× ] écris ou charge d'abord un morceau","err");return;}
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"]);
     const keys=Object.keys(PRESETS||{});if(!keys.length){log("[ 🧬× ] aucun second parent disponible","err");return;}
     const Bname=keys[Math.floor(Math.random()*keys.length)];
     const split=txt=>{const dirs={},voices={};for(const raw of txt.split("\n")){const t=raw.trim();if(!t||t.startsWith("#"))continue;
