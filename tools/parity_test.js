@@ -98,6 +98,7 @@ const pieces = {
   'degrade+chance (seeded drops)': 'seed: 11\nh: x x x x x x x x x x x x x x x x | degrade 40\np: 1 3 5 1\' | chance 0.6\nk: x x x x | degrade 25',
   'develop (motivic arc)': 'seed: 1\nkey: c major\nlead: 1 2 3 5 | develop\nhh: x . x x . x . x | develop',
   'rythmes du monde': 'kick: tresillo\nhat: bembe\nclap: son\nperc: baiao',
+  'sieve (Xenakis)': 'kick: sieve(16,3:0,5:2)\nhat: sieve(13,2:0,3:1)\nperc: sieve(12,4:1,6:3)',
 };
 
 let total = 0, bad = 0;

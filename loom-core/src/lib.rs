@@ -263,6 +263,23 @@ fn expand_bin_token(tok: &str) -> Option<Vec<String>> {
     Some(format!("{:b}", v).chars().map(|c| if c == '1' { "x".into() } else { ".".into() }).collect())
 }
 /// Expand bar/seed-INDEPENDENT generative tokens in place.
+/// `sieve(N,M:R,M:R,…)` -> Xenakis sieve: N steps, a hit where ANY residual class
+/// matches (i mod M == R). Number theory -> complex, non-periodic rhythms.
+fn expand_sieve_token(tok: &str) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("sieve(")?.strip_suffix(')')?;
+    let mut parts = inner.split(',');
+    let n: usize = parts.next()?.trim().parse().ok()?;
+    if n == 0 || n > 1024 { return None; }
+    let classes: Vec<(usize, usize)> = parts.filter_map(|p| {
+        let (m, r) = p.split_once(':')?;
+        let m: usize = m.trim().parse().ok()?;
+        let r: usize = r.trim().parse().ok()?;
+        if m == 0 { None } else { Some((m, r % m)) }
+    }).collect();
+    if classes.is_empty() { return None; }
+    Some((0..n).map(|i| if classes.iter().any(|&(m, r)| i % m == r) { "x".to_string() } else { ".".to_string() }).collect())
+}
+
 /// World-rhythm bank: named timelines (clave, tresillo, bembe…) expand to x/.
 /// patterns. The SAME table lives in the JS engine, so parity is automatic.
 pub fn world_rhythm(name: &str) -> Option<&'static str> {
@@ -303,6 +320,7 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
         else if let Some(seq) = expand_trib_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_bin_token(&t) { out.extend(seq); }
         else if let Some(seq) = expand_rhythm_token(&t) { out.extend(seq); }
+        else if let Some(seq) = expand_sieve_token(&t) { out.extend(seq); }
         else { out.push(t); }
     }
     out
@@ -2601,6 +2619,15 @@ mod tests {
         // consecutive bars differ -> genuine evolution
         let bars: Vec<String> = (0..6).map(|b| apply_verb(&t, "develop", b, 0).join(" ")).collect();
         assert!(bars.iter().collect::<std::collections::HashSet<_>>().len() >= 5);
+    }
+
+    #[test]
+    fn sieve_expands() {
+        // even positions
+        assert_eq!(parse("k: sieve(8,2:0)")[0].tokens.join(" "), "x . x . x . x .");
+        // union of (i%3==0) and (i%4==1) over 12 steps
+        assert_eq!(parse("k: sieve(12,3:0,4:1)")[0].tokens.join(" "), "x x . x . x x . . x . .");
+        assert!(expand_sieve_token("sieve(0)").is_none());
     }
 
     #[test]
