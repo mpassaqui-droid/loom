@@ -1644,6 +1644,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     const f=Math.max(2,n/6);let o=[];for(let i=0;i<n;i++){const x=i/f,x0=Math.floor(x),tt=x-x0,sm=tt*tt*(3-2*tt),val=h(x0)*(1-sm)+h(x0+1)*sm;
       o.push(String(Math.min(7,Math.max(1,Math.floor(val*7)+1))));}return o;}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
+    if(v._clipVerb)t=applyOne(t,v._clipVerb,bar);  // live Session clip-slot variation (quantised, not written to code)
     let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok)||expandPi(tok)||expandGolden(tok)||expandCollatz(tok)||expandRecaman(tok)||expandLogistic(tok)||expandCantor(tok)||expandTrib(tok)||expandPerlin(tok)||expand1f(tok,bar)||expandGendy(tok,bar);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
@@ -1901,7 +1902,17 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       b.addEventListener("click",()=>{pendingClip=PRESETS[k];b.classList.add("on");
         log("[ ▦ ] clip « "+k+" » armé — lancé au prochain temps"+(playing?"":" (lance RUN)"),"ai");
         if(!playing){editor.value=PRESETS[k];run();pendingClip=null;}});
-      el.appendChild(b);}}
+      el.appendChild(b);}
+    // per-voice clip slots (Session 2D): vary ONE voice live, quantised, not written to code
+    if(voices&&voices.length){const sep=document.createElement("div");
+      sep.style.cssText="width:100%;font-size:12px;color:var(--dim);margin:7px 0 2px";sep.textContent="— clips par voix (variation live, quantisée) —";el.appendChild(sep);
+      const SLOTS=[["orig",""],["dev","develop"],["rev","rev"],["mut","mutate 30"],["8va","add 7"],["½","thin 2"],["×2","fast 2"]];
+      for(const v of voices){if(v.section)continue;const row=document.createElement("div");row.style.cssText="white-space:nowrap;margin:2px 0";
+        const nm=document.createElement("span");nm.textContent=v.name;nm.style.cssText="display:inline-block;width:74px;font-size:12px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;color:hsl("+(v.hue!=null?v.hue:voiceHue(v.name))+",60%,72%)";row.appendChild(nm);
+        const rfs=[];SLOTS.forEach(([lbl,vb])=>{const b=document.createElement("button");b.className="tiny";b.textContent=lbl;b.style.cssText="font-size:11px;padding:1px 5px;margin:1px;cursor:pointer";
+          const rf=()=>{const on=(v._clipVerb||"")===vb;b.style.background=on?"var(--cyan)":"transparent";b.style.color=on?"#06120a":"var(--dim)";};rf();rfs.push(rf);
+          b.addEventListener("click",()=>{v._clipVerb=vb||null;rfs.forEach(f=>f());});row.appendChild(b);});
+        el.appendChild(row);}}}
   function tick(){if(!playing)return;while(nextBarTime<ctx.currentTime+LOOKAHEAD){
       if(pendingClip!=null){editor.value=pendingClip;recompile();barCount=0;transportStart=nextBarTime;buildTimeline();pendingClip=null;
         const cl=$("clips");if(cl&&cl.querySelectorAll)cl.querySelectorAll(".on").forEach(b=>b.classList.remove("on"));log("[ ▶ ] clip lancé","ai");}
