@@ -5606,11 +5606,15 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
   function playGroups(groups,gap,hold){if(!ctx)initAudio();if(!ctx)return;if(ctx.state==="suspended")ctx.resume();
     gap=gap||0.4;hold=hold||0.5;
     groups.forEach((g,i)=>setTimeout(()=>{g.forEach(m=>liveNoteOn(m,86));setTimeout(()=>g.forEach(m=>liveNoteOff(m)),hold*1000);},i*gap*1000));}
-  // 👂 EAR-TRAINING : the teacher plays an interval, you guess (typed in VIBE)
-  let earQuiz=null;const EAR=["octave","quinte","quarte","tierce","triton","seconde","sixte"];
-  function earRound(){const pick=EAR[Math.floor(Math.random()*EAR.length)];earQuiz={answer:pick};
-    const d=loreDemo(pick);if(d)playGroups(d.groups,d.gap,d.hold);
-    log("[ 👂 ] devine l'intervalle — écris ta réponse dans VIBE (octave/quinte/quarte/tierce/triton/seconde/sixte) · 👂 reclique = réécoute","ai");}
+  // 👂 EAR-TRAINING : the teacher plays an interval OR a chord, you guess (typed in VIBE)
+  let earQuiz=null;
+  const EAR_INT=["octave","quinte","quarte","tierce","triton","seconde","sixte"];
+  const EAR_CH=["maj7","m7","dim","sus4","7"];
+  const EAR_ALL=[...EAR_INT,...EAR_CH];
+  function earRound(){const pick=EAR_ALL[Math.floor(Math.random()*EAR_ALL.length)],cat=EAR_INT.includes(pick)?"intervalle":"accord";
+    earQuiz={answer:pick,cat};const d=loreDemo(pick);if(d)playGroups(d.groups,d.gap,d.hold);
+    const opts=(cat==="intervalle"?EAR_INT:EAR_CH).join("/");
+    log("[ 👂 ] devine l'"+cat+" — écris ta réponse dans VIBE ("+opts+") · 👂 reclique = réécoute","ai");}
   function gradeEar(g){if(g===earQuiz.answer){log("[ 👂 ✅ ] bravo — c'était bien « "+g+" » !"+(LORE[g]?"  ("+LORE[g]+")":""),"ai");earQuiz=null;}
     else{const d=loreDemo(earQuiz.answer);if(d)playGroups(d.groups,d.gap,d.hold);log("[ 👂 ❌ ] pas tout à fait — réécoute. (clique ?"+earQuiz.answer+" pour la réponse)","err");}}
   function loreDemo(term){
@@ -5635,7 +5639,7 @@ drone:  1 . . . . . . . | saw | partials 1 0 0.5 0 0.3 | unison 3 | detune 8 | l
     catch(_){log("[ prof ] indisponible (besoin d'internet)","err");}}
   async function vibe(){const req=$("vibeIn").value.trim();if(!req){log("[ vibe ] ecris d'abord ce que tu veux","err");return;}
     if(req[0]==="?"){lookup(req.slice(1));return;}
-    if(earQuiz&&EAR.includes(deburr(req.toLowerCase()))){gradeEar(deburr(req.toLowerCase()));$("vibeIn").value="";return;}  // ear-quiz answer
+    if(earQuiz&&EAR_ALL.includes(deburr(req.toLowerCase()))){gradeEar(deburr(req.toLowerCase()));$("vibeIn").value="";return;}  // ear-quiz answer
     const key=$("apiKey").value.trim();log("[ vibe ] reflexion... (jusqu'a 30s)","ai");
     const btn=$("vibeBtn");btn.disabled=true;const old=btn.textContent;btn.textContent="...";
     const userMsg="Current LOOM code:\n"+editor.value+"\n\nRequest: "+req+"\n\nReturn the full updated LOOM program. Code only.";
