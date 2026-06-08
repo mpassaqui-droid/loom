@@ -2016,7 +2016,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
         let t0=barT+i*step+sh+(v.nudge||0)*step,vel=1;if(i%2===1)t0+=sw*step;  // nudge: per-voice microtiming (push/lay-back)
         {const fa=v.humanize!=null?v.humanize:feelAmt;if(fa){t0+=(rng(seed,bar,v.name,i*3+7)-0.5)*fa*0.016;vel=1+(rng(seed,bar,v.name,i*3+11)-0.5)*fa*0.5;}}
         if(groove&&GROOVES[groove])t0+=(GROOVES[groove][i%GROOVES[groove].length]||0)*step;  // groove template microtiming
-        if(v.dyn&&n>1)vel*=0.35+0.65*(v.dyn>0?i/(n-1):1-i/(n-1));  // cresc/dim: ramp velocity across the bar
+        if(v.dyn&&n>1)vel*=0.15+0.85*(v.dyn>0?i/(n-1):1-i/(n-1));  // cresc/dim: ramp velocity across the bar (deep range so it stays audible through the master comp)
         // sub-sequence [a b ...]: subdivide this step among the children (recursive)
         if(tok.startsWith("[")){scheduleGroup(v,tok,bar,t0,step,vel);continue;}
         const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,i)>=tm[1])continue;
