@@ -6140,7 +6140,9 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
       let body=lines[li],comment="";const cm=body.search(/\s#/);if(cm>=0){comment=body.slice(cm);body=body.slice(0,cm);}
       lines[li]=body.slice(0,idx)+": "+n+(comment?" "+comment.trim():"");editor.value=lines.join("\n");return;}
     lines.unshift("bpm: "+n);editor.value=lines.join("\n");}
-  function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
+  function liveEdit(){codeView=buildCodeView(editor.value);
+    {const bp=parseBpm(editor.value);if(bp)baseBpm=bp;syncBpmField();}  // reflect a bpm: edit in the field even when STOPPED
+    clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
   // auto-save the editor to localStorage (debounced) so you never lose your work on reload/crash
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
