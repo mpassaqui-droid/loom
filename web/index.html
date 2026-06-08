@@ -248,7 +248,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
       <option value="ja">日本語</option><option value="ru">Русский</option></select>
     <span id="google_translate_element" class="notranslate" translate="no" style="display:none;vertical-align:middle"></span>
     <button class="tiny go" id="tapBtn" title="tape le rythme pour régler le tempo">&#9678; TAP</button>
-    <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="240"></span>
+    <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="300"></span>
     <span id="vu" title="niveau master (vert→ambre→rouge=saturation)" style="display:inline-block;width:90px;height:13px;border:1px solid var(--dim);border-radius:3px;overflow:hidden;vertical-align:middle"><span id="vuBar" style="display:block;height:100%;width:0;background:var(--cyan);transition:width .06s"></span></span>
     <span id="lufs" class="opt" title="loudness (LUFS~, cible streaming ≈ -14) · crête dB · rouge = écrêtage" style="font-size:14px;margin-left:6px;vertical-align:middle;min-width:130px;display:inline-block">LUFS~ −∞ · pk −∞</span>
   </div>
@@ -633,7 +633,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
     initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ render ] rien à rendre - écris un morceau","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(300,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;
     const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
     if(!OAC){log("[ render ] non supporté par ce navigateur","err");return;}
@@ -661,7 +661,7 @@ bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
   async function renderStems(){initAudio();
     const parsed=parse(editor.value);if(!parsed.length){log("[ stems ] rien à rendre","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);
-    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
+    const bpm=parseBpm(editor.value)||Math.max(40,Math.min(300,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
     const nbars=song.reduce((a,s)=>a+s[1],0)||16;const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC){log("[ stems ] non supporté","err");return;}
     const btn=$("stemsBtn");if(btn)btn.disabled=true;
     try{await Promise.all(voices.filter(v=>v.sample).map(v=>loadSample(v.sample)));}catch(_){}
@@ -3030,7 +3030,7 @@ void main(){
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     codeView=buildCodeView(editor.value);
-    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(240,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);
+    voices.forEach(v=>{if(v.sample)loadSample(v.sample);if(v.vocode)loadSample(v.vocode);});initMidi();buildGrid();buildTimeline();const bpm=parseBpm(editor.value)||Math.max(40,Math.min(300,parseInt($("bpm").value,10)||120));baseBpm=bpm;meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);keyMap=parseKeyMap(editor.value);groove=parseGroove(editor.value);loopSec=parseLoop(editor.value);cycleLen=(60/bpm)*meterBeats;tempoMap=parseTempoMap(editor.value);syncBpmField();
     // sync the ping-pong to an 1/8-note offset (R slightly longer for the bounce feel)
     if(delayL){delayL.delayTime.value=cycleLen/8;delayR.delayTime.value=cycleLen/8*1.5;}
     if(!playing){playing=true;barCount=0;nextBarTime=ctx.currentTime+0.1;transportStart=nextBarTime;
@@ -6122,7 +6122,24 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   let recompTimer=null;
   function recompile(){const parsed=parse(editor.value);if(!parsed.length)return;
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
+    // tempo: a bpm:/tempo: directive in the code is the source of truth. Recompute it
+    // here so editing it LIVE takes effect without a restart, and mirror it into the
+    // BPM field so the display always matches what plays (code -> field link).
+    meterBeats=parseMeter(editor.value);accel=parseAccel(editor.value);tempoMap=parseTempoMap(editor.value);
+    baseBpm=parseBpm(editor.value)||baseBpm;
+    if(!accel&&!(tempoMap&&Object.keys(tempoMap).length))cycleLen=(60/baseBpm)*meterBeats;
+    syncBpmField();
     voices.forEach(v=>{if(v.sample)loadSample(v.sample);});buildGrid();buildTimeline();}
+  // keep the BPM field showing the real current tempo (unless you're typing in it)
+  function syncBpmField(){const e=$("bpm");if(e&&document.activeElement!==e)e.value=Math.round(baseBpm);}
+  // write the tempo back into a bpm: directive (create at top if absent) so the field
+  // and the code agree and the value persists — same pattern as the mixer/bus faders.
+  function setBpmDirective(n){const lines=editor.value.split("\n");
+    for(let li=0;li<lines.length;li++){const idx=lines[li].indexOf(":");if(idx<0)continue;
+      const h=lines[li].slice(0,idx).trim().toLowerCase();if(h!=="bpm"&&h!=="tempo")continue;
+      let body=lines[li],comment="";const cm=body.search(/\s#/);if(cm>=0){comment=body.slice(cm);body=body.slice(0,cm);}
+      lines[li]=body.slice(0,idx)+": "+n+(comment?" "+comment.trim():"");editor.value=lines.join("\n");return;}
+    lines.unshift("bpm: "+n);editor.value=lines.join("\n");}
   function liveEdit(){codeView=buildCodeView(editor.value);clearTimeout(recompTimer);recompTimer=setTimeout(()=>{if(playing)recompile();},280);}
   // auto-save the editor to localStorage (debounced) so you never lose your work on reload/crash
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
@@ -6381,6 +6398,13 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   bind("eqLow","vEqLow",v=>{if(mEqLow)mEqLow.gain.value=+v;});
   bind("eqMid","vEqMid",v=>{if(mEqMid)mEqMid.gain.value=+v;});
   bind("eqHigh","vEqHigh",v=>{if(mEqHigh)mEqHigh.gain.value=+v;});
+  // BPM field <-> code two-way link. While dragging/typing: change the tempo LIVE.
+  // On commit (blur/Enter): write it back into the bpm: directive so it persists and
+  // the code & field agree (otherwise a bpm: line in the code would override the field).
+  {const be=$("bpm");if(be){
+    const apply=n=>{baseBpm=n;if(!accel&&!(tempoMap&&Object.keys(tempoMap).length))cycleLen=(60/n)*meterBeats;};
+    be.addEventListener("input",()=>apply(Math.max(40,Math.min(300,parseInt(be.value,10)||baseBpm))));
+    be.addEventListener("change",()=>{const n=Math.max(40,Math.min(300,parseInt(be.value,10)||120));be.value=n;apply(n);setBpmDirective(n);liveEdit();});}}
   // MIDI LEARN : clic sur un potard pour l'armer, puis bouge un CC pour le lier
   for(const id of ["vol","swing","echo","space","eqLow","eqMid","eqHigh","bpm"]){const el=$(id);
     if(el)el.addEventListener("click",()=>{if(midiLearn){learnTarget=id;log("[ learn ] bouge un potard MIDI pour lier « "+id+" »","ai");}});}
