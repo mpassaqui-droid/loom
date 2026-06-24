@@ -1,0 +1,62 @@
+# ===============================================================
+#  LOOM — SET DEMO : (presque) tout ce qu'on a construit.
+#  Chaque ligne montre une fonctionnalite (voir le commentaire).
+#  > Clique RUN. Puis SCENE (plein ecran). RENDER = export WAV.
+# ===============================================================
+
+# ---------- DIRECTIVES GLOBALES ----------
+seed:  12        # graine : rend TOUT l'aleatoire reproductible
+duck:  62        # sidechain : tout pompe sur le kick (groove techno)
+feel:  24        # humanisation : micro-decalages timing/velocite -> ca respire
+key:   a minor   # tonalite -> on ecrit en degres 1-7 (1 = la)
+song:  intro*8 build*8 drop*16 break*8 drop*16 peak*16 outro*8   # arrangement long
+
+# ---------- DRUMS (synthese + samples) ----------
+# kick : @section = pattern DIFFERENT par section (le morceau evolue)
+kick:       x . . . x . . . x . . . x . . . | sample bd | in build drop peak outro
+kick@drop:  x . . . x . . x x . x . x . . . | sample bd
+clap:       . . . . x . . . . . . . x . . . | sample cp | gain 0.4 | in drop peak outro
+# hat : rythme EUCLIDIEN e(k,n) + AUTO-PAN par SIGNAL (la sinus ondule -0.6..0.6)
+hat:        e(11,16) | sample hh | gain 0.18 | pan sine 1 -0.6 0.6 | in build drop break peak outro
+# perc : AUTOMATE CELLULAIRE de Wolfram -> mute chaque mesure, jamais pareil
+perc:       ca(30,16) | sample perc | gain 0.13 | in drop peak
+# ghost : PROBABILITE par pas (x?40 = 40%) + verbe SOMETIMES (parfois double)
+ghost:      . x?40 . x?30 . x?40 . x?30 | sample rim | gain 0.16 | pan 0.3 | sometimes fast 2 | in drop peak
+# build : FILL avec RATCHETS (x*N = N frappes dans un pas)
+fill@build: . . . . . . . . . . . . x*2 x*3 x*4 x*2 | sample sd | gain 0.3
+# riser : filtre qui s'ouvre par AUTOMATION (lp 200..6000 sur 8 mesures)
+riser@build: 1 . . . . . . . | saw | unison 5 | lp 200..6000 | over 8 | env 0.3 0.3 0.9 0.5 | reverb 0.4 | gain 0.1
+
+# ---------- BASS (LAYERING : sub + medium) ----------
+# sub : sinus tres grave (le poids, octave 1)
+sub:        1 . . . 5, . 1 . . . 1 . 6, . . . | sine | oct 1 | env 0.005 0.1 0.3 0.07 | gain 0.42 | in drop peak outro
+# reese : super-saw (UNISON+DETUNE) + FM + DRIVE + EQ + filtre qui ONDULE (signal)
+reese:      1 . . . 5, . 1 . . . 1 . 6, . . . | saw | unison 3 | detune 18 | fm 0.5 2 | lp sine 0.25 400 2200 | q 6 | drive 0.4 | eq 3 -1 -3 | oct 2 | gain 0.13 | in drop peak
+
+# ---------- HARMONIE ----------
+# arp : ACCORDS ROMAINS diatoniques (i VI III VII) joues en ARPEGE
+arp@drop:   i . . . VI . . . III . . . VII . . . | arp up | saw | lp 1500 q 5 | env 0.01 0.1 0.3 0.2 | reverb 0.3 | gain 0.12
+# chord : VARIATION A/B <a/b/c> -> un accord different a chaque mesure
+chord@peak: <Am/Dm/F/E> . . . . . . . . . . . . . . . | sine | env 0.05 0.3 0.6 0.4 | reverb 0.4 | gain 0.12
+# keys : ACCORDS ETENDUS + RENVERSEMENT (slash C/G) + e-piano FM
+keys@peak:  Am9 . . . Fmaj7 . . . C/G . . . E7 . . . | sine | fm 1 2 | env 0.01 0.3 0.4 0.4 | reverb 0.4 | gain 0.12
+
+# ---------- MELODIE ----------
+# lead : ALTERATION chromatique (7# = sensible) + DELAY + reverb
+lead@drop:  1 . 5 . 1' . 7# . 5 . 4 . 3 . 1 . | tri | lp 1800 | delay 0.3 | reverb 0.4 | gain 0.14
+# bells : synthese FM (cloche) + suite de FIBONACCI comme rythme
+bells@peak: fib(16) | sine | fm 3.5 4 | env 0.005 0.5 0 0.4 | reverb 0.5 | delay 0.4 | gain 0.1 | pan -0.3
+
+# ---------- BREAK : POLYMETRIE / PHASING facon Steve Reich ----------
+# deux voix identiques a vitesses legerement differentes -> elles se dephasent
+ph1@break:  1 2 3 5 6 | poly 16 | tri | lp 1200 | reverb 0.5 | gain 0.1 | pan -0.3
+ph2@break:  1 2 3 5 6 | poly 17 | tri | lp 1200 | reverb 0.5 | gain 0.1 | pan 0.3
+
+# ---------- PADS (nappes lush, presentes partout) ----------
+pad:        Am9 . . . . . . . F . . . . . . . | saw | unison 4 | lp 900 | env 0.9 0.6 0.7 2.5 | reverb 0.6 | gain 0.1
+pad2:       Am9 . . . . . . . F . . . . . . . | sine | oct 4 | env 1.2 0.8 0.7 2.5 | reverb 0.6 | gain 0.06
+
+# Aussi dispo (a essayer !) :
+#   key: d bayati   -> maqam MICROTONAL (vrais quarts de ton)
+#   | lfo cutoff 4 0.5 , morse(16) , | midi 1 (vers ton DAW)
+#   charge tes propres sons (panneau "mes sons") , 48 themes (menu "look")
