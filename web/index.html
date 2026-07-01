@@ -8,11 +8,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0b0f0b;--green:#5cff4a;--dim:#2b6b22;--glow:#9dff8a;--amber:#ffc04a;--cyan:#5fe6ff;}
+  :root{--bg:#0b0f0b;--green:#5cff4a;--dim:#2b6b22;--glow:#9dff8a;--amber:#ffc04a;--cyan:#5fe6ff;
+    --font-mono:'VT323',monospace;--font-display:'Press Start 2P',monospace;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{
     background:var(--bg);color:var(--green);
-    font-family:'VT323',monospace;font-size:24px;line-height:1.35;
+    font-family:var(--font-mono);font-size:24px;line-height:1.35;
     padding:22px 16px 48px;max-width:620px;margin:0 auto;
     text-shadow:0 0 2px rgba(92,255,74,0.4);
   }
@@ -23,6 +24,28 @@
   body.flat::after{display:none;}
   body.flat{text-shadow:none;}
   body.flat h1{text-shadow:none;}
+  /* ── APPEARANCE AXES (indépendants du thème) — police · densité · effet ── */
+  /* Police : Nette (system mono, offline) · Machine (Courier). Rétro = VT323 par défaut. */
+  body.font-clean{--font-mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,Consolas,monospace;
+    --font-display:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:17px;letter-spacing:0;}
+  body.font-clean textarea{font-size:15px;line-height:1.6;}
+  body.font-clean #console{font-size:14px;} body.font-clean .sub{font-size:14px;}
+  body.font-clean .head{font-size:13px;} body.font-clean h1{font-size:24px;letter-spacing:2px;}
+  body.font-clean button{font-size:12px;} body.font-clean #stageEditor{font-size:15px;}
+  body.font-machine{--font-mono:'Courier New',Courier,monospace;--font-display:'Courier New',Courier,monospace;font-size:18px;}
+  body.font-machine textarea{font-size:16px;line-height:1.55;}
+  body.font-machine #console{font-size:15px;} body.font-machine button{font-size:13px;font-weight:bold;}
+  body.font-machine h1{font-size:26px;} body.font-machine #stageEditor{font-size:16px;}
+  /* Densité : Compact (serré) · Aéré (espacé). Défaut = l'actuel. */
+  body.dense{line-height:1.18;} body.dense textarea{line-height:1.3;} body.dense .card{padding:9px;margin-bottom:9px;}
+  body.dense .head{margin-bottom:5px;} body.dense .transport{gap:6px;margin-bottom:10px;} body.dense .sub{margin-bottom:10px;}
+  body.cozy{line-height:1.6;} body.cozy textarea{line-height:1.85;} body.cozy .card{padding:20px;margin-bottom:22px;}
+  body.cozy .transport{gap:14px;margin-bottom:24px;} body.cozy .sub{margin-bottom:28px;}
+  /* Effet : force plat / CRT (scanlines+glow) / grain — par-dessus le flag du thème. */
+  body.fx-flat::after{display:none;} body.fx-flat,body.fx-flat h1{text-shadow:none;}
+  body.fx-crt::after{display:block!important;} body.fx-crt{text-shadow:0 0 2px var(--dim);}
+  body.fx-grain::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:98;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
   /* desktop: spread panels across the width (mobile stays a single column) */
   @media (min-width:980px){
     body{max-width:1320px;}
@@ -38,7 +61,7 @@
     textarea{height:300px;}
   }
   @media (min-width:1500px){ body{max-width:1560px;} textarea{height:340px;} }
-  h1{font-family:'Press Start 2P',monospace;font-size:26px;color:var(--glow);
+  h1{font-family:var(--font-display);font-size:26px;color:var(--glow);
     text-shadow:0 0 12px var(--green);letter-spacing:3px;margin-bottom:6px;}
   .sub{color:var(--dim);font-size:20px;margin-bottom:20px;}
   .blink{animation:blink 1.1s steps(1) infinite;}@keyframes blink{50%{opacity:0;}}
@@ -49,7 +72,7 @@
   .card.cyan .head{color:var(--cyan);}
 
   textarea{width:100%;height:210px;background:transparent;border:none;outline:none;resize:vertical;
-    color:var(--glow);font-family:'VT323',monospace;font-size:23px;line-height:1.5;caret-color:var(--amber);
+    color:var(--glow);font-family:var(--font-mono);font-size:23px;line-height:1.5;caret-color:var(--amber);
     position:relative;z-index:1;padding:4px 6px;box-sizing:border-box;}
   /* live "playhead" boxes drawn behind the editor text (transparent textarea on top) */
   #editGlow{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
@@ -57,12 +80,12 @@
   #stageGlow{position:absolute;inset:0;z-index:301;pointer-events:none;}
   #stageEditor{position:absolute;left:0;top:0;width:100%;height:100%;z-index:302;
     background:transparent;border:none;outline:none;resize:none;box-sizing:border-box;padding:18px 20px;
-    color:#eaffe0;font-family:'VT323',monospace;font-size:21px;line-height:1.5;caret-color:var(--amber);
+    color:#eaffe0;font-family:var(--font-mono);font-size:21px;line-height:1.5;caret-color:var(--amber);
     text-shadow:0 0 5px rgba(0,0,0,.95),0 1px 3px rgba(0,0,0,.95),0 0 14px rgba(0,0,0,.7);}
 
   /* transport */
   .transport{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px;}
-  button{font-family:'Press Start 2P',monospace;font-size:13px;cursor:pointer;
+  button{font-family:var(--font-display);font-size:13px;cursor:pointer;
     background:var(--bg);color:var(--green);border:1px solid var(--green);
     padding:14px 18px;text-shadow:0 0 4px var(--green);transition:.08s;border-radius:3px;}
   button:active,button:hover{background:var(--green);color:var(--bg);text-shadow:none;}
@@ -71,7 +94,7 @@
   button.go{border-color:var(--cyan);color:var(--cyan);text-shadow:0 0 4px var(--cyan);}
   button.go:active,button.go:hover{background:var(--cyan);color:var(--bg);}
   select.menu{background:var(--bg);color:var(--green);border:1px solid var(--dim);
-    font-family:'VT323',monospace;font-size:19px;padding:8px 10px;border-radius:3px;cursor:pointer;}
+    font-family:var(--font-mono);font-size:19px;padding:8px 10px;border-radius:3px;cursor:pointer;}
   select.menu:hover{border-color:var(--green);}
   button.rec{border-color:#ff5a5a;color:#ff5a5a;text-shadow:0 0 4px #ff5a5a;}
   button.rec:active,button.rec:hover{background:#ff5a5a;color:var(--bg);}
@@ -181,6 +204,14 @@
     <span id="themeSwatches" title="clique un look — survole pour l'aperçu" style="display:flex;gap:5px;overflow-x:auto;max-width:64vw;padding:3px 1px;align-items:center;scrollbar-width:thin"></span>
     <span id="themeName" style="color:var(--dim);font-size:13px;min-width:84px;white-space:nowrap">—</span>
     <button class="tiny" id="randTheme" title="thème au hasard">&#9860;</button>
+    <span style="display:inline-flex;gap:6px;align-items:center;margin-left:6px;flex-wrap:wrap">
+      <select id="fontSel" class="menu" title="police (indépendante du thème)" style="font-size:13px;padding:4px 6px">
+        <option value="retro">Aa Rétro</option><option value="clean">Aa Nette</option><option value="machine">Aa Machine</option></select>
+      <select id="densSel" class="menu" title="densité de l'interface" style="font-size:13px;padding:4px 6px">
+        <option value="normal">&#9636; Normale</option><option value="dense">&#9636; Compacte</option><option value="cozy">&#9636; Aérée</option></select>
+      <select id="fxSel" class="menu" title="effet visuel (par-dessus le thème)" style="font-size:13px;padding:4px 6px">
+        <option value="auto">&#10022; Auto</option><option value="flat">&#10022; Plat</option><option value="crt">&#10022; CRT</option><option value="grain">&#10022; Grain</option></select>
+    </span>
     <label id="rustToggleWrap" title="EXPÉRIMENTAL : le moteur Rust (WASM) décide les notes/le timing, la synthèse/FX restent en JS. Décoché = moteur JS habituel." style="margin-left:14px;color:var(--dim);font-size:15px;display:none;align-items:center;gap:6px;cursor:pointer">
       <input type="checkbox" id="rustToggle" style="cursor:pointer"> moteur 🦀 Rust
     </label>
@@ -5722,11 +5753,25 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     eink:"E-ink",oled:"OLED",vaporwave:"Vaporwave",cyberpunk:"Cyberpunk",thermal:"Ticket thermique",
     ink:"Ink (papier)",mono:"Mono",noir:"Noir",graphite:"Graphite",slate:"Slate",bone:"Bone",sepia:"Sepia",
     fog:"Fog",midnight:"Midnight",sand:"Sand",carbon:"Carbon",porcelain:"Porcelaine",terracotta:"Terracotta",olive:"Olive"};
-  let curTheme="crt";
+  let curTheme="crt",curEffect="auto",_themeFlat=false;
+  // effet découplé du thème : réconcilie le flag "flat" du thème avec l'override utilisateur
+  function applyFx(){const b=document.body.classList;b.remove("fx-flat","fx-crt","fx-grain");
+    let flat=_themeFlat;
+    if(curEffect==="flat"){flat=true;b.add("fx-flat");}
+    else if(curEffect==="crt"){flat=false;b.add("fx-crt");}
+    else if(curEffect==="grain"){flat=false;b.add("fx-grain");}
+    b.toggle("flat",flat);}
+  function applyEffect(m){curEffect=m;applyFx();const s=$("fxSel");if(s)s.value=m;try{localStorage.setItem("loom-fx",m);}catch(_){}}
+  function applyFont(m){document.body.classList.remove("font-clean","font-machine");
+    if(m==="clean")document.body.classList.add("font-clean");else if(m==="machine")document.body.classList.add("font-machine");
+    const s=$("fontSel");if(s)s.value=m;try{localStorage.setItem("loom-font",m);}catch(_){}}
+  function applyDensity(m){document.body.classList.remove("dense","cozy");
+    if(m==="dense")document.body.classList.add("dense");else if(m==="cozy")document.body.classList.add("cozy");
+    const s=$("densSel");if(s)s.value=m;try{localStorage.setItem("loom-density",m);}catch(_){}}
   // paint only (used for hover-preview, no save) vs applyTheme (commits + saves + marks active)
   function paintTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
     const k=["--bg","--green","--dim","--glow","--amber","--cyan"];for(let i=0;i<6;i++)r.setProperty(k[i],t[i]);
-    document.body.classList.toggle("flat",!!t[6]);}
+    _themeFlat=!!t[6];applyFx();}
   function setActiveSwatch(name){const el=$("themeSwatches");
     if(el)for(const b of el.querySelectorAll(".swatch")){const on=b.dataset.theme===name;
       b.style.outline=on?"2px solid var(--cyan)":"none";b.style.outlineOffset="1px";b.style.opacity=on?"1":"0.82";}
@@ -5754,6 +5799,13 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   buildThemeMenu();buildSwatches();
   $("themeSel").addEventListener("change",e=>applyTheme(e.target.value));
   $("randTheme").addEventListener("click",()=>{const all=THEME_GROUPS.flatMap(g=>g[1]);applyTheme(all[Math.floor(Math.random()*all.length)]);});
+  $("fontSel").addEventListener("change",e=>applyFont(e.target.value));
+  $("densSel").addEventListener("change",e=>applyDensity(e.target.value));
+  $("fxSel").addEventListener("change",e=>applyEffect(e.target.value));
+  // restaure les préférences d'apparence (effet AVANT le thème pour que paintTheme le respecte)
+  try{const f=localStorage.getItem("loom-font");if(f)applyFont(f);}catch(_){}
+  try{const d=localStorage.getItem("loom-density");if(d)applyDensity(d);}catch(_){}
+  try{const x=localStorage.getItem("loom-fx");if(x)curEffect=x;const s=$("fxSel");if(s)s.value=curEffect;}catch(_){}
   try{const saved=localStorage.getItem("loom-theme");applyTheme(saved&&THEMES[saved]?saved:"crt");}catch(_){applyTheme("crt");}
 
   function captureState(){return {c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value,
