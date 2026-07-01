@@ -1435,6 +1435,17 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       return(w.startsWith("just")||w==="ji")?"just":w.startsWith("pyth")?"pyth":w.startsWith("werck")?"werck":w.startsWith("kirn")?"kirn":(w.startsWith("mean")||w.startsWith("quart"))?"meantone":w.startsWith("adapt")?"adaptive":"equal";}}return "equal";}
   function sectionAtBar(song,bar){const total=song.reduce((a,s)=>a+s[1],0);if(total===0)return null;
     let pos=((bar%total)+total)%total;for(const s of song){if(pos<s[1])return s[0];pos-=s[1];}return null;}
+  // ── morph: N — crossfade musical à l'évaluation (volé à Punctual, personne ne l'a en musical).
+  // Quand le code change en cours de lecture, les voix MODIFIÉES fondent ancien→nouveau sur N mesures
+  // (équi-puissance sin/cos) au lieu de couper net. morph: 0 (défaut) = comportement immédiat classique.
+  let morphBars=0,morphState=null;
+  function parseMorph(text){for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
+    if(line.slice(0,i).trim().toLowerCase()==="morph"){const n=parseInt(line.slice(i+1),10);return isNaN(n)?0:Math.max(0,Math.min(32,n));}}return 0;}
+  const MORPH_DIRS=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","morph"];
+  function srcMapOf(text){const m={};for(const raw of noComments(expandMacros(text)).split("\n")){const line=raw.trim();
+    if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i<0)continue;
+    const full=line.slice(0,i).trim().toLowerCase();if(MORPH_DIRS.includes(full.split("@")[0]))continue;m[full]=line;}return m;}
+  const vKey=v=>v.section?v.name+"@"+v.section:v.name;
   function parseDuck(text){for(let raw of text.split("\n")){const line=raw.trim();const i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="duck"){let n=parseFloat(line.slice(i+1).trim());if(isNaN(n))return 0;
       if(n>1)n/=100;return Math.max(0,Math.min(0.95,n));}}return 0;}
@@ -1475,7 +1486,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
-    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"].includes(name))continue;
+    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","morph"].includes(name))continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
@@ -1998,10 +2009,17 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
         key=_savedKey;return;
       }catch(err){console.warn('[LOOM] moteur Rust: repli sur JS —',err&&err.message);}
     }
+    // morph: courbe équi-puissance du crossfade (les voix changées montent, les anciennes descendent)
+    let morphNew=1,morphOld=0,morphChanged=null,morphOldVoices=null;
+    if(morphState){let off=bar-morphState.startBar;if(off<0)off=0;
+      if(off>=morphState.bars)morphState=null;
+      else{const mt=(off+1)/(morphState.bars+1);morphNew=Math.sin(mt*Math.PI/2);morphOld=Math.cos(mt*Math.PI/2);
+        morphChanged=morphState.changed;morphOldVoices=morphState.old;}}
     for(const v of activeVoices(bar)){
       if(v.mute||(anySolo&&!v.solo))continue;
       if(v.chance!=null&&rng(seed,bar,v.name+"chc",0)>=v.chance)continue;  // chance N: this voice only plays some bars (arrangement variation)
       if(stemSolo&&v.name!==stemSolo)continue;  // stems export: render one voice at a time
+      const vsc=(morphChanged&&morphChanged.has(vKey(v)))?morphNew:1;  // morph: fade-in des voix modifiées (le poly change net)
       // true polymeter: a `| poly N` voice runs its own loop at N steps/bar and
       // drifts against the bar grid when its length != N (Reich-style phasing)
       if(v.poly){const spb=(typeof v.poly==="number"&&v.poly>0)?v.poly:16,gstep=cycleLen/spb,toks=v.tokens,nn=toks.length;
@@ -2023,13 +2041,19 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
           [{...v,pan:0.82,hue:hu(v,30)},applyOne(baseEff,v.jux,bar),0]];
         if(v.off&&baseEff.length)layers=layers.concat(layers.map(([lv,le])=>
           [{...lv,gain:(lv.gain||0.25)*0.6,hue:hu(lv,180)},v.off.verb?applyOne(le,v.off.verb,bar):le,v.off.n]));
-        for(const[lv,le,sh]of layers)scheduleSeq(lv,le,barT,bar,sh);}}key=_savedKey;}
+        for(const[lv,le,sh]of layers)scheduleSeq(lv,le,barT,bar,sh,vsc);}}
+    // morph: les ANCIENNES versions des voix changées/supprimées s'éteignent en fondu
+    if(morphOldVoices&&morphOld>0.02)for(const ov of morphOldVoices){
+      if(ov.mute||ov.poly)continue;
+      const ostk=(ov.stacks&&ov.stacks.length>1)?ov.stacks:[ov.tokens];
+      try{for(const toks of ostk)scheduleSeq(ov,effectiveOf(toks,ov,bar),barT,bar,0,morphOld);}catch(_){}}
+    key=_savedKey;}
   // schedule one token sequence for a voice within a bar (shared by normal/jux/off)
-  function scheduleSeq(v,eff,barT,bar,shift){const sw=v.swing!=null?v.swing:+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n,sh=(shift||0)*step;
+  function scheduleSeq(v,eff,barT,bar,shift,velScale){const sw=v.swing!=null?v.swing:+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n,sh=(shift||0)*step;
       const tieN=(idx)=>{let c=0;for(let j=idx+1;j<n&&eff[j]==="_";j++)c++;return c;};  // note tie: `_` extends the previous note
       for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);if(tok==="."||tok==="~"||tok==="_")continue;
         if(v.degrade&&rng(seed,bar,v.name+"dg",i)<v.degrade)continue;  // degrade N: randomly drop a fraction of hits
-        let t0=barT+i*step+sh+(v.nudge||0)*step,vel=1;if(i%2===1)t0+=sw*step;  // nudge: per-voice microtiming (push/lay-back)
+        let t0=barT+i*step+sh+(v.nudge||0)*step,vel=(velScale!=null?velScale:1);if(i%2===1)t0+=sw*step;  // nudge: per-voice microtiming (push/lay-back)
         {const fa=v.humanize!=null?v.humanize:feelAmt;if(fa){t0+=(rng(seed,bar,v.name,i*3+7)-0.5)*fa*0.016;vel=1+(rng(seed,bar,v.name,i*3+11)-0.5)*fa*0.5;}}
         if(groove&&GROOVES[groove])t0+=(GROOVES[groove][i%GROOVES[groove].length]||0)*step;  // groove template microtiming
         if(v.dyn&&n>1)vel*=0.15+0.85*(v.dyn>0?i/(n-1):1-i/(n-1));  // cresc/dim: ramp velocity across the bar (deep range so it stays audible through the master comp)
@@ -3056,6 +3080,7 @@ void main(){
     if(!w.length)return null;
     return "[ aide ] "+w.slice(0,4).join("  ·  ")+(w.length>4?"  …(+"+(w.length-4)+")":"");}
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
+    morphState=null;try{window.__loomSrcMap=srcMapOf(editor.value);}catch(_){window.__loomSrcMap=null;}  // base du diff morph
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     codeView=buildCodeView(editor.value);
@@ -5772,6 +5797,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     "- Odd meters: meter: 7/8 sets the bar to N/D beats (7/8, 5/4, 3/4, 12/8…) — changes the bar length, so patterns feel in odd time. meter: 3 = 3 beats. One meter per song.",
     "- Modulation (key change): key@SECTION: c minor makes that song section resolve its degrees AND its ^/prog chords in a different key. e.g. song: verse*4 chorus*4 with key: a minor and key@chorus: c minor -> the chorus lifts to C minor. Great for a key change at the drop/chorus.",
     "- Accelerando/ritardando: accel: 120 160 ramps the tempo from 120 to 160 across the whole piece (accel: 160 90 8 = slow down over 8 bars). For a build-up or a tape-stop ending.",
+    "- Live morphing: morph: N (bars) makes live edits CROSSFADE — when a voice's line changes while playing, the old version fades out and the new fades in over N bars (equal-power) instead of switching abruptly. morph: 4 is musical for performance. Omit (or 0) for instant switching.",
     "- Voice-leading: | voicing lead keeps each chord close to the previous one (smooth, no big register jumps) — lovely on a prog: pad. (Also open/drop2/wide for spacing.)",
     "- Custom scales: scale: 0 2 3 5 7 9 10 defines ANY scale as semitone offsets from the tonic — microtonal allowed (scale: 0 1.5 3 5 7 8 10 for quarter-tones). key: c 0 2 3 5 7 9 10 works too. Lets you invent scales beyond the named ones.",
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
@@ -6011,7 +6037,19 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
       }
       text=String(text).replace(/```[a-z]*\n?/gi,"").replace(/```/g,"").trim();
       if(!text){log("[ vibe ] pas de reponse - reessaie","err");}
-      else{editor.value=text;run();log("[ vibe ] ok // "+req,"ai");}
+      else{
+        // valide côté moteur AVANT d'appliquer — jamais de code cassé (la faille des hacks LLM×Strudel)
+        let parsed=null;try{parsed=parse(text);}catch(_){}
+        if(!parsed||!parsed.length){log("[ vibe ] l'IA a renvoyé du code invalide — rien n'a changé, réessaie","err");}
+        else{
+          // diff par voix (le format 1 voix/ligne rend ça trivial — notre avantage structurel)
+          let ch=[];try{const b=srcMapOf(editor.value),a=srcMapOf(text);
+            for(const k in a){if(!(k in b))ch.push("+"+k);else if(b[k]!==a[k])ch.push("~"+k);}
+            for(const k in b)if(!(k in a))ch.push("−"+k);}catch(_){}
+          const chTxt=ch.length?ch.slice(0,6).join(" ")+(ch.length>6?" …":""):"réglages";
+          if(playing){pendingClip=text;log("[ vibe ] prêt → appliqué à la prochaine mesure · "+chTxt+" // "+req,"ai");}
+          else{editor.value=text;run();log("[ vibe ] ok · "+chTxt+" // "+req,"ai");}
+        }}
     }catch(e){
       if(e.name==="AbortError"||e.message==="timeout")log("[ vibe ] trop lent (>30s) - reessaie, ou ajoute une cle","err");
       else log("[ vibe ] erreur: "+e.message+" - reessaie","err");
@@ -6160,6 +6198,18 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     // never-silence guard: if the code is mid-edit/broken, keep the last good version playing
     try{parsed=parse(editor.value);}catch(e){log("[ garde ] code incomplet — la dernière version valide continue de jouer","err");return;}
     if(!parsed.length)return;
+    // morph: N — arme le crossfade sur les voix dont la ligne a changé (+ celles supprimées)
+    const _prevVoices=voices,_prevMap=window.__loomSrcMap||null;
+    const _newMap=srcMapOf(editor.value);window.__loomSrcMap=_newMap;
+    morphBars=parseMorph(editor.value);
+    if(playing&&morphBars>0&&_prevVoices&&_prevVoices.length&&_prevMap){
+      const changed=new Set();
+      for(const k in _newMap)if(!(k in _prevMap)||_prevMap[k]!==_newMap[k])changed.add(k);
+      const removedOld=_prevVoices.filter(v=>!v.section&&!(vKey(v)in _newMap));
+      const changedOld=_prevVoices.filter(v=>changed.has(vKey(v))&&(vKey(v)in _prevMap));
+      if(changed.size||removedOld.length)
+        morphState={changed,old:changedOld.concat(removedOld),startBar:barCount,bars:morphBars};
+    }
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     // tempo: a bpm:/tempo: directive in the code is the source of truth. Recompute it
     // here so editing it LIVE takes effect without a restart, and mirror it into the
@@ -6204,7 +6254,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
       log("[ slider ] valeur réglée au geste — ⌥+glisser sur n'importe quel nombre","ai");});}
   attachNumberDrag(editor);attachNumberDrag($("stageEditor"));
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
-  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus","room",
+  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus","room","morph",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
     "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","warp","stretch","freeze","adaptive","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
