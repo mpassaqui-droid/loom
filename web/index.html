@@ -158,6 +158,14 @@
 <script src="https://js.puter.com/v2/"></script>
 </head>
 <body>
+  <!-- first-play overlay: one click starts the music (also unlocks the browser's audio autoplay policy) -->
+  <div id="firstPlay" style="position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.78);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;text-align:center">
+    <div style="font-size:54px;letter-spacing:14px;color:var(--cyan);text-shadow:0 0 24px var(--cyan)">LOOM</div>
+    <div id="fpBtn" style="font-size:88px;line-height:1;margin:18px 0;color:var(--amber);text-shadow:0 0 30px var(--amber);animation:fpPulse 1.6s ease-in-out infinite">&#9654;</div>
+    <div style="font-size:18px;color:var(--fg)">clique &mdash; la musique commence</div>
+    <div style="font-size:13px;color:var(--dim);margin-top:10px">&Eacute;chap = juste regarder &middot; &eacute;dite le code pendant que &ccedil;a joue</div>
+  </div>
+  <style>@keyframes fpPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}</style>
   <div id="stageWrap" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg)">
     <canvas id="glstage" style="position:absolute;inset:0;display:none;pointer-events:none"></canvas>
     <canvas id="stage" style="position:absolute;inset:0;cursor:pointer"></canvas>
@@ -211,13 +219,19 @@
   <div class="card wide">
     <div class="head">pattern.loom</div>
     <div id="editwrap" style="position:relative"><canvas id="editGlow"></canvas>
-    <textarea id="editor" spellcheck="false" translate="no" class="notranslate"># x = hit  . = rest  | = verbs/timbre  1-7 = scale degrees
+    <textarea id="editor" spellcheck="false" translate="no" class="notranslate"># LOOM — le code EST l'instrument. x = coup, . = silence, 1-7 = degrés, | = verbes
+title: première lueur
 key:   c minor
-kick:  x . . . x . . .
-snare: . . x . . . x .
-hat:   x x x x x x x x | every 4 fast 2
-lead:  1 3 5 1' 5 3 1 . | pulse
-bass:  1 . 3 . 5 . 3 . | saw | oct 2</textarea></div>
+bpm:   118
+duck:  45
+feel:  25
+scene: aurora
+kick:  x . . . x . . x . . x . x . . . | sample bd
+snare: . . . . x . . . . . . . x . . . | sample sd | reverb 0.3
+hat:   e(11,16) | sample hh | gain 0.18 | swing 56
+bass:  1 . . 1 . . 5, . 1 . . 1 . 7, . . | saw | oct 2 | lp 650 q 4 | sub 0.4 | env 0.005 0.08 0.4 0.1 | gain 0.22
+keys:  Cm7 . . . . . . . Ab . . . . . . . | wt warm | env 0.3 0.3 0.6 1.0 | reverb 0.45 | gain 0.13
+lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | gain 0.2</textarea></div>
   </div>
 
   <div class="transport wide">
@@ -5974,10 +5988,10 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     let text="";
     try{
       if(key){
-        const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),30000);
+        const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),90000);  // long tracks need time (sonnet, 4000 tokens)
         const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctl.signal,
           headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-          body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:1000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
+          body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
         clearTimeout(to);const data=await res.json();if(data.error)throw new Error(data.error.message||"api error");
         text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       }else{
@@ -5995,6 +6009,12 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // wiring
   $("run").addEventListener("click",run);
   $("stop").addEventListener("click",stop);
+  // first-play overlay: one click = audio unlocked + RUN. Escape = dismiss without playing.
+  {const fp=$("firstPlay");if(fp){
+    const hide=()=>{fp.style.opacity="0";fp.style.transition="opacity .45s";fp.style.pointerEvents="none";setTimeout(()=>{fp.style.display="none";},500);};
+    fp.addEventListener("click",()=>{hide();run();});
+    document.addEventListener("keydown",e=>{if(e.key==="Escape"&&fp.style.display!=="none")hide();},{once:false});
+  }}
   // tap-tempo: tap the button in rhythm to set the BPM (live)
   {let tapT=[];$("tapBtn").addEventListener("click",()=>{const now=(typeof performance!=="undefined"&&performance.now)?performance.now():0;
     tapT=tapT.filter(t=>now-t<2000);tapT.push(now);
