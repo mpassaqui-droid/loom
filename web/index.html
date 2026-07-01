@@ -175,9 +175,11 @@
   <h1>LOOM</h1>
   <div class="sub" style="font-size:19px;">&eacute;cris la musique &mdash; elle joue, elle se voit <span class="blink">_</span> <span style="color:var(--dim);font-size:14px">&middot; SC&Egrave;NE = spectacle &middot; d&eacute;cris une vibe, l'IA &eacute;crit le code</span></div>
 
-  <div class="presets" id="topbar" style="margin-bottom:14px;align-items:center">
+  <div class="presets" id="topbar" style="margin-bottom:14px;align-items:center;gap:6px">
     <span style="color:var(--dim);font-size:16px;margin-right:2px">look &#9656;</span>
-    <select id="themeSel" class="menu" title="thème terminal"></select>
+    <select id="themeSel" class="menu" title="thème terminal" style="display:none"></select>
+    <span id="themeSwatches" title="clique un look — survole pour l'aperçu" style="display:flex;gap:5px;overflow-x:auto;max-width:64vw;padding:3px 1px;align-items:center;scrollbar-width:thin"></span>
+    <span id="themeName" style="color:var(--dim);font-size:13px;min-width:84px;white-space:nowrap">—</span>
     <button class="tiny" id="randTheme" title="thème au hasard">&#9860;</button>
     <label id="rustToggleWrap" title="EXPÉRIMENTAL : le moteur Rust (WASM) décide les notes/le timing, la synthèse/FX restent en JS. Décoché = moteur JS habituel." style="margin-left:14px;color:var(--dim);font-size:15px;display:none;align-items:center;gap:6px;cursor:pointer">
       <input type="checkbox" id="rustToggle" style="cursor:pointer"> moteur 🦀 Rust
@@ -5720,13 +5722,36 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     eink:"E-ink",oled:"OLED",vaporwave:"Vaporwave",cyberpunk:"Cyberpunk",thermal:"Ticket thermique",
     ink:"Ink (papier)",mono:"Mono",noir:"Noir",graphite:"Graphite",slate:"Slate",bone:"Bone",sepia:"Sepia",
     fog:"Fog",midnight:"Midnight",sand:"Sand",carbon:"Carbon",porcelain:"Porcelaine",terracotta:"Terracotta",olive:"Olive"};
-  function applyTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
+  let curTheme="crt";
+  // paint only (used for hover-preview, no save) vs applyTheme (commits + saves + marks active)
+  function paintTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
     const k=["--bg","--green","--dim","--glow","--amber","--cyan"];for(let i=0;i<6;i++)r.setProperty(k[i],t[i]);
-    document.body.classList.toggle("flat",!!t[6]);if($("themeSel"))$("themeSel").value=name;
-    try{localStorage.setItem("loom-theme",name);}catch(_){}}
+    document.body.classList.toggle("flat",!!t[6]);}
+  function setActiveSwatch(name){const el=$("themeSwatches");
+    if(el)for(const b of el.querySelectorAll(".swatch")){const on=b.dataset.theme===name;
+      b.style.outline=on?"2px solid var(--cyan)":"none";b.style.outlineOffset="1px";b.style.opacity=on?"1":"0.82";}
+    const nm=$("themeName");if(nm)nm.textContent=THEME_LABEL[name]||name;}
+  function applyTheme(name){paintTheme(name);curTheme=name;if($("themeSel"))$("themeSel").value=name;
+    setActiveSwatch(name);try{localStorage.setItem("loom-theme",name);}catch(_){}}
   function buildThemeMenu(){const el=$("themeSel");if(!el)return;
     el.innerHTML=THEME_GROUPS.map(g=>'<optgroup label="'+g[0]+'">'+g[1].map(id=>'<option value="'+id+'">'+(THEME_LABEL[id]||id)+'</option>').join("")+'</optgroup>').join("");}
-  buildThemeMenu();
+  // ✦ pastilles visuelles : chaque thème peint dans ses vraies couleurs, survol = aperçu live sur toute l'UI
+  function buildSwatches(){const el=$("themeSwatches");if(!el)return;el.innerHTML="";
+    THEME_GROUPS.forEach((g,gi)=>{
+      if(gi>0){const sep=document.createElement("span");sep.title=g[0];
+        sep.style.cssText="width:1px;height:16px;background:var(--dim);opacity:.4;flex:0 0 auto;margin:0 3px;align-self:center";el.appendChild(sep);}
+      g[1].forEach(id=>{const t=THEMES[id];if(!t)return;const b=document.createElement("button");
+        b.className="swatch";b.dataset.theme=id;b.title=(THEME_LABEL[id]||id)+"  ·  "+g[0];
+        b.style.cssText="width:24px;height:24px;border-radius:5px;border:1px solid var(--dim);cursor:pointer;flex:0 0 auto;padding:0;position:relative;transition:transform .08s;background:"+t[0];
+        b.innerHTML='<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px">'
+          +'<i style="width:5px;height:5px;border-radius:50%;background:'+t[1]+'"></i>'
+          +'<i style="width:4px;height:4px;border-radius:50%;background:'+t[4]+'"></i>'
+          +'<i style="width:4px;height:4px;border-radius:50%;background:'+t[5]+'"></i></span>';
+        b.addEventListener("click",()=>applyTheme(id));
+        b.addEventListener("mouseenter",()=>{paintTheme(id);b.style.transform="scale(1.18)";const nm=$("themeName");if(nm)nm.textContent=THEME_LABEL[id]||id;});
+        b.addEventListener("mouseleave",()=>{paintTheme(curTheme);b.style.transform="";const nm=$("themeName");if(nm)nm.textContent=THEME_LABEL[curTheme]||curTheme;});
+        el.appendChild(b);});});}
+  buildThemeMenu();buildSwatches();
   $("themeSel").addEventListener("change",e=>applyTheme(e.target.value));
   $("randTheme").addEventListener("click",()=>{const all=THEME_GROUPS.flatMap(g=>g[1]);applyTheme(all[Math.floor(Math.random()*all.length)]);});
   try{const saved=localStorage.getItem("loom-theme");applyTheme(saved&&THEMES[saved]?saved:"crt");}catch(_){applyTheme("crt");}
