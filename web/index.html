@@ -5680,13 +5680,33 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     oled:["#000000","#ffffff","#666666","#ffffff","#ffd24a","#5fe6ff",1],
     vaporwave:["#241a3a","#ff71ce","#5a4a7a","#ffd6f5","#fffb96","#01cdfe",1],
     cyberpunk:["#0a0014","#00fff5","#3a2a6a","#b6fffb","#ff206e","#fee801",0],
-    thermal:["#f7f3ea","#222222","#9a948a","#000000","#9a5a2a","#3a6a8a",1]
+    thermal:["#f7f3ea","#222222","#9a948a","#000000","#9a5a2a","#3a6a8a",1],
+    // ✦ Minimalistes — palettes sobres, sans glow (flat), 1 accent retenu. [bg, fg, dim, glow, amber, cyan, flat]
+    ink:["#fbfaf7","#1a1a1a","#b3b0a6","#000000","#8a6a2a","#3a6a8a",1],
+    mono:["#ffffff","#222222","#b0b0b0","#000000","#666666","#444444",1],
+    noir:["#000000","#eaeaea","#5e5e5e","#ffffff","#c9a24a","#8ab4c8",1],
+    graphite:["#1c1c1e","#d6d6d8","#68686c","#ffffff","#c8a25a","#7aa8c0",1],
+    slate:["#1a1f26","#c6cfd8","#5a6672","#eef2f6","#cfa860","#7ab0c8",1],
+    bone:["#f4f1ea","#2b2926","#a49e92","#000000","#a8712a","#4a7a8a",1],
+    sepia:["#efe6d2","#463726","#ab9d7c","#1a1206","#8a5a1a","#5a6a4a",1],
+    fog:["#e9e9eb","#3a3a3e","#a0a0a6","#111111","#8a7a5a","#5a7a8a",1],
+    midnight:["#0d1117","#c9d1d9","#4a515a","#f0f6fc","#cfa860","#589cd8",1],
+    sand:["#e9e2d0","#3a3226","#ab9f88","#1a1206","#9a6a2a","#5a7062",1],
+    carbon:["#141414","#dedede","#5e5e5e","#ffffff","#c2a15a","#7fb0b8",1],
+    porcelain:["#fdfdfd","#2a2e33","#adb2b8","#000000","#9a6a3a","#3a7a9a",1],
+    terracotta:["#f2e9e1","#3a2a24","#b0998e","#1a0e08","#c26a44","#6a7a6a",1],
+    olive:["#1e2019","#d0d3c3","#61654f","#f0f2e8","#c0a850","#8aa878",1]
   };
-  // Menu curé à 12 looks forts (cartographie 01/07) — les 36 autres restent dans THEMES (rétrocompat localStorage)
+  // Menu complet : famille minimaliste en tête + tous les looks historiques (62 au total)
   const THEME_GROUPS=[
-    ["Phosphore (CRT)",["crt","amber","whitephos","bluephos","matrix"]],
-    ["Machines",["c64","gameboy","nixie"]],
-    ["Moderne",["dracula","paper","vaporwave","cyberpunk"]]
+    ["✦ Minimalistes",["ink","mono","noir","graphite","slate","bone","sepia","fog","midnight","sand","carbon","porcelain","terracotta","olive"]],
+    ["Phosphore (CRT)",["crt","green2","amber","amber2","whitephos","bluephos","matrix"]],
+    ["Micro-ordinateurs",["c64","pet","apple2","spectrum","bbc","atari","gameboy","dos"]],
+    ["Terminaux & mainframe",["vt100","ibm3270","hercules","tektronix","wyse","next","plan9"]],
+    ["Spatial / NASA",["apollo","mission","radar"]],
+    ["Téléphones / LCD",["minitel","nokia","pager","pipboy"]],
+    ["Affichages vintage",["nixie","vfd","led_red","led_blue","bsod","telegraph"]],
+    ["Moderne / écrans",["modern","dracula","nord","gruvbox","solarized","monokai","ocean","paper","eink","oled","vaporwave","cyberpunk","thermal"]]
   ];
   const THEME_LABEL={crt:"Green CRT (P1)",green2:"Bright Green",amber:"Amber (P3)",amber2:"Amber warm",
     whitephos:"White phosphor (P4)",bluephos:"Blue phosphor",matrix:"Matrix",c64:"Commodore 64",pet:"Commodore PET",
@@ -5697,7 +5717,9 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     apollo:"Apollo DSKY",mission:"NASA Mission Control",radar:"Radar scope",
     minitel:"Minitel",nokia:"Nokia LCD",pager:"Pager LCD",pipboy:"Pip-Boy",
     nixie:"Nixie tube",vfd:"VFD display",led_red:"LED rouge",led_blue:"LED bleue",bsod:"Blue screen",telegraph:"Télégraphe / ruban",
-    eink:"E-ink",oled:"OLED",vaporwave:"Vaporwave",cyberpunk:"Cyberpunk",thermal:"Ticket thermique"};
+    eink:"E-ink",oled:"OLED",vaporwave:"Vaporwave",cyberpunk:"Cyberpunk",thermal:"Ticket thermique",
+    ink:"Ink (papier)",mono:"Mono",noir:"Noir",graphite:"Graphite",slate:"Slate",bone:"Bone",sepia:"Sepia",
+    fog:"Fog",midnight:"Midnight",sand:"Sand",carbon:"Carbon",porcelain:"Porcelaine",terracotta:"Terracotta",olive:"Olive"};
   function applyTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
     const k=["--bg","--green","--dim","--glow","--amber","--cyan"];for(let i=0;i<6;i++)r.setProperty(k[i],t[i]);
     document.body.classList.toggle("flat",!!t[6]);if($("themeSel"))$("themeSel").value=name;
