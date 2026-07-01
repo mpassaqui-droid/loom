@@ -200,9 +200,9 @@
 
   <div class="presets" id="topbar" style="margin-bottom:14px;align-items:center;gap:6px">
     <span style="color:var(--dim);font-size:16px;margin-right:2px">look &#9656;</span>
-    <select id="themeSel" class="menu" title="thème terminal" style="display:none"></select>
-    <span id="themeSwatches" title="clique un look — survole pour l'aperçu" style="display:flex;gap:5px;overflow-x:auto;max-width:64vw;padding:3px 1px;align-items:center;scrollbar-width:thin"></span>
-    <span id="themeName" style="color:var(--dim);font-size:13px;min-width:84px;white-space:nowrap">—</span>
+    <button class="tiny" id="themePrev" title="thème précédent">&#9664;</button>
+    <select id="themeSel" class="menu" title="choisir un thème (ou ◀ ▶ pour feuilleter — tout l'écran est l'aperçu)" style="min-width:158px"></select>
+    <button class="tiny" id="themeNext" title="thème suivant">&#9654;</button>
     <button class="tiny" id="randTheme" title="thème au hasard">&#9860;</button>
     <span style="display:inline-flex;gap:6px;align-items:center;margin-left:6px;flex-wrap:wrap">
       <select id="fontSel" class="menu" title="police (indépendante du thème)" style="font-size:13px;padding:4px 6px">
@@ -5772,33 +5772,18 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   function paintTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
     const k=["--bg","--green","--dim","--glow","--amber","--cyan"];for(let i=0;i<6;i++)r.setProperty(k[i],t[i]);
     _themeFlat=!!t[6];applyFx();}
-  function setActiveSwatch(name){const el=$("themeSwatches");
-    if(el)for(const b of el.querySelectorAll(".swatch")){const on=b.dataset.theme===name;
-      b.style.outline=on?"2px solid var(--cyan)":"none";b.style.outlineOffset="1px";b.style.opacity=on?"1":"0.82";}
-    const nm=$("themeName");if(nm)nm.textContent=THEME_LABEL[name]||name;}
   function applyTheme(name){paintTheme(name);curTheme=name;if($("themeSel"))$("themeSel").value=name;
-    setActiveSwatch(name);try{localStorage.setItem("loom-theme",name);}catch(_){}}
+    try{localStorage.setItem("loom-theme",name);}catch(_){}}
   function buildThemeMenu(){const el=$("themeSel");if(!el)return;
     el.innerHTML=THEME_GROUPS.map(g=>'<optgroup label="'+g[0]+'">'+g[1].map(id=>'<option value="'+id+'">'+(THEME_LABEL[id]||id)+'</option>').join("")+'</optgroup>').join("");}
-  // ✦ pastilles visuelles : chaque thème peint dans ses vraies couleurs, survol = aperçu live sur toute l'UI
-  function buildSwatches(){const el=$("themeSwatches");if(!el)return;el.innerHTML="";
-    THEME_GROUPS.forEach((g,gi)=>{
-      if(gi>0){const sep=document.createElement("span");sep.title=g[0];
-        sep.style.cssText="width:1px;height:16px;background:var(--dim);opacity:.4;flex:0 0 auto;margin:0 3px;align-self:center";el.appendChild(sep);}
-      g[1].forEach(id=>{const t=THEMES[id];if(!t)return;const b=document.createElement("button");
-        b.className="swatch";b.dataset.theme=id;b.title=(THEME_LABEL[id]||id)+"  ·  "+g[0];
-        b.style.cssText="width:24px;height:24px;border-radius:5px;border:1px solid var(--dim);cursor:pointer;flex:0 0 auto;padding:0;position:relative;transition:transform .08s;background:"+t[0];
-        b.innerHTML='<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px">'
-          +'<i style="width:5px;height:5px;border-radius:50%;background:'+t[1]+'"></i>'
-          +'<i style="width:4px;height:4px;border-radius:50%;background:'+t[4]+'"></i>'
-          +'<i style="width:4px;height:4px;border-radius:50%;background:'+t[5]+'"></i></span>';
-        b.addEventListener("click",()=>applyTheme(id));
-        b.addEventListener("mouseenter",()=>{paintTheme(id);b.style.transform="scale(1.18)";const nm=$("themeName");if(nm)nm.textContent=THEME_LABEL[id]||id;});
-        b.addEventListener("mouseleave",()=>{paintTheme(curTheme);b.style.transform="";const nm=$("themeName");if(nm)nm.textContent=THEME_LABEL[curTheme]||curTheme;});
-        el.appendChild(b);});});}
-  buildThemeMenu();buildSwatches();
+  // ◀ nom ▶ : on feuillette les thèmes, tout l'écran sert d'aperçu ; le nom (select) ouvre la liste pour sauter
+  const THEME_FLAT=()=>THEME_GROUPS.flatMap(g=>g[1]).filter(id=>THEMES[id]);
+  function cycleTheme(dir){const all=THEME_FLAT();let i=all.indexOf(curTheme);if(i<0)i=0;applyTheme(all[((i+dir)%all.length+all.length)%all.length]);}
+  buildThemeMenu();
   $("themeSel").addEventListener("change",e=>applyTheme(e.target.value));
-  $("randTheme").addEventListener("click",()=>{const all=THEME_GROUPS.flatMap(g=>g[1]);applyTheme(all[Math.floor(Math.random()*all.length)]);});
+  $("themePrev").addEventListener("click",()=>cycleTheme(-1));
+  $("themeNext").addEventListener("click",()=>cycleTheme(1));
+  $("randTheme").addEventListener("click",()=>{const all=THEME_FLAT();applyTheme(all[Math.floor(Math.random()*all.length)]);});
   $("fontSel").addEventListener("change",e=>applyFont(e.target.value));
   $("densSel").addEventListener("change",e=>applyDensity(e.target.value));
   $("fxSel").addEventListener("change",e=>applyEffect(e.target.value));
