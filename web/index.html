@@ -207,8 +207,6 @@
       <span style="color:var(--cyan);font-size:15px;margin:0 2px 0 8px;align-self:center">outils &#9656;</span>
       <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10067; explique</button>
       <button class="tiny" id="developBtn" title="développe le morceau HORS-LIGNE : ajoute du développement aux mélodies, varie les batteries, change le seed (annulable)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10024; développe</button>
-      <button class="tiny" id="muterBtn" title="engendre un DESCENDANT du morceau (mute générateurs/rythmes/paramètres) — évolution par sélection : reclique, garde, ou ↩ annule" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516; muter</button>
-      <button class="tiny" id="crossBtn" title="CROISE ce morceau avec un autre (voix/réglages des deux parents) — un enfant inattendu (↩ annule)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#129516;&#10005; croiser</button>
       <button class="tiny" id="earBtn" title="entraînement de l'oreille : le prof joue un intervalle, devine-le en l'écrivant dans VIBE" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#128066; oreille</button>
       <button class="tiny" id="undoBtn" title="annuler la dernière action" style="display:none;border-color:var(--amber);color:var(--amber)">&#8617; annuler</button>
     </div>
@@ -251,10 +249,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <button id="syncBtn" class="go" title="émettre une horloge MIDI (start + clock 24ppqn) pour synchroniser Ableton/hardware sur le tempo de LOOM — via le port IAC">&#9201; SYNC</button>
     <button id="followBtn" class="go" title="SUIVRE une horloge MIDI externe : LOOM se cale sur le tempo et le transport (start/stop) d'Ableton/hardware">&#9201; SUIVRE</button>
     <button id="learnBtn" class="go" title="MIDI LEARN : clique un potard (VOL/EQ/SWING/ECHO/SPACE) puis bouge un CC de ton contrôleur pour le lier">&#127919; LEARN</button>
-    <button id="mbandBtn" class="go" title="compresseur multibande de mastering (grave/médium/aigu) sur le bus master — colle le mix">&#9776; MULTI</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="mixBtn" class="go" title="mixeur : fader/pan/mute/solo + mètre par voix">&#127899; MIX</button>
-    <button id="clipsBtn" class="go" title="vue Session : lance une scène (morceau) quantisée au prochain temps, sans arrêter">&#9638; CLIPS</button>
     <button id="demoBtn" class="go" title="visite guidée auto : enchaîne tous les morceaux + visuels">&#127916; DÉMO</button>
     <button id="langBtn" class="go" title="traduire l'interface (100+ langues, en ligne) — le code LOOM ne change pas">&#127760; LANG</button>
     <select id="uiLang" class="menu notranslate" translate="no" title="langue de l'interface (hors-ligne) — le code LOOM ne change pas" style="min-width:96px">
@@ -2135,7 +2131,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   // HSV -> [r,g,b] 0-255 (for per-pixel scenes like the Julia fractal)
   function hsv2rgb(h,s,v){h=((h%360)+360)%360/60;const i=Math.floor(h),f=h-i,p=v*(1-s),q=v*(1-s*f),t=v*(1-s*(1-f));
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
-  const SCENES=["codemap","radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fountain","helix","moire","fire","sunburst","matrix","orbits","globe","wave","harmono","clifford","cymatic","lorenz","dejong","rossler","superf","hopalong","rose","spiro","gumowski","tinker","ikeda","phyllo","reaction","truchet","warp","ship","julia4","maurer","epicycle","lissa3d","flower","honeycomb","cube","tesseract","knot","wormhole","mobius","pendulum","radialbars","henon","thomas","aizawa","fern","chen","voronoi","sierpinski","dadras","halvorsen","guilloche","lightning","metatron","tracker","chladni","string","spectro","scope","faraday","ripple","grid","petals","dna","mandala","spectrum3d","ribbon","fireworks","vortex","lattice","tiles","starsphere","bubbles","comet","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora","gcells","gwater","gmandel","nebula","scan","rings","checker"];
+  // Registre curé (cartographie 01/07) : ~50 scènes distinctives exposées au cycle N / à la doc.
+  // Les ~54 autres (attracteurs clones, variantes 3D…) restent dessinables via scene: <nom> (rétrocompat presets).
+  const SCENES=["codemap","radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fire","matrix","orbits","wave","cymatic","chladni","lorenz","reaction","truchet","warp","phyllo","voronoi","sierpinski","lightning","tracker","string","spectro","scope","dna","mandala","fireworks","fern","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora","gcells","gwater","gmandel"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let spectroCv=null;  // persistent offscreen for the scrolling spectrogram scene
   let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3,mEqLow=null,mEqMid=null,mEqHigh=null,multibandOn=false;
@@ -3044,6 +3042,17 @@ void main(){
       for(const t of (v.tokens||[])){if(/^[1-7][#b]?[',]*([?*!].*)?$/.test(t))usesDeg=true;else if(t&&t[0]==="^")usesProg=true;}}
     if(usesDeg&&!key)w.push("des degrés (1-7) sont utilisés sans « key: » — ajoute p.ex. key: a minor");
     if(usesProg&&!prog.length)w.push("le token ^ est utilisé sans « prog: » — ajoute p.ex. prog: Am F C G");
+    // typo bienveillante (leçon Sonic Pi) : verbe inconnu proche d'un connu → suggestion
+    try{
+      const known=new Set(((typeof KEYWORDS!=="undefined")?KEYWORDS:[]).concat(["in","lp","hp","bp","notch","q","mute","solo","over","chord","s","morph","poly"]));
+      const lev=(a,b)=>{if(Math.abs(a.length-b.length)>2)return 9;const m=[];for(let i=0;i<=a.length;i++){m[i]=[i];for(let j=1;j<=b.length;j++)m[i][j]=i===0?j:Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));}return m[a.length][b.length];};
+      const seen=new Set();
+      for(const raw of editor.value.split("\n")){const line=raw.split("#")[0];if(line.indexOf("|")<0)continue;
+        for(const seg of line.split("|").slice(1)){const wd=(seg.trim().split(/\s+/)[0]||"").toLowerCase();
+          if(!wd||wd.length<3||known.has(wd)||seen.has(wd)||/^[\d.]/.test(wd))continue;seen.add(wd);
+          let best=null,bd=3;for(const k of known){const d=lev(wd,k);if(d<bd){bd=d;best=k;}}
+          if(best&&bd<=2)w.push("« "+wd+" » n'existe pas — tu voulais « "+best+" » ?");}}
+    }catch(_){}
     if(!w.length)return null;
     return "[ aide ] "+w.slice(0,4).join("  ·  ")+(w.length>4?"  …(+"+(w.length-4)+")":"");}
   function run(){initAudio();if(ctx.state==="suspended")ctx.resume();
@@ -5648,14 +5657,11 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     cyberpunk:["#0a0014","#00fff5","#3a2a6a","#b6fffb","#ff206e","#fee801",0],
     thermal:["#f7f3ea","#222222","#9a948a","#000000","#9a5a2a","#3a6a8a",1]
   };
+  // Menu curé à 12 looks forts (cartographie 01/07) — les 36 autres restent dans THEMES (rétrocompat localStorage)
   const THEME_GROUPS=[
-    ["Phosphore (CRT)",["crt","green2","amber","amber2","whitephos","bluephos","matrix"]],
-    ["Micro-ordinateurs",["c64","pet","apple2","spectrum","bbc","atari","gameboy","dos"]],
-    ["Terminaux & mainframe",["vt100","ibm3270","hercules","tektronix","wyse","next","plan9"]],
-    ["Spatial / NASA",["apollo","mission","radar"]],
-    ["Téléphones / LCD",["minitel","nokia","pager","pipboy"]],
-    ["Affichages vintage",["nixie","vfd","led_red","led_blue","bsod","telegraph"]],
-    ["Moderne / écrans",["modern","dracula","nord","gruvbox","solarized","monokai","ocean","paper","eink","oled","vaporwave","cyberpunk","thermal"]]
+    ["Phosphore (CRT)",["crt","amber","whitephos","bluephos","matrix"]],
+    ["Machines",["c64","gameboy","nixie"]],
+    ["Moderne",["dracula","paper","vaporwave","cyberpunk"]]
   ];
   const THEME_LABEL={crt:"Green CRT (P1)",green2:"Bright Green",amber:"Amber (P3)",amber2:"Amber warm",
     whitephos:"White phosphor (P4)",bluephos:"Blue phosphor",matrix:"Matrix",c64:"Commodore 64",pet:"Commodore PET",
@@ -5675,7 +5681,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     el.innerHTML=THEME_GROUPS.map(g=>'<optgroup label="'+g[0]+'">'+g[1].map(id=>'<option value="'+id+'">'+(THEME_LABEL[id]||id)+'</option>').join("")+'</optgroup>').join("");}
   buildThemeMenu();
   $("themeSel").addEventListener("change",e=>applyTheme(e.target.value));
-  $("randTheme").addEventListener("click",()=>{const all=Object.keys(THEMES);applyTheme(all[Math.floor(Math.random()*all.length)]);});
+  $("randTheme").addEventListener("click",()=>{const all=THEME_GROUPS.flatMap(g=>g[1]);applyTheme(all[Math.floor(Math.random()*all.length)]);});
   try{const saved=localStorage.getItem("loom-theme");applyTheme(saved&&THEMES[saved]?saved:"crt");}catch(_){applyTheme("crt");}
 
   function captureState(){return {c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value,
@@ -6150,7 +6156,10 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   document.addEventListener("fullscreenchange",()=>{if(!document.fullscreenElement&&stageOn){stageOn=false;$("stageWrap").style.display="none";}});
   // live coding: typing in either editor updates the boxes immediately and (while playing) recompiles the music after a short pause
   let recompTimer=null;
-  function recompile(){const parsed=parse(editor.value);if(!parsed.length)return;
+  function recompile(){let parsed;
+    // never-silence guard: if the code is mid-edit/broken, keep the last good version playing
+    try{parsed=parse(editor.value);}catch(e){log("[ garde ] code incomplet — la dernière version valide continue de jouer","err");return;}
+    if(!parsed.length)return;
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
     // tempo: a bpm:/tempo: directive in the code is the source of truth. Recompute it
     // here so editing it LIVE takes effect without a restart, and mirror it into the
@@ -6176,6 +6185,24 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // auto-save the editor to localStorage (debounced) so you never lose your work on reload/crash
   let draftT=0;function saveDraft(){try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
   editor.addEventListener("input",()=>{if(stageOn&&$("stageEditor"))$("stageEditor").value=editor.value;liveEdit();clearTimeout(draftT);draftT=setTimeout(saveDraft,800);});
+  // ── alt-drag sur n'importe quel nombre = slider (Bret Victor) : maintiens ⌥/Alt, clique un
+  // nombre et glisse horizontalement — la valeur change et la musique suit en direct. ──
+  function attachNumberDrag(el){if(!el)return;let drag=null;
+    el.addEventListener("mousedown",e=>{if(!e.altKey)return;
+      setTimeout(()=>{const pos=el.selectionStart,txt=el.value,re=/-?\d+(?:\.\d+)?/g;let m;
+        while((m=re.exec(txt))){if(pos>=m.index&&pos<=m.index+m[0].length){
+          const dec=(m[0].split(".")[1]||"").length;
+          drag={start:m.index,end:m.index+m[0].length,orig:parseFloat(m[0]),dec,x:e.clientX,before:txt};
+          document.body.style.userSelect="none";el.style.cursor="ew-resize";break;}}},0);});
+    document.addEventListener("mousemove",e=>{if(!drag)return;e.preventDefault();
+      const step=drag.dec?Math.pow(10,-drag.dec):1,px=drag.dec?3:6;
+      let nv=+(drag.orig+Math.round((e.clientX-drag.x)/px)*step).toFixed(Math.max(drag.dec,0));
+      el.value=drag.before.slice(0,drag.start)+nv+drag.before.slice(drag.end);
+      el.setSelectionRange(drag.start,drag.start+String(nv).length);
+      el.dispatchEvent(new Event("input"));});
+    document.addEventListener("mouseup",()=>{if(!drag)return;drag=null;document.body.style.userSelect="";el.style.cursor="";
+      log("[ slider ] valeur réglée au geste — ⌥+glisser sur n'importe quel nombre","ai");});}
+  attachNumberDrag(editor);attachNumberDrag($("stageEditor"));
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
   const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus","room",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
