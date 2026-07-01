@@ -162,8 +162,8 @@
   <div id="firstPlay" style="position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.78);backdrop-filter:blur(4px);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;text-align:center">
     <div style="font-size:54px;letter-spacing:14px;color:var(--cyan);text-shadow:0 0 24px var(--cyan)">LOOM</div>
     <div id="fpBtn" style="font-size:88px;line-height:1;margin:18px 0;color:var(--amber);text-shadow:0 0 30px var(--amber);animation:fpPulse 1.6s ease-in-out infinite">&#9654;</div>
-    <div style="font-size:18px;color:var(--fg)">clique &mdash; la musique commence</div>
-    <div style="font-size:13px;color:var(--dim);margin-top:10px">&Eacute;chap = juste regarder &middot; &eacute;dite le code pendant que &ccedil;a joue</div>
+    <div style="font-size:18px;color:var(--fg)">clique &mdash; la musique commence, en pleine sc&egrave;ne</div>
+    <div style="font-size:13px;color:var(--dim);margin-top:10px">&eacute;dite le code par-dessus les visuels &middot; &Eacute;chap = studio</div>
   </div>
   <style>@keyframes fpPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}</style>
   <div id="stageWrap" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg)">
@@ -173,7 +173,7 @@
     <textarea id="stageEditor" spellcheck="false"></textarea>
   </div>
   <h1>LOOM</h1>
-  <div class="sub" style="color:var(--amber);font-size:22px;">&#9656; VERSION 6 &middot; IA GRATUITE <span class="blink">_</span></div>
+  <div class="sub" style="font-size:19px;">&eacute;cris la musique &mdash; elle joue, elle se voit <span class="blink">_</span> <span style="color:var(--dim);font-size:14px">&middot; SC&Egrave;NE = spectacle &middot; d&eacute;cris une vibe, l'IA &eacute;crit le code</span></div>
 
   <div class="presets" id="topbar" style="margin-bottom:14px;align-items:center">
     <span style="color:var(--dim);font-size:16px;margin-right:2px">look &#9656;</span>
@@ -237,8 +237,12 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   <div class="transport wide">
     <button id="run">&#9658; RUN</button>
     <button id="stop" class="stop">&#9632; STOP</button>
-    <button id="metroBtn" class="go" title="métronome (clic à chaque temps)">&#9201; CLICK</button>
+    <button id="stageBtn" class="go" title="mode plein écran (scène) — le spectacle">&#9974; SCÈNE</button>
     <button id="rec" class="rec">&#9679; REC</button>
+    <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
+    <button id="studioToggle" class="go" title="ouvrir le studio : métronome, exports, MIDI, mixeur, piano-roll, clips, langues…">&#9881; STUDIO &#9656;</button>
+    <span id="studioTools" style="display:none">
+    <button id="metroBtn" class="go" title="métronome (clic à chaque temps)">&#9201; CLICK</button>
     <button id="humBtn" class="go" title="chante/siffle → LOOM écrit la mélodie">&#127908; HUM</button>
     <button id="filmBtn" class="go" title="filmer la SCÈNE (vidéo + son) en .webm">&#127909; FILM</button>
     <button id="renderBtn" class="go" title="exporter tout le morceau en WAV">&#11015; RENDER</button>
@@ -248,11 +252,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <button id="followBtn" class="go" title="SUIVRE une horloge MIDI externe : LOOM se cale sur le tempo et le transport (start/stop) d'Ableton/hardware">&#9201; SUIVRE</button>
     <button id="learnBtn" class="go" title="MIDI LEARN : clique un potard (VOL/EQ/SWING/ECHO/SPACE) puis bouge un CC de ton contrôleur pour le lier">&#127919; LEARN</button>
     <button id="mbandBtn" class="go" title="compresseur multibande de mastering (grave/médium/aigu) sur le bus master — colle le mix">&#9776; MULTI</button>
-    <button id="linkBtn" class="go" title="copier un lien de partage (le morceau est dans l'URL)">&#128279; LIEN</button>
     <button id="rollBtn" class="go" title="afficher le piano-roll (mélodies en blocs)">&#127929; ROLL</button>
     <button id="mixBtn" class="go" title="mixeur : fader/pan/mute/solo + mètre par voix">&#127899; MIX</button>
     <button id="clipsBtn" class="go" title="vue Session : lance une scène (morceau) quantisée au prochain temps, sans arrêter">&#9638; CLIPS</button>
-    <button id="stageBtn" class="go" title="mode plein écran (scène)">&#9974; SCÈNE</button>
     <button id="demoBtn" class="go" title="visite guidée auto : enchaîne tous les morceaux + visuels">&#127916; DÉMO</button>
     <button id="langBtn" class="go" title="traduire l'interface (100+ langues, en ligne) — le code LOOM ne change pas">&#127760; LANG</button>
     <select id="uiLang" class="menu notranslate" translate="no" title="langue de l'interface (hors-ligne) — le code LOOM ne change pas" style="min-width:96px">
@@ -262,6 +264,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       <option value="ja">日本語</option><option value="ru">Русский</option></select>
     <span id="google_translate_element" class="notranslate" translate="no" style="display:none;vertical-align:middle"></span>
     <button class="tiny go" id="tapBtn" title="tape le rythme pour régler le tempo">&#9678; TAP</button>
+    </span>
     <span class="bpm">BPM <input type="number" id="bpm" value="120" min="40" max="300"></span>
     <span id="vu" title="niveau master (vert→ambre→rouge=saturation)" style="display:inline-block;width:90px;height:13px;border:1px solid var(--dim);border-radius:3px;overflow:hidden;vertical-align:middle"><span id="vuBar" style="display:block;height:100%;width:0;background:var(--cyan);transition:width .06s"></span></span>
     <span id="lufs" class="opt" title="loudness (LUFS~, cible streaming ≈ -14) · crête dB · rouge = écrêtage" style="font-size:14px;margin-left:6px;vertical-align:middle;min-width:130px;display:inline-block">LUFS~ −∞ · pk −∞</span>
@@ -6009,10 +6012,14 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // wiring
   $("run").addEventListener("click",run);
   $("stop").addEventListener("click",stop);
+  // studio drawer: the secondary transport tools live behind one STUDIO toggle (progressive disclosure)
+  {const st=$("studioToggle"),tools=$("studioTools");if(st&&tools)st.addEventListener("click",()=>{
+    const open=tools.style.display!=="none";tools.style.display=open?"none":"inline";
+    st.classList.toggle("on",!open);st.innerHTML=open?"&#9881; STUDIO &#9656;":"&#9881; STUDIO &#9662;";});}
   // first-play overlay: one click = audio unlocked + RUN. Escape = dismiss without playing.
   {const fp=$("firstPlay");if(fp){
     const hide=()=>{fp.style.opacity="0";fp.style.transition="opacity .45s";fp.style.pointerEvents="none";setTimeout(()=>{fp.style.display="none";},500);};
-    fp.addEventListener("click",()=>{hide();run();});
+    fp.addEventListener("click",()=>{hide();run();try{toggleStage();}catch(_){}});
     document.addEventListener("keydown",e=>{if(e.key==="Escape"&&fp.style.display!=="none")hide();},{once:false});
   }}
   // tap-tempo: tap the button in rhythm to set the BPM (live)
