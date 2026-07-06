@@ -36,6 +36,11 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
 5. **Effects, sample playback, MIDI out.**
 6. **Port the JS engine to loom-core (Rust→WASM) so all surfaces share one engine.**
 
+## Session cycle (tasks/)
+- Start of session: read `tasks/todo.md` (current work) and `tasks/lessons.md` (past corrections).
+- Before implementing anything non-trivial: write the plan as checkable items in `tasks/todo.md`, then check them off as you go; add a short "Review" note at the end.
+- After ANY correction from the owner: add one lesson to `tasks/lessons.md` (one lesson per entry).
+
 ## Conventions
 - Keep `loom-core` dependency-free and fully tested. Run `cargo test -p loom-core`.
 - Every new language feature: update the parser, add tests, then expose it in
@@ -43,9 +48,9 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
 - Small commits, clear messages. Explain tradeoffs to the owner.
 
 ## The AI brain
-Use a strong Claude model (Opus) for composition quality. The owner has a Max
-subscription — authenticate Claude Code with that (do NOT set ANTHROPIC_API_KEY,
-or it bills the API instead of the subscription).
+Use the strongest available Claude model (Fable 5, formerly Opus) for composition
+quality. The owner has a Max subscription — authenticate Claude Code with that
+(do NOT set ANTHROPIC_API_KEY, or it bills the API instead of the subscription).
 
 ## First task suggestion
 Run `cargo test -p loom-core` to confirm the core builds, then start the music
