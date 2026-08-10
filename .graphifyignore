@@ -1,0 +1,6 @@
+# anti-boucle graphify (10/07) : jamais ses propres sorties ni les artefacts de build
+graphify-out/
+target/
+node_modules/
+dist/
+*.log
