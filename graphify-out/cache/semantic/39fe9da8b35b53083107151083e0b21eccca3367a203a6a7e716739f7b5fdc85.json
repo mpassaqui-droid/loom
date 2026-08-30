@@ -1,1 +1,0 @@
-{"nodes": [{"id": "PLAN_MONDE::ableton-integration", "label": "Ableton Live Integration", "type": "concept", "source_file": "PLAN-MONDE.md", "description": "MIDI clock sync, Ableton Link (tempo+phase), OSC bidirectional control, Max for Live device.", "confidence": "MEDIUM"}], "edges": [], "hyperedges": []}

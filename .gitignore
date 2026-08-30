@@ -1,3 +1,15 @@
 /target
 **/node_modules
 .DS_Store
+.env
+.env.*
+*.pem
+*.key
+
+# Proposed, not decided: internal tooling artifacts, not useful to a portfolio
+# reader. Already tracked in git, so uncommenting these alone will NOT remove
+# them from the repo or its history. That needs `git rm -r --cached <path>`
+# (and a history rewrite if they must disappear from old commits too).
+graphify-out/
+# .claude/
+# tasks/
