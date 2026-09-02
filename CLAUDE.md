@@ -28,13 +28,15 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
 - timbre: `saw sine tri pulse square`, `gain N`
 
 ## Roadmap (build in this order, each as its own small PR)
-1. **Music theory layer**: `key: c minor`, `scale: dorian`, `chord: Cm7`,
-   world scales (maqam, raga, pentatonic, gamelan). Notes can be scale degrees.
-2. **Structure**: sections, arrangement (intro/verse/chorus/drop), song timeline.
-3. **Variation / generative**: euclidean rhythms, probability, mutation, seeds.
-4. **Polyrhythm/polymeter, tempo & meter changes.**
-5. **Effects, sample playback, MIDI out.**
+1. ✅ done — **Music theory layer**: `key:`, `scale:`, `chord:`, world scales
+   (maqam, raga, pentatonic, gamelan), scale degrees. In `loom-core` with tests.
+2. ✅ done — **Structure**: sections, arrangement (intro/verse/chorus/drop), song timeline.
+3. ✅ done — **Variation / generative**: euclidean rhythms, probability, mutation, seeds.
+4. ✅ done — **Polyrhythm/polymeter, tempo & meter changes.**
+5. ✅ done — **Effects, sample playback, MIDI out.** (in `web/index.html`, the JS engine.)
 6. **Port the JS engine to loom-core (Rust→WASM) so all surfaces share one engine.**
+   In progress, not finished: `web/index.html` loads `loom-wasm` as a non-destructive
+   A/B check (`window.__loomRust`), toggle off by default — JS is still the real engine.
 
 ## Session cycle (tasks/)
 - Start of session: read `tasks/todo.md` (current work) and `tasks/lessons.md` (past corrections).
@@ -53,6 +55,8 @@ quality. The owner has a Max subscription — authenticate Claude Code with that
 (do NOT set ANTHROPIC_API_KEY, or it bills the API instead of the subscription).
 
 ## First task suggestion
-Run `cargo test -p loom-core` to confirm the core builds, then start the music
-theory layer (item 1): add `key:` and `scale:` so melodic voices can use scale
-degrees (1 2 3 4 5 6 7) that resolve against the key. Add tests first.
+Run `cargo test -p loom-core` to confirm the core builds (88 tests as of this
+writing). Roadmap items 1-5 are already done — the real remaining work is item 6
+(finish the loom-core→WASM port, currently an experimental A/B toggle in
+`web/index.html`) and the native audio backend for `loom-tui` (explicit TODO in
+`loom-tui/src/main.rs`). Check `tasks/todo.md` for the session in progress first.
