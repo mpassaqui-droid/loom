@@ -19,16 +19,39 @@ bass:  c2 . eb2 . g2 . eb2 . | saw | every 8 rev
 - **Timbre:** `saw` `sine` `tri` `pulse` `square` · `gain N`
 - `#` starts a comment
 
+## Native apps (Linux / Omarchy)
+```bash
+./install.sh            # builds and installs `loom` + `loom-gui` for your user (no sudo)
+./install.sh --uninstall
+```
+- **`loom-gui`**: a window with the editor, a live step grid, transport, volume, and the song library.
+- **`loom`**: the same thing in the terminal. Also `loom play song.loom` (headless) and
+  `loom render song.loom out.wav [bars]` (offline bounce).
+- Both play sound natively through PipeWire/ALSA. Code edits hot-swap at the next bar
+  line, so the music never stops while you type.
+- On [Omarchy](https://omarchy.org) the apps appear in the Super+Space menu, take their
+  colours from the active theme, and recolour live on `omarchy theme set`. `.loom` files
+  open in LOOM.
+
+Native sound today: synth drums (`kick snare hat clap`), oscillators
+(`saw sine tri square`), gain, pan, velocity/accents, plus the whole language
+from `loom-core` (keys, scales, chords, progressions, song structure, euclid,
+probability, polymeter, tempo changes). Browser-only for now: FX, filters and
+envelopes, samples, MIDI, and the VIBE AI box.
+
 ## What's in this repo
 | path | what it is | runs where |
 |------|------------|-----------|
 | `loom-core` | Parser, verbs, per-bar scheduler. Zero dependencies. | anywhere |
+| `loom-audio` | Native synth voices + sample-clock sequencer, live output (cpal) and WAV rendering | desktop |
+| `loom-app` | Shared logic for the native apps: Omarchy theme, song library, step-grid model | desktop |
+| `loom-tui` | Terminal app `loom` (ratatui) | terminal |
+| `loom-gui` | Window app `loom-gui` (egui) | desktop |
 | `loom-wasm` | `wasm-bindgen` wrapper around `loom-core` | browser |
-| `loom-tui` | Terminal client (ratatui for the grid UI, cpal for audio) | terminal |
 | `web/index.html` | Standalone browser prototype, JS engine. Includes "VIBE": type a plain-language request and an AI model writes the LOOM code. | browser |
 
 `loom-core` has no external dependencies and is the one crate meant to run
-identically everywhere else. `loom-wasm` and `loom-tui` build on top of it.
+identically everywhere else. Everything else builds on top of it.
 
 ## Build & test
 ```bash
@@ -39,11 +62,13 @@ cargo test -p loom-core
 cargo install wasm-pack
 wasm-pack build loom-wasm --target web
 
-# terminal client
-cargo run -p loom-tui --release
+# native apps
+cargo run -p loom-tui --release          # terminal
+cargo run -p loom-gui --release          # window
+cargo test -p loom-audio -p loom-app     # native sound + shared app logic
 ```
 
-`loom-core` has 88 tests and all of them pass (`cargo test -p loom-core`).
+`loom-core` has 90 tests and all of them pass (`cargo test -p loom-core`).
 
 ## Status
 This is a repo in transition, not a finished product. The browser prototype

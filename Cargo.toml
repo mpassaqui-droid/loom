@@ -3,4 +3,4 @@
 # Test the core logic with:    cargo test -p loom-core
 [workspace]
 resolver = "2"
-members = ["loom-core", "loom-wasm", "loom-tui"]
+members = ["loom-core", "loom-wasm", "loom-tui", "loom-audio", "loom-app", "loom-gui"]

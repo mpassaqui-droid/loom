@@ -1,0 +1,15 @@
+[package]
+name = "loom-audio"
+version = "0.1.0"
+edition = "2021"
+description = "LOOM native sound: synth voices + a sample-clock sequencer driven by loom-core, with live audio output (cpal) and offline WAV rendering."
+
+[dependencies]
+loom-core = { path = "../loom-core" }
+# Live audio output (PipeWire/ALSA on Linux). Turn off with
+# `--no-default-features` to build/test the pure DSP without a sound card.
+cpal = { version = "0.18", optional = true }
+
+[features]
+default = ["device"]
+device = ["dep:cpal"]

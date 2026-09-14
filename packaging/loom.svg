@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- LOOM: warp threads (vertical) woven with a weft (horizontal) that is a waveform -->
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#101410"/>
+  <g stroke="#2f5a2f" stroke-width="6" stroke-linecap="round">
+    <line x1="32" y1="24" x2="32" y2="104"/>
+    <line x1="54" y1="24" x2="54" y2="104"/>
+    <line x1="74" y1="24" x2="74" y2="104"/>
+    <line x1="96" y1="24" x2="96" y2="104"/>
+  </g>
+  <path d="M18 64 C 28 38, 38 38, 43 64 S 58 90, 64 64 S 80 38, 85 64 S 100 90, 110 64"
+        fill="none" stroke="#39ff14" stroke-width="8" stroke-linecap="round"/>
+  <g fill="#39ff14">
+    <circle cx="32" cy="24" r="5"/><circle cx="54" cy="104" r="5"/>
+    <circle cx="74" cy="24" r="5"/><circle cx="96" cy="104" r="5"/>
+  </g>
+</svg>

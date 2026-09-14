@@ -121,6 +121,9 @@ pub struct Event {
     /// Stereo pan (-1 left … 1 right) for this event's layer. `None` = centre.
     /// Set by `| pan N` and by the `jux`/`off` layers. Carries the stereo split.
     pub pan: Option<f32>,
+    /// Length of the step this event occupies, as a fraction of the bar (0..1).
+    /// A native synth uses it as the note's gate length.
+    pub dur: f32,
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
@@ -1049,7 +1052,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
             let m = ord.len();
             for (j, note) in ord.iter().enumerate() {
                 events.push(Event { phase: p0 + (j as f32 / m as f32) * span, voice: v.name.clone(),
-                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note), pan: v.pan });
+                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note), pan: v.pan, dur: span / m as f32 });
             }
             return;
         }
@@ -1059,7 +1062,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
         let vel = accent * ramp_factor(j, ratchet, ramp_dir);
         for note in &notes {
             events.push(Event { phase, voice: v.name.clone(), token: note.clone(),
-                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note), pan: v.pan });
+                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note), pan: v.pan, dur: span / ratchet as f32 });
         }
     }
 }
@@ -1747,6 +1750,8 @@ pub struct Program {
     pub tempo_map: Vec<(String, f64)>,
     /// Resolved groove microtiming table (`groove: dilla`), empty if none.
     pub groove: Vec<f32>,
+    /// Chord progression (`prog: Am F C G`), one chord per bar, followed by `^` tokens.
+    pub prog: Vec<String>,
 }
 
 impl Program {
@@ -1762,6 +1767,7 @@ impl Program {
             accel: parse_accel(src),
             tempo_map: parse_tempo_map(src),
             groove: parse_groove(src),
+            prog: parse_prog(src),
         }
     }
 
@@ -1831,7 +1837,7 @@ impl Program {
         let cur_key = sec_now
             .and_then(|s| self.key_map.iter().find(|(n, _)| n == s).map(|(_, k)| k))
             .or(self.key.as_ref());
-        sched_prog(&active, cur_key, &[], bar, self.seed, &self.groove)
+        sched_prog(&active, cur_key, &self.prog, bar, self.seed, &self.groove)
     }
 }
 
@@ -2873,5 +2879,26 @@ mod tests {
         assert_eq!(apply_verb(&v("1 2 3"), "mirror", 0, 0).join(" "), "1 2 3 3 2 1");
         assert_eq!(apply_verb(&v("x x x x"), "thin 2", 0, 0).join(" "), "x . x .");
         assert_eq!(apply_verb(&v("x x x x"), "accent 2", 0, 0).join(" "), "x! x x! x");
+    }
+
+    #[test]
+    fn events_carry_step_length() {
+        let ev = schedule_bar(&parse("kick: x . [x x] ."), 0);
+        let durs: Vec<f32> = ev.iter().map(|e| e.dur).collect();
+        assert_eq!(durs, vec![0.25, 0.125, 0.125]);
+        // arpeggio: a chord step is shared between its notes
+        let ev = schedule_bar(&parse("keys: Cm . | arp up"), 0);
+        assert_eq!(ev.len(), 3, "{:?}", ev);
+        assert!(ev.iter().all(|e| (e.dur - 0.5 / 3.0).abs() < 1e-6), "{:?}", ev);
+    }
+
+    #[test]
+    fn program_follows_chord_progression() {
+        // `^` plays the current chord of `prog:` — Program must pass the progression through
+        let p = Program::parse("prog: Am F\npad: ^ . . .");
+        let bar0: Vec<String> = p.schedule_bar(0).into_iter().map(|e| e.token).collect();
+        let bar1: Vec<String> = p.schedule_bar(1).into_iter().map(|e| e.token).collect();
+        assert!(!bar0.is_empty(), "the chord must sound");
+        assert_ne!(bar0, bar1, "bar 1 moves to F");
     }
 }

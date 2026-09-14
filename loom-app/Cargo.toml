@@ -1,0 +1,8 @@
+[package]
+name = "loom-app"
+version = "0.1.0"
+edition = "2021"
+description = "Shared logic for LOOM's native apps (TUI + GUI): Omarchy theme, song library, step-grid view."
+
+[dependencies]
+loom-core = { path = "../loom-core" }

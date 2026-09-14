@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "Terminal live-coding client for LOOM — the same engine, native audio, runs in your terminal like a tracker."
 
+[[bin]]
+name = "loom"
+path = "src/main.rs"
+
 [dependencies]
 loom-core = { path = "../loom-core" }
-ratatui = "0.28"        # terminal UI (the retro green grid, in the terminal)
-crossterm = "0.28"      # key input / raw mode
-cpal = "0.15"           # cross-platform native audio output
+loom-audio = { path = "../loom-audio" }
+loom-app = { path = "../loom-app" }
+ratatui = "0.30"        # terminal UI (re-exports crossterm for key input / raw mode)
 
 # Run with:  cargo run -p loom-tui --release
