@@ -1,31 +1,68 @@
 //! LOOM native sound.
 //!
-//! - [`synth`]: the instruments (drums + oscillators), ported from the browser engine.
 //! - [`seq`]: the sample-clock sequencer that plays a `loom_core::Program`.
+//! - [`note`]: the contract between the sequencer and the sound modules.
+//! - [`drums`], [`tone`], [`sample`]: the sound sources.
+//! - [`inserts`]: the per-note effect chain; [`master`]: buses, sends, mastering.
+//! - [`dsp`], [`clock`]: shared building blocks and musical time.
 //! - [`Engine`] (feature `device`): live output on the system sound card.
 //! - [`render`] / [`write_wav`]: offline bounce to a WAV file.
 
+pub mod clock;
+pub mod drums;
+pub mod dsp;
+pub mod inserts;
+pub mod master;
+pub mod note;
+pub mod sample;
 pub mod seq;
-pub mod synth;
+pub mod tone;
 #[cfg(feature = "device")]
 mod device;
+#[cfg(feature = "device")]
+pub mod midi;
+#[cfg(feature = "device")]
+pub mod input;
 
 #[cfg(feature = "device")]
 pub use device::Engine;
-pub use seq::{Sequencer, Status};
+pub use sample::SampleBank;
+pub use seq::{Channel, Hit, MidiEvent, MidiNote, Sequencer, Status, SCOPE_LEN};
 
 use loom_core::Program;
+use std::sync::{Arc, OnceLock};
+
+/// The default sample bank, loaded once per process (for offline rendering).
+pub fn default_bank() -> Arc<SampleBank> {
+    static BANK: OnceLock<Arc<SampleBank>> = OnceLock::new();
+    BANK.get_or_init(|| Arc::new(SampleBank::load_default())).clone()
+}
 
 /// Render `bars` bars of LOOM source offline. Returns interleaved stereo f32.
 pub fn render(src: &str, bars: u32, sample_rate: u32) -> Vec<f32> {
+    render_voice(src, bars, sample_rate, None)
+}
+
+/// Stems: every voice rendered on its own (through the same master chain),
+/// as `(voice name, interleaved stereo)` — the browser's STEMS button.
+pub fn render_stems(src: &str, bars: u32, sample_rate: u32) -> Vec<(String, Vec<f32>)> {
+    let mut names: Vec<String> = Vec::new();
+    for v in Program::parse(src).voices {
+        if !names.contains(&v.name) { names.push(v.name); }
+    }
+    names.into_iter().map(|n| { let audio = render_voice(src, bars, sample_rate, Some(&n)); (n, audio) }).collect()
+}
+
+fn render_voice(src: &str, bars: u32, sample_rate: u32, stem: Option<&str>) -> Vec<f32> {
     let program = Program::parse(src);
     let seconds: f64 = (0..bars as i64).map(|b| {
         let len = program.len_bars() as i64;
         program.bar_seconds(if len > 0 { b.rem_euclid(len) } else { b })
     }).sum();
-    let tail = 0.5; // let the last notes ring out
+    let tail = 2.0; // let reverb and delay tails ring out
     let frames = ((seconds + tail) * sample_rate as f64) as usize;
-    let mut seq = Sequencer::new(sample_rate as f32);
+    let mut seq = Sequencer::new(sample_rate as f32, default_bank());
+    seq.set_stem(stem);
     seq.set_program(program);
     seq.play();
     let mut out = vec![0.0; frames * 2];

@@ -26,6 +26,18 @@ impl Editor {
         Editor { lines, row: 0, col: 0, scroll: 0, dirty: false }
     }
 
+    /// Swap in a whole new text (VIBE), keeping the cursor roughly in place.
+    /// It counts as an edit: the file is marked modified.
+    pub fn replace_text(&mut self, text: &str) {
+        let (row, col, scroll) = (self.row, self.col, self.scroll);
+        *self = Editor::new(text);
+        self.row = row.min(self.lines.len() - 1);
+        self.col = col;
+        self.clamp_col();
+        self.scroll = scroll.min(self.row);
+        self.dirty = true;
+    }
+
     pub fn text(&self) -> String {
         let mut s = self.lines.join("\n");
         s.push('\n');
@@ -156,6 +168,16 @@ mod tests {
         e.end();
         e.delete();
         assert_eq!(e.lines, ["abcd"]);
+    }
+
+    #[test]
+    fn replace_text_marks_dirty_and_clamps_cursor() {
+        let mut e = Editor::new("kick: x . x .\nhat: x x x x\nbass: c2");
+        e.down(2);
+        e.end();
+        e.replace_text("kick: x x");
+        assert_eq!((e.row, e.col, e.dirty), (0, 8, true));
+        assert_eq!(e.text(), "kick: x x\n");
     }
 
     #[test]

@@ -1,13 +1,22 @@
 //! Shared logic for LOOM's native apps. The terminal (`loom`) and window
 //! (`loom-gui`) front-ends both build on this, so they look and behave alike.
 
+pub mod develop;
+pub mod ear;
+pub mod generate;
 pub mod grid;
+pub mod hum;
+pub mod lessons;
+pub mod prof;
 pub mod library;
+pub mod share;
 pub mod theme;
+pub mod vibe;
 
 pub use grid::{grid, Cell, Row};
 pub use library::Library;
 pub use theme::{Rgb, Theme, ThemeWatcher};
+pub use vibe::{VibeAnswer, VibeJob};
 
 /// The pattern a brand-new session opens with.
 pub const WELCOME: &str = "\

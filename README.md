@@ -33,18 +33,28 @@ bass:  c2 . eb2 . g2 . eb2 . | saw | every 8 rev
   colours from the active theme, and recolour live on `omarchy theme set`. `.loom` files
   open in LOOM.
 
-Native sound today: synth drums (`kick snare hat clap`), oscillators
-(`saw sine tri square`), gain, pan, velocity/accents, plus the whole language
-from `loom-core` (keys, scales, chords, progressions, song structure, euclid,
-probability, polymeter, tempo changes). Browser-only for now: FX, filters and
-envelopes, samples, MIDI, and the VIBE AI box.
+The native engine is a port of the browser engine: synth drums and samples
+(`| sample bd`, warp, freeze, chop, grain), oscillators with unison, wavetables,
+FM, plucked/bowed/reed strings, granular, filters and envelopes, the per-note
+effects (`drive chorus phaser crush echo ir vowel`…), the master chain (reverb,
+ping-pong delay, `duck:`, glue compressor, EQ, `warmth:`, limiter), `bus:`
+submixes, `morph:` crossfades, MIDI in/out (a virtual "LOOM" port, clock sync,
+live keyboard), REC to WAV, a metronome, a mixer, the VIBE AI box (through the
+`claude` CLI) and the visual stage (SCÈNE).
+
+Around it, the apps carry the browser's studio and teacher tools: mixer with
+master knobs, stems export (`loom render song.loom dir --stems`), tap tempo,
+LUFS meter, MIDI learn, piano roll, editable song timeline, demo tour, clips,
+share codes compatible with the web (`LOOM1:`), GÉNÉRER / DÉVELOPPE, the AI
+teacher (EXPLIQUE, `?question`), ear training, HUM (sing a melody, LOOM writes
+it) and 57 lessons + the language reference. Press F1 in either app for the keys.
 
 ## What's in this repo
 | path | what it is | runs where |
 |------|------------|-----------|
 | `loom-core` | Parser, verbs, per-bar scheduler. Zero dependencies. | anywhere |
-| `loom-audio` | Native synth voices + sample-clock sequencer, live output (cpal) and WAV rendering | desktop |
-| `loom-app` | Shared logic for the native apps: Omarchy theme, song library, step-grid model | desktop |
+| `loom-audio` | Native engine: sequencer, instruments, samples, effects, master, MIDI, live output (cpal), WAV rendering | desktop |
+| `loom-app` | Shared logic for the native apps: Omarchy theme, song library, step-grid model, VIBE, web-compatible share codes | desktop |
 | `loom-tui` | Terminal app `loom` (ratatui) | terminal |
 | `loom-gui` | Window app `loom-gui` (egui) | desktop |
 | `loom-wasm` | `wasm-bindgen` wrapper around `loom-core` | browser |

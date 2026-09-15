@@ -7,6 +7,7 @@
 # What it puts where:
 #   ~/.local/bin/loom, ~/.local/bin/loom-gui          the apps
 #   ~/.local/share/loom/examples/*.loom               the example songs
+#   ~/.local/share/loom/samples/*.wav                 the sample bank (bd, amen, vox…)
 #   ~/.local/share/applications/loom*.desktop         launchers (Super+Space menu)
 #   ~/.local/share/icons/hicolor/scalable/apps/loom.svg
 #   ~/.local/share/mime/packages/loom.xml             .loom files open in LOOM
@@ -20,6 +21,7 @@ APPS="$DATA/applications"
 ICON="$DATA/icons/hicolor/scalable/apps/loom.svg"
 MIME="$DATA/mime/packages/loom.xml"
 EXAMPLES="$DATA/loom/examples"
+SAMPLES="$DATA/loom/samples"
 
 say() { printf '\033[1;32m›\033[0m %s\n' "$*"; }
 
@@ -50,10 +52,11 @@ say "Compilation (release) — la première fois prend quelques minutes…"
 "${CARGO[@]}" build --release --manifest-path "$ROOT/Cargo.toml" -p loom-tui -p loom-gui
 
 say "Installation des apps dans $BIN"
-mkdir -p "$BIN" "$EXAMPLES" "$APPS" "$(dirname "$ICON")" "$(dirname "$MIME")" "$HOME/Music/loom"
+mkdir -p "$BIN" "$EXAMPLES" "$SAMPLES" "$APPS" "$(dirname "$ICON")" "$(dirname "$MIME")" "$HOME/Music/loom"
 install -m 755 "$ROOT/target/release/loom" "$BIN/loom"
 install -m 755 "$ROOT/target/release/loom-gui" "$BIN/loom-gui"
 install -m 644 "$ROOT"/*.loom "$EXAMPLES/"
+install -m 644 "$ROOT"/web/samples/*.wav "$SAMPLES/"
 install -m 644 "$ROOT/packaging/loom.svg" "$ICON"
 
 # On Omarchy, open the terminal app the Omarchy way (themed terminal,

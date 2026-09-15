@@ -1,6 +1,7 @@
 //! Drawing: transport bar, highlighted editor, live step grid, popups.
 
 use crate::app::{App, Mode};
+use crate::{studio_view, teacher_view};
 use loom_app::{grid, Cell, Rgb};
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -11,30 +12,44 @@ use std::time::Duration;
 
 const GRID_STEPS: usize = 16;
 
-fn c(rgb: Rgb) -> Color { Color::Rgb(rgb.0, rgb.1, rgb.2) }
+pub(crate) fn c(rgb: Rgb) -> Color { Color::Rgb(rgb.0, rgb.1, rgb.2) }
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let t = app.theme.clone();
     let base = Style::new().bg(c(t.background)).fg(c(t.foreground));
     f.render_widget(Block::new().style(base), f.area());
+    if matches!(app.mode, Mode::Stage) {
+        draw_stage(f, app);
+        return;
+    }
 
-    let [top, body, bottom] = Layout::vertical([Constraint::Length(1), Constraint::Min(3), Constraint::Length(1)]).areas(f.area());
+    // the arrangement line shows when the code has a `song:`
+    let has_song = !crate::studio::songline::sections(&app.editor.text()).is_empty();
+    let [top, body, timeline, bottom] = Layout::vertical([
+        Constraint::Length(1), Constraint::Min(3), Constraint::Length(u16::from(has_song)), Constraint::Length(1),
+    ]).areas(f.area());
     draw_transport(f, app, top);
 
     let grid_width = (GRID_STEPS as u16 * 2 + 14).min(body.width / 2);
     let [code, side] = Layout::horizontal([Constraint::Min(20), Constraint::Length(grid_width)]).areas(body);
     draw_editor(f, app, code);
-    draw_grid(f, app, side);
+    if app.studio.show_roll { studio_view::draw_roll(f, app, side) } else { draw_grid(f, app, side) }
+    if matches!(app.mode, Mode::Mixer { .. }) { studio_view::draw_mixer(f, app, body); }
+    if has_song { studio_view::draw_timeline(f, app, timeline); }
     draw_status(f, app, bottom);
 
     match &app.mode {
-        Mode::Help => draw_help(f, app),
+        Mode::Help { .. } => draw_help(f, app),
         Mode::Browser { .. } => draw_browser(f, app),
         Mode::Confirm { question, .. } => {
             let q = question.clone();
             draw_confirm(f, app, &q)
         }
-        Mode::Edit => {}
+        Mode::Prof { .. } => teacher_view::draw_prof(f, app),
+        Mode::Ear => teacher_view::draw_ear(f, app),
+        Mode::Hum => teacher_view::draw_hum(f, app),
+        Mode::Lessons { .. } => teacher_view::draw_lessons(f, app),
+        Mode::Edit | Mode::Vibe { .. } | Mode::Stage | Mode::Mixer { .. } | Mode::Timeline { .. } | Mode::Import { .. } => {}
     }
 }
 
@@ -71,13 +86,43 @@ fn draw_transport(f: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::styled("▮".repeat(level.min(8)), Style::new().fg(c(if level >= 8 { t.error } else { t.note }))));
         spans.push(Span::styled("▯".repeat(8 - level.min(8)), dim));
         spans.push(Span::styled(format!(" vol {:.0}%", app.volume * 100.0), dim));
+        spans.extend(studio_view::transport_spans(app));
+        if app.is_recording() { spans.push(Span::styled("  ● REC", Style::new().fg(c(t.error)).add_modifier(Modifier::BOLD))); }
+        if app.metronome { spans.push(Span::styled("  ♩", accent)); }
+        if app.midi_clock { spans.push(Span::styled("  MIDI→", accent)); }
+        if app.midi_follow { spans.push(Span::styled("  →MIDI", accent)); }
     }
     spans.push(Span::styled("  ", dim));
     spans.push(Span::styled(app.file_label(), Style::new().fg(c(t.foreground))));
+    if let Some(label) = app.teacher.history.undo_label() {
+        spans.push(Span::styled(format!("  F3 ↩ {label}"), dim));
+    }
+    if let Some(label) = app.teacher.history.redo_label() {
+        spans.push(Span::styled(format!("  ^Y rétablir {label}"), dim));
+    }
     if app.out_of_sync() {
         spans.push(Span::styled("  ⟳ modifié — Ctrl+R", Style::new().fg(c(t.accent))));
     }
     f.render_widget(Paragraph::new(Line::from(spans)).style(Style::new().bg(c(t.panel))), area);
+}
+
+/// The full-screen SCÈNE (F12), with the title, section and bar on top.
+fn draw_stage(f: &mut Frame, app: &mut App) {
+    let mut position = String::from("arrêté");
+    if let Ok(engine) = &app.engine {
+        let s = engine.status();
+        if s.playing() {
+            position = format!("mesure {}", s.bar() + 1);
+            if let Some(section) = app.program.section_at(s.song_bar()) {
+                position = format!("{section} · {position}");
+            }
+        }
+    }
+    let file = app.path.as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().into_owned());
+    let title = app.stage.director.title.clone().or(file).unwrap_or_default();
+    let theme = app.theme.clone();
+    let area = f.area();
+    app.stage.draw(f, area, &theme, &title, &position);
 }
 
 fn is_name(s: &str) -> bool {
@@ -85,7 +130,7 @@ fn is_name(s: &str) -> bool {
 }
 
 /// Colour one line of LOOM source: comments, names/directives, verbs, hits.
-fn highlight<'a>(line: &'a str, app: &App) -> Vec<Span<'a>> {
+pub(crate) fn highlight<'a>(line: &'a str, app: &App) -> Vec<Span<'a>> {
     let t = &app.theme;
     let (code, comment) = match line.find('#') { Some(i) => line.split_at(i), None => (line, "") };
     let mut spans = Vec::new();
@@ -198,7 +243,44 @@ fn draw_grid(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
-    let hints = " ^R jouer  Échap stop  ^S enregistrer  ^O ouvrir  ^E export wav  F1 aide  ^Q quitter ";
+    let hints = " ^R jouer  Échap stop  F2 vibe/?prof  Alt+G générer  Alt+L leçons  Alt+O oreille  F3 annuler  Alt+M mix  ^S enregistrer  ^O ouvrir  F1 aide  ^Q quitter ";
+    let accent = Style::new().fg(c(t.accent)).add_modifier(Modifier::BOLD);
+    if matches!(app.mode, Mode::Import { .. }) {
+        studio_view::draw_import(f, app, area);
+        return;
+    }
+    // the VIBE prompt takes over the status line while typing…
+    if let Mode::Vibe { input } = &app.mode {
+        let label = " VIBE › ";
+        let help = "   Entrée envoie · ?question = le prof · Échap ferme";
+        let mut spans = vec![Span::styled(label, accent), Span::raw(input.clone())];
+        if input.is_empty() {
+            spans.push(Span::styled("décris la musique, ex. fais un groove afro plus sombre", Style::new().fg(c(t.dim))));
+        }
+        spans.push(Span::styled(help, Style::new().fg(c(t.dim))));
+        f.render_widget(Paragraph::new(Line::from(spans)).style(Style::new().bg(c(t.panel))), area);
+        let x = area.x + (label.chars().count() + input.chars().count()) as u16;
+        if x < area.right() { f.set_cursor_position(Position::new(x, area.y)); }
+        return;
+    }
+    // …and shows a spinner while Claude thinks
+    if let Some(job) = &app.vibe {
+        const SPIN: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let elapsed = job.elapsed();
+        let frame = SPIN[(elapsed.as_millis() / 100) as usize % SPIN.len()];
+        let line = Line::from(vec![
+            Span::styled(format!(" {frame} VIBE réfléchit… {} s ", elapsed.as_secs()), accent),
+            Span::styled(format!("« {} »", job.words), Style::new().fg(c(t.foreground))),
+            Span::styled("   Échap annule", Style::new().fg(c(t.dim))),
+        ]);
+        f.render_widget(Paragraph::new(line).style(Style::new().bg(c(t.panel))), area);
+        return;
+    }
+    // …and the teacher's spinner, while the answer popup is closed
+    if let (Some(line), false) = (teacher_view::thinking_line(app), matches!(app.mode, Mode::Prof { .. })) {
+        f.render_widget(Paragraph::new(line).style(Style::new().bg(c(t.panel))), area);
+        return;
+    }
     let line = match &app.message {
         Some((msg, err, at)) if at.elapsed() < Duration::from_secs(6) => {
             Line::from(vec![Span::styled(format!(" {msg} "), Style::new().fg(c(if *err { t.error } else { t.foreground })))])
@@ -208,7 +290,7 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(line).style(Style::new().bg(c(t.panel))), area);
 }
 
-fn popup(f: &mut Frame, app: &App, title: &str, w: u16, h: u16) -> Rect {
+pub(crate) fn popup(f: &mut Frame, app: &App, title: &str, w: u16, h: u16) -> Rect {
     let area = f.area();
     let (w, h) = (w.min(area.width.saturating_sub(2)), h.min(area.height.saturating_sub(2)));
     let rect = Rect::new(area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h);
@@ -222,7 +304,7 @@ fn popup(f: &mut Frame, app: &App, title: &str, w: u16, h: u16) -> Rect {
     inner
 }
 
-fn draw_help(f: &mut Frame, app: &App) {
+fn draw_help(f: &mut Frame, app: &mut App) {
     let t = &app.theme;
     let key = |k: &str, what: &str| Line::from(vec![
         Span::styled(format!("  {k:<17}"), Style::new().fg(c(t.accent))),
@@ -235,6 +317,25 @@ fn draw_help(f: &mut Frame, app: &App) {
         key("Échap · F6", "stop"),
         key("Alt+1…9", "couper / rétablir la voix n° N de la grille"),
         key("F7 · F8", "volume − / +"),
+        key("F4", "REC : enregistrer ce qui joue (~/Music/loom/enregistrements)"),
+        key("Ctrl+T", "métronome"),
+        key("F9", "envoyer l'horloge MIDI (port « LOOM »)"),
+        key("F10", "suivre une horloge MIDI externe"),
+        key("clavier MIDI", "joue en direct avec le son de la voix lead"),
+        Line::from(""),
+        section("Scène (visuels)"),
+        key("F12", "scène : visuels plein écran (Échap ou F12 pour revenir)"),
+        key("  N · V", "scène suivante · mode VJ (change toutes les 4 mesures)"),
+        key("scene: tunnel", "choisir la scène (scene@drop: tunnel par section)"),
+        Line::from(""),
+        section("Studio"),
+        key("Alt+M", "mixeur : volume/pan/mute/solo/clip par voix + potards master"),
+        key("  ↑↓ ←→ +/-", "choisir · volume ou pan · régler (m mute, s solo, c clip, l LEARN)"),
+        key("Alt+A", "arrangement : ←→ section, +/- mesures, d dup, x suppr, < > déplacer"),
+        key("Alt+R · Alt+T", "piano-roll · TAP tempo (réécrit bpm:)"),
+        key("Alt+S", "STEMS : une piste WAV par voix dans <morceau>-stems/"),
+        key("Alt+P · Alt+I", "partager (code LOOM1: → <morceau>.share.txt) · importer"),
+        key("Alt+D", "DÉMO : visite des morceaux d'exemple (une touche arrête)"),
         Line::from(""),
         section("Fichiers"),
         key("Ctrl+O", "ouvrir un morceau"),
@@ -243,16 +344,33 @@ fn draw_help(f: &mut Frame, app: &App) {
         key("Ctrl+E", "exporter en WAV à côté du morceau"),
         key("Ctrl+Q", "quitter"),
         Line::from(""),
+        section("IA — VIBE"),
+        key("F2", "décrire la musique en mots, Claude écrit le code"),
+        key("  Entrée · Échap", "envoyer · fermer (Échap annule s'il réfléchit)"),
+        key("F2 ?question", "demander au prof : ?quinte ?raga ?pourquoi c'est triste"),
+        key("F3 · Ctrl+Y", "annuler · rétablir VIBE/GÉNÉRER/DÉVELOPPE/HUM/leçon"),
+        Line::from(""),
+        section("Prof & composition"),
+        key("Alt+G", "GÉNÉRER un morceau neuf (genre au hasard)"),
+        key("Alt+B", "DÉVELOPPE : faire évoluer les voix (nouveau seed)"),
+        key("Alt+E", "EXPLIQUE : le prof explique ton morceau"),
+        key("Alt+O", "OREILLE : entraîner l'oreille (Tab écoute l'exemple)"),
+        key("Alt+H", "HUM : chante 16 temps, LOOM écrit la mélodie"),
+        key("Alt+L", "LEÇONS & RÉFÉRENCE (tape pour chercher)"),
+        Line::from(""),
         section("Écrire"),
         key("Ctrl+/", "commenter / décommenter la ligne"),
         key("kick: x . x .", "une voix par ligne — x = coup, . = silence"),
         key("bass: c2 eb2", "notes, ou degrés 1 3 5 avec  key: c minor"),
         key("| rev | fast 2", "verbes : rev fast slow every euclid…"),
         Line::from(""),
-        Line::styled("  une touche pour fermer · TUTORIEL.md pour tout le langage", Style::new().fg(c(t.dim))),
+        Line::styled("  ↑↓ PgUp PgDn défiler · autre touche : fermer · TUTORIEL.md : le langage", Style::new().fg(c(t.dim))),
     ];
-    let inner = popup(f, app, "LOOM — aide", 76, lines.len() as u16 + 2);
-    f.render_widget(Paragraph::new(lines), inner);
+    let total = lines.len();
+    let inner = popup(f, app, "LOOM — aide", 80, total as u16 + 2);
+    let Mode::Help { scroll } = &mut app.mode else { return };
+    *scroll = teacher_view::clamp_scroll(*scroll, total, inner.height as usize);
+    f.render_widget(Paragraph::new(lines).scroll((*scroll as u16, 0)), inner);
 }
 
 fn draw_browser(f: &mut Frame, app: &App) {

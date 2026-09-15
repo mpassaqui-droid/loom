@@ -3,6 +3,7 @@
 //!   loom [song.loom]                     live-coding editor with native audio
 //!   loom play song.loom                  play without the editor (Ctrl+C to stop)
 //!   loom render song.loom out.wav [N]    bounce N bars (default: the song, or 8) to WAV
+//!   loom render song.loom dir --stems [N]  one WAV per voice in `dir`
 //!
 //! Architecture: the audio thread lives inside `loom_audio::Engine` (cpal);
 //! this thread draws with ratatui and sends it commands. Edits hot-swap at
@@ -10,6 +11,16 @@
 
 mod app;
 mod editor;
+mod scene;
+/// The studio's logic, shared with `loom-gui` (the same files, compiled here too).
+#[path = "../../loom-gui/src/studio/mod.rs"]
+#[allow(dead_code)] // the GUI uses all of it, the terminal only part
+mod studio;
+mod studio_view;
+/// LE PROF & COMPOSITION's state, shared with `loom-gui` (the same files, compiled here too).
+#[path = "../../loom-gui/src/teacher/mod.rs"]
+mod teacher;
+mod teacher_view;
 mod ui;
 
 use app::App;
@@ -23,27 +34,83 @@ const USAGE: &str = "\
 LOOM — un langage de live-coding musical
 
 usage :
-  loom [morceau.loom]                    éditeur live avec son natif
-  loom play morceau.loom                 jouer sans l'éditeur (Ctrl+C pour arrêter)
-  loom render morceau.loom sortie.wav [N]  exporter N mesures en WAV
-  loom-gui [morceau.loom]                la même chose dans une fenêtre
+  loom [morceau.loom]                          éditeur live avec son natif
+  loom play morceau.loom                       jouer sans l'éditeur (Ctrl+C pour arrêter)
+  loom render morceau.loom sortie.wav [N]      exporter N mesures en WAV
+  loom render morceau.loom dossier --stems [N] une piste WAV par voix dans le dossier
+  loom render --help                           détails de l'export
+  loom-gui [morceau.loom]                      la même chose dans une fenêtre
 ";
+
+const RENDER_USAGE: &str = "\
+loom render — exporter un morceau en WAV (hors-ligne, sans carte son)
+
+usage :
+  loom render morceau.loom sortie.wav [N]
+  loom render morceau.loom dossier --stems [N]
+
+  N         nombre de mesures (par défaut : tout le song:, sinon 8)
+  --stems   une piste WAV par voix (kick.wav, bass.wav…) dans le dossier,
+            chacune passée par la même chaîne master que le morceau entier
+            (pour mixer dans un logiciel audio)
+";
+
+/// What the command line asked for.
+#[derive(Debug, PartialEq)]
+enum Command {
+    Help,
+    RenderHelp,
+    Version,
+    Play(String),
+    /// Bounce to `out` (a WAV, or a folder of stems), `bars` bars or the whole song.
+    Render { file: String, out: String, bars: Option<u32>, stems: bool },
+    Tui(Option<PathBuf>),
+}
+
+/// Read the arguments (without the program name).
+fn parse(args: &[&str]) -> Result<Command, String> {
+    Ok(match args {
+        ["-h" | "--help" | "help"] => Command::Help,
+        ["-V" | "--version"] => Command::Version,
+        ["play", file] => Command::Play(file.to_string()),
+        ["render", rest @ ..] => {
+            if rest.iter().any(|a| matches!(*a, "-h" | "--help")) {
+                return Ok(Command::RenderHelp);
+            }
+            let stems = rest.contains(&"--stems");
+            let positional: Vec<&str> = rest.iter().copied().filter(|a| *a != "--stems").collect();
+            if let Some(flag) = positional.iter().find(|a| a.starts_with('-')) {
+                return Err(format!("option inconnue : {flag}\n\n{RENDER_USAGE}"));
+            }
+            let (file, out, bars) = match positional.as_slice() {
+                [file, out] => (file, out, None),
+                [file, out, bars] => match bars.parse::<u32>() {
+                    Ok(n) if n > 0 => (file, out, Some(n)),
+                    _ => return Err(format!("nombre de mesures invalide : {bars}")),
+                },
+                _ => return Err(format!("il faut un morceau et une sortie\n\n{RENDER_USAGE}")),
+            };
+            Command::Render { file: file.to_string(), out: out.to_string(), bars, stems }
+        }
+        [] => Command::Tui(None),
+        [file] if !file.starts_with('-') => Command::Tui(Some(PathBuf::from(file))),
+        _ => return Err(format!("arguments non reconnus\n\n{USAGE}")),
+    })
+}
+
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let result = match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
-        ["-h" | "--help" | "help"] => { print!("{USAGE}"); Ok(()) }
-        ["-V" | "--version"] => { println!("loom {}", env!("CARGO_PKG_VERSION")); Ok(()) }
-        ["play", file] => play(file),
-        ["render", file, out] => render(file, out, None),
-        ["render", file, out, bars] => match bars.parse() {
-            Ok(n) => render(file, out, Some(n)),
-            Err(_) => Err(format!("nombre de mesures invalide : {bars}")),
-        },
-        [] => tui(None),
-        [file] if !file.starts_with('-') => tui(Some(PathBuf::from(file))),
-        _ => Err(format!("arguments non reconnus\n\n{USAGE}")),
-    };
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let result = parse(&args).and_then(|command| match command {
+        Command::Help => { print!("{USAGE}"); Ok(()) }
+        Command::RenderHelp => { print!("{RENDER_USAGE}"); Ok(()) }
+        Command::Version => { println!("loom {}", env!("CARGO_PKG_VERSION")); Ok(()) }
+        Command::Play(file) => play(&file),
+        Command::Render { file, out, bars, stems: false } => render(&file, &out, bars),
+        Command::Render { file, out, bars, stems: true } => render_stems(&file, &out, bars),
+        Command::Tui(path) => tui(path),
+    });
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => { eprintln!("loom : {e}"); ExitCode::FAILURE }
@@ -102,10 +169,67 @@ fn play(file: &str) -> Result<(), String> {
 fn render(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
     let src = read(file)?;
     let program = loom_core::Program::parse(&src);
-    let bars = bars.unwrap_or(if program.len_bars() > 0 { program.len_bars() } else { 8 });
+    let bars = bars.unwrap_or_else(|| studio::stems::bars_to_render(&program));
     let samples = loom_audio::render(&src, bars, 48000);
     loom_audio::write_wav(std::path::Path::new(out), &samples, 48000).map_err(|e| e.to_string())?;
     let peak = samples.iter().fold(0.0f32, |m, x| m.max(x.abs()));
     println!("{bars} mesures → {out} ({:.1} s, crête {:.2})", samples.len() as f32 / 2.0 / 48000.0, peak);
     Ok(())
+}
+
+/// `--stems`: every voice to its own WAV in `dir` (the STUDIO's STEMS, from the command line).
+fn render_stems(file: &str, dir: &str, bars: Option<u32>) -> Result<(), String> {
+    let src = read(file)?;
+    let program = loom_core::Program::parse(&src);
+    if program.voices.is_empty() { return Err(format!("{file} ne contient aucune voix")); }
+    let bars = bars.unwrap_or_else(|| studio::stems::bars_to_render(&program));
+    let dir = std::path::Path::new(dir);
+    std::fs::create_dir_all(dir).map_err(|e| format!("impossible de créer le dossier {} : {e}", dir.display()))?;
+    let stems = loom_audio::render_stems(&src, bars, 48000);
+    for (voice, samples) in &stems {
+        let path = studio::stems::stem_path(dir, voice);
+        loom_audio::write_wav(&path, samples, 48000).map_err(|e| format!("{} : {e}", path.display()))?;
+        let peak = samples.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        println!("  {voice:<12} → {} (crête {peak:.2})", path.display());
+    }
+    let seconds = stems.first().map_or(0.0, |(_, s)| s.len() as f32 / 2.0 / 48000.0);
+    println!("{bars} mesures · {} pistes → {} ({seconds:.1} s chacune)", stems.len(), dir.display());
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render_args(list: &[&str]) -> Result<Command, String> {
+        let mut args = vec!["render"];
+        args.extend_from_slice(list);
+        parse(&args)
+    }
+
+    #[test]
+    fn command_line() {
+        assert_eq!(parse(&[]), Ok(Command::Tui(None)));
+        assert_eq!(parse(&["techno.loom"]), Ok(Command::Tui(Some(PathBuf::from("techno.loom")))));
+        assert_eq!(parse(&["--help"]), Ok(Command::Help));
+        assert_eq!(parse(&["play", "a.loom"]), Ok(Command::Play("a.loom".into())));
+        assert!(parse(&["--vite"]).is_err());
+        assert!(USAGE.contains("--stems"));
+    }
+
+    #[test]
+    fn render_and_stems() {
+        let render = |out: &str, bars, stems| Ok(Command::Render { file: "a.loom".into(), out: out.into(), bars, stems });
+        assert_eq!(render_args(&["a.loom", "a.wav"]), render("a.wav", None, false));
+        assert_eq!(render_args(&["a.loom", "a.wav", "16"]), render("a.wav", Some(16), false));
+        assert_eq!(render_args(&["a.loom", "pistes", "--stems"]), render("pistes", None, true));
+        assert_eq!(render_args(&["a.loom", "pistes", "--stems", "4"]), render("pistes", Some(4), true));
+        assert_eq!(render_args(&["--stems", "a.loom", "pistes", "4"]), render("pistes", Some(4), true));
+        assert_eq!(render_args(&["--help"]), Ok(Command::RenderHelp));
+        assert_eq!(render_args(&["a.loom", "a.wav", "-h"]), Ok(Command::RenderHelp));
+        assert!(RENDER_USAGE.contains("--stems"));
+        for bad in [&["a.loom"][..], &["a.loom", "a.wav", "zéro"], &["a.loom", "a.wav", "0"], &["a.loom", "a.wav", "--stem"], &["a", "b", "1", "2"]] {
+            assert!(render_args(bad).is_err(), "{bad:?}");
+        }
+    }
 }

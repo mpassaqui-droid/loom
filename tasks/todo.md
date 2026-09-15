@@ -30,10 +30,22 @@ Architecture : `loom-core` (langage, inchangé) → `loom-audio` (NOUVEAU : synt
 ### Phase 4 — intégration Omarchy
 - [x] `.desktop` (menu Super+Espace) pour TUI et GUI, icône
 - [x] Script `install.sh` (cargo install + desktop entries)
-- [ ] Raccourci Hyprland (proposé, pas imposé)
+- [x] Raccourci Hyprland : Super+Shift+L (GUI), Super+Shift+Alt+L (TUI)
 
-### Plus tard (sessions suivantes)
-- [ ] Porter FX, filtres/ADSR, samples, MIDI, VIBE (IA) vers le moteur natif
+### Vague 2 — « tout porter » (commencée 2026-09-14, terminée 2026-09-15)
+- [x] loom-core : ~95 verbes de son (`synth.rs`), directives mix (duck/feel/warmth/room/bus/morph/loop/tune), macros `def`, arp modes, `stutter`
+- [x] loom-audio : dsp/clock/note, instrument (`tone/`), effets par note (`inserts/`), master (`master/`), samples WAV (`sample/`), MIDI in/out (`midi.rs`), micro (`input.rs`), REC, métronome, morph, mixeur (gain/pan/solo/niveaux), swing, SPACE/ECHO/EQ, stems, flux visuel (hits/scope/CC)
+- [x] VIBE (F2) dans TUI + GUI (claude CLI, Fable 5 par défaut) · SCÈNE : 24 scènes GUI (F11), 5 TUI (F12)
+- [x] partage compatible web (`loom-app/src/share.rs`)
+- [x] Studio (GUI + TUI) : mixeur, knobs master, stems, tap, LUFS, MIDI learn, partage, piano-roll, timeline éditable, démo, clips
+- [x] Prof & composition (logique, loom-app) : generate, develop, ear, hum, prof (explique/?question/lookup), 57 leçons + 163 références
+- [x] Prof & composition branchés dans GUI + TUI : GÉNÉRER, DÉVELOPPE, annuler/rétablir partagé, EXPLIQUE, ?question, OREILLE, HUM, LEÇONS (`loom-gui/src/teacher/` partagé, `teacher_ui/`, `app_teacher.rs` ×2, `loom-tui/src/teacher_view.rs`)
+- [x] `loom render morceau.loom dossier --stems [N]` en CLI (+ `loom render --help`)
+- [x] Audit : 62/62 morceaux rendus, aucun silence, crêtes ≤ 0.96, médiane 34× temps réel
+- [x] Fix core : `seed: N # commentaire` était lu comme 0 (aurora/showcase/expose)
+- [x] Tests workspace (361 ok), README/CLAUDE.md, `./install.sh`, commit + push
+
+Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40× temps réel.
 
 ## Review
 
@@ -44,4 +56,12 @@ Architecture : `loom-core` (langage, inchangé) → `loom-audio` (NOUVEAU : synt
 - Tests : core 90 · audio 7 · app 4 · tui 3 · gui 12.
 - Limites connues : le natif n'a pas encore FX / filtres / env / unison / samples / MIDI / VIBE → `h_concrete` (100 % samples) est muet, les autres sonnent « nus ». Le parser ignore silencieusement les lignes invalides.
 - Idées suivantes : Status « changement en attente » pour la grille ; erreurs de parse avec n° de ligne ; porter `lp`/`env`/`unison` puis les samples (`web/samples`).
+
+**2026-09-15 — vague 2 : le moteur web entier porté en natif.**
+- Moteur : instruments, samples, effets par note, master, MIDI, REC, morph, mixeur ; 62/62 morceaux rendus, live ≈ 20 % d'un cœur.
+- Apps : VIBE, SCÈNE (24 GUI / 5 TUI), Studio (11 outils), Prof & composition, leçons.
+- Bugs core corrigés : `prog:` ignoré par Program, `seed: N # commentaire` lu 0, `x` mélodique muet.
+- Tests : 361 ok (core 96 · audio 70 · app 47 · gui 75 · tui 73).
+- Non vérifié : écoute réelle sur enceintes, clics souris dans la GUI (logique testée), MIDI learn avec un vrai contrôleur, micro réel pour HUM.
+- Pistes : partager un `ir` par voix (CPU), déplacer `studio/` et `teacher/` de loom-gui vers loom-app, analyse hors-ligne `analyzePiece` du prof pas portée.
 

@@ -38,8 +38,10 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
 4. ✅ done — **Polyrhythm/polymeter, tempo & meter changes.**
 5. ✅ done — **Effects, sample playback, MIDI out.** (in `web/index.html`, the JS engine.)
 6. **Port the JS engine to loom-core (Rust→WASM) so all surfaces share one engine.**
-   Native side started 2026-09-14: `loom-audio` plays drums + oscillators natively.
-   Still browser-only: FX, filters/ADSR (`lp`, `env`, `unison`…), samples, MIDI, VIBE.
+   Native side (2026-09-14/15): `loom-audio` ports the whole browser sound engine
+   (`tone/`, `inserts/`, `master/`, `sample/`, `midi.rs`), and `loom-core/src/synth.rs`
+   parses every sound verb. Keep web and native in step: a new sound verb goes in
+   `synth.rs` (+ test), then `loom-audio`, then `web/index.html`.
    In progress, not finished: `web/index.html` loads `loom-wasm` as a non-destructive
    A/B check (`window.__loomRust`), toggle off by default — JS is still the real engine.
 

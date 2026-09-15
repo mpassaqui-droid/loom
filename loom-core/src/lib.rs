@@ -4,6 +4,11 @@
 //! crate is wrapped by `loom-wasm` (browser / phone) and `loom-tui` (terminal),
 //! so the language behaves identically everywhere. No external dependencies.
 
+mod synth;
+pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flange, Fm, Harm, Lfo, MixSettings, Param, Reson, Room, SigShape, Synth};
+
+use std::sync::Arc;
+
 /// A single voice (one line of LOOM source), already parsed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Voice {
@@ -49,6 +54,9 @@ pub struct Voice {
     /// `| chance N`: the whole voice plays only on a fraction (0..1) of bars
     /// (seeded). `None` = always plays.
     pub chance: Option<f32>,
+    /// How the voice SOUNDS (filters, envelope, FM, samples, effects…). Shared
+    /// with every event it produces, so cloning is cheap.
+    pub synth: Arc<Synth>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,13 +64,17 @@ pub enum Wave { Sine, Square, Saw, Triangle }
 
 /// Arpeggio direction for a chord voice (`| arp up|down|updown|downup`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ArpMode { Up, Down, UpDown, DownUp }
+pub enum ArpMode { Up, Down, UpDown, DownUp, Converge, Diverge, Thumb, Pinky }
 
 fn arp_mode(w: &str) -> ArpMode {
     match w {
         "down" => ArpMode::Down,
         "updown" | "ud" => ArpMode::UpDown,
         "downup" | "du" => ArpMode::DownUp,
+        "converge" | "conv" => ArpMode::Converge,
+        "diverge" | "div" => ArpMode::Diverge,
+        "thumb" | "thumbup" => ArpMode::Thumb,
+        "pinky" | "pinkyup" => ArpMode::Pinky,
         _ => ArpMode::Up,
     }
 }
@@ -84,6 +96,27 @@ fn arp_order(notes: &[String], mode: ArpMode) -> Vec<String> {
             if notes.len() > 2 { v.extend(notes[1..notes.len() - 1].iter().cloned()); }
             v
         }
+        ArpMode::Converge => {
+            // outside-in: lowest, highest, 2nd lowest, 2nd highest…
+            let (mut lo, mut hi, mut v) = (0usize, notes.len(), Vec::new());
+            while lo < hi {
+                v.push(notes[lo].clone()); lo += 1;
+                if lo < hi { hi -= 1; v.push(notes[hi].clone()); }
+            }
+            v
+        }
+        ArpMode::Diverge => { let mut v = arp_order(notes, ArpMode::Converge); v.reverse(); v }
+        ArpMode::Thumb => {
+            // the bottom note alternates with each of the others
+            let v: Vec<String> = notes.iter().skip(1).flat_map(|n| [notes[0].clone(), n.clone()]).collect();
+            if v.is_empty() { notes.to_vec() } else { v }
+        }
+        ArpMode::Pinky => {
+            // each note alternates with the top note
+            let Some(top) = notes.last() else { return Vec::new() };
+            let v: Vec<String> = notes[..notes.len() - 1].iter().flat_map(|n| [n.clone(), top.clone()]).collect();
+            if v.is_empty() { notes.to_vec() } else { v }
+        }
     }
 }
 
@@ -103,6 +136,7 @@ impl Wave {
 const DRUMS: [&str; 8] = ["kick","bd","snare","sd","hat","hh","clap","cp"];
 
 /// One scheduled sound event within a bar.
+/// (`synth` is the sound design of the voice that produced it.)
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
     /// Position within the bar, 0.0..1.0 (multiply by bar length in seconds).
@@ -124,12 +158,14 @@ pub struct Event {
     /// Length of the step this event occupies, as a fraction of the bar (0..1).
     /// A native synth uses it as the note's gate length.
     pub dur: f32,
+    /// The voice's sound design (filters, envelopes, samples, effects…).
+    pub synth: Arc<Synth>,
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 21] = [
+const DIRECTIVES: [&str; 22] = [
     "key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune",
-    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room",
+    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "morph",
 ];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
@@ -419,6 +455,8 @@ fn decomment(s: &str) -> &str {
 }
 
 pub fn parse(src: &str) -> Vec<Voice> {
+    let expanded = expand_macros(src);
+    let src = expanded.as_str();
     let mut out = Vec::new();
     for raw in src.lines() {
         let line = decomment(raw).trim();
@@ -459,6 +497,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut off = None;
         let mut degrade = 0.0_f32;
         let mut chance = None;
+        let mut synth = Synth::default();
         let mut verbs = Vec::new();
 
         for seg in segs {
@@ -475,6 +514,9 @@ pub fn parse(src: &str) -> Vec<Voice> {
                 octave = parts.next().and_then(|x| x.parse::<i32>().ok());
             } else if head == "arp" {
                 arp = Some(arp_mode(parts.next().unwrap_or("up")));
+                if let Some(n) = parts.next().and_then(|x| x.parse::<u32>().ok()).filter(|n| *n > 1) {
+                    synth.arp_octaves = Some(n.min(4));
+                }
             } else if head == "swing" {
                 if let Some(mut nn) = parts.next().and_then(|x| x.parse::<f32>().ok()) {
                     if nn > 1.0 { nn /= 100.0; }
@@ -487,7 +529,9 @@ pub fn parse(src: &str) -> Vec<Voice> {
             } else if head == "poly" {
                 poly = Some(parts.next().and_then(|x| x.parse::<u32>().ok()).unwrap_or(16).max(1));
             } else if head == "pan" {
+                // a plain number is the layer pan; sweeps/signals live in the synth
                 pan = parts.next().and_then(|x| x.parse::<f32>().ok()).map(|p| p.clamp(-1.0, 1.0));
+                synth.apply_segment(seg, &mut wave);
             } else if head == "jux" {
                 let verb = parts.collect::<Vec<_>>().join(" ");
                 if !verb.is_empty() { jux = Some(verb); }
@@ -505,11 +549,12 @@ pub fn parse(src: &str) -> Vec<Voice> {
             } else if head == "in" {
                 let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
                 if !secs.is_empty() { sections = Some(secs); }
-            } else {
+            } else if !synth.apply_segment(seg, &mut wave) {
                 verbs.push(seg.to_string());
             }
         }
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance });
+        let synth = Arc::new(synth);
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance, synth });
     }
     out
 }
@@ -621,6 +666,12 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
                 if t == "." { return first_non_rest.clone().unwrap_or_else(|| t.clone()); }
                 t.clone()
             }).collect()
+        }
+        Some("stutter") | Some("stut") => {
+            // beat-repeat: loop the first 1/N of the pattern across the bar
+            let n = parts.get(1).and_then(|x| x.parse::<usize>().ok()).filter(|n| *n != 0).unwrap_or(4).max(2);
+            let slice = &tokens[..(tokens.len() / n).max(1).min(tokens.len())];
+            slice.iter().cycle().take(tokens.len()).cloned().collect()
         }
         Some("shuffle") | Some("shuf") => {
             let mut a = tokens.to_vec();
@@ -1048,11 +1099,16 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
     let span = p1 - p0;
     if let Some(mode) = v.arp {
         if !v.is_drum && notes.len() > 1 {
-            let ord = arp_order(&notes, mode);
+            // `| arp up 2`: stack the chord again one (or more) octaves higher
+            let mut span_notes = notes.clone();
+            for o in 1..v.synth.arp_octaves.unwrap_or(1) as i32 {
+                span_notes.extend(notes.iter().filter_map(|n| note_to_midi(n)).map(|m| midi_to_name(m + 12 * o)));
+            }
+            let ord = arp_order(&span_notes, mode);
             let m = ord.len();
             for (j, note) in ord.iter().enumerate() {
                 events.push(Event { phase: p0 + (j as f32 / m as f32) * span, voice: v.name.clone(),
-                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note), pan: v.pan, dur: span / m as f32 });
+                    token: note.clone(), wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel: accent, freq: freq_for(note), pan: v.pan, dur: span / m as f32, synth: v.synth.clone() });
             }
             return;
         }
@@ -1062,13 +1118,13 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
         let vel = accent * ramp_factor(j, ratchet, ramp_dir);
         for note in &notes {
             events.push(Event { phase, voice: v.name.clone(), token: note.clone(),
-                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note), pan: v.pan, dur: span / ratchet as f32 });
+                wave: v.wave, gain: v.gain, is_drum: v.is_drum, vel, freq: freq_for(note), pan: v.pan, dur: span / ratchet as f32, synth: v.synth.clone() });
         }
     }
 }
 
-/// Convert a note name like "c2", "eb3", "g#4" to a frequency in Hz.
-pub fn note_to_freq(note: &str) -> Option<f32> {
+/// Convert a note name like "c2", "eb3", "g#4" to a MIDI note number.
+pub fn note_to_midi(note: &str) -> Option<i32> {
     let b = note.as_bytes();
     if b.is_empty() { return None; }
     let letter = (b[0] as char).to_ascii_lowercase();
@@ -1080,8 +1136,12 @@ pub fn note_to_freq(note: &str) -> Option<f32> {
         idx += 1;
     }
     let octave: i32 = note[idx..].parse().ok()?;
-    let midi = 12 * (octave + 1) + semi;
-    Some(midi_to_freq(midi))
+    Some(12 * (octave + 1) + semi)
+}
+
+/// Convert a note name like "c2", "eb3", "g#4" to a frequency in Hz.
+pub fn note_to_freq(note: &str) -> Option<f32> {
+    note_to_midi(note).map(midi_to_freq)
 }
 
 /// MIDI note number → frequency in Hz (A4 = midi 69 = 440 Hz).
@@ -1514,6 +1574,12 @@ fn rand01(seed: u64, bar: i64, voice: &str, step: usize) -> f32 {
     js_rng(seed as u32, bar, voice, step as i64) as f32
 }
 
+/// The engine's deterministic random number (0..1) for a seed/bar/voice/step —
+/// the same sequence as the browser's `rng()`, for players that add humanisation.
+pub fn rng01(seed: u64, bar: i64, voice: &str, step: usize) -> f32 {
+    rand01(seed, bar, voice, step)
+}
+
 /// Digits immediately following position `at` in `tok` (a `?`/`*` marker).
 fn digits_after(tok: &str, at: usize) -> &str {
     let rest = &tok[at + 1..];
@@ -1577,7 +1643,7 @@ fn pick_alt(tok: &str, bar: i64) -> &str {
 /// Read the optional `seed: N` directive (default 0 = the canonical performance).
 pub fn parse_seed(src: &str) -> u64 {
     for raw in src.lines() {
-        let line = raw.trim();
+        let line = decomment(raw).trim();
         let Some(colon) = line.find(':') else { continue };
         if line[..colon].trim().eq_ignore_ascii_case("seed") {
             if let Ok(n) = line[colon + 1..].trim().parse::<u64>() { return n; }
@@ -1752,10 +1818,14 @@ pub struct Program {
     pub groove: Vec<f32>,
     /// Chord progression (`prog: Am F C G`), one chord per bar, followed by `^` tokens.
     pub prog: Vec<String>,
+    /// Mix-wide settings: `duck`, `feel`, `warmth`, `room`, `bus`, `morph`, `loop`, `tune`.
+    pub mix: MixSettings,
 }
 
 impl Program {
     pub fn parse(src: &str) -> Program {
+        let expanded = expand_macros(src);
+        let src = expanded.as_str();
         Program {
             voices: parse(src),
             key: parse_key(src),
@@ -1768,6 +1838,7 @@ impl Program {
             tempo_map: parse_tempo_map(src),
             groove: parse_groove(src),
             prog: parse_prog(src),
+            mix: MixSettings::parse(src),
         }
     }
 
@@ -2900,5 +2971,26 @@ mod tests {
         let bar1: Vec<String> = p.schedule_bar(1).into_iter().map(|e| e.token).collect();
         assert!(!bar0.is_empty(), "the chord must sound");
         assert_ne!(bar0, bar1, "bar 1 moves to F");
+    }
+
+    #[test]
+    fn stutter_arp_modes_and_voice_synth() {
+        let v = |s: &str| s.split_whitespace().map(String::from).collect::<Vec<_>>();
+        assert_eq!(apply_verb(&v("1 2 3 4 5 6 7 8"), "stutter 4", 0, 0).join(" "), "1 2 1 2 1 2 1 2");
+        let names = |ev: Vec<Event>| ev.into_iter().map(|e| e.token).collect::<Vec<_>>().join(" ");
+        assert_eq!(names(schedule_bar(&parse("k: Cmaj7 | arp converge"), 0)), "c3 b3 e3 g3");
+        assert_eq!(names(schedule_bar(&parse("k: C | arp up 2"), 0)), "c3 e3 g3 c4 e4 g4");
+        assert_eq!(names(schedule_bar(&parse("k: C | arp thumb"), 0)), "c3 e3 c3 g3");
+        let voices = parse("def fx: lp 900 | reverb 0.4\nbass: c2 . | saw | $fx | every 2 rev");
+        let s = &voices[0].synth;
+        assert_eq!((s.cutoff, s.reverb), (Some(Param::Const(900.0)), Some(0.4)));
+        assert_eq!(voices[0].verbs, vec!["every 2 rev".to_string()]);
+        assert_eq!(schedule_bar(&voices, 0)[0].synth.reverb, Some(0.4));
+    }
+
+    #[test]
+    fn seed_ignores_trailing_comment() {
+        assert_eq!(parse_seed("seed: 41 # graine du refrain"), 41);
+        assert_eq!(parse_seed("seed:  24          # graine"), 24);
     }
 }

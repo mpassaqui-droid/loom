@@ -7,12 +7,21 @@
 //! - [`grid`]: the step grid with its playhead.
 //! - [`style`]: the Omarchy theme turned into egui colours.
 //! - [`export`]: the background WAV export.
+//! - [`scene`]: the SCÈNE, full-window visuals that follow the music (F11).
+//! - [`studio`] / [`studio_ui`]: the STUDIO (knobs, mixer, stems, clips…).
+//! - [`teacher`] / [`teacher_ui`]: LE PROF & COMPOSITION (GÉNÉRER, DÉVELOPPE,
+//!   EXPLIQUE, ?question, OREILLE, HUM, LEÇONS).
 
 mod app;
 mod editor;
 mod export;
 mod grid;
+mod scene;
+mod studio;
+mod studio_ui;
 mod style;
+mod teacher;
+mod teacher_ui;
 
 use std::path::PathBuf;
 
@@ -25,7 +34,13 @@ Usage : loom-gui [morceau.loom]
 
 Sans fichier, LOOM rouvre le dernier morceau (ou le morceau d'accueil).
 Raccourcis : Ctrl+Entrée jouer · Échap/Ctrl+. arrêter · Ctrl+S enregistrer
-             Ctrl+N nouveau · Ctrl+Maj+E exporter en WAV";
+             Ctrl+N nouveau · Ctrl+Maj+E exporter en WAV
+             F11/Ctrl+F scène plein écran (N scène suivante · V mode VJ · Échap retour)
+Studio :     F6 potards · F7 TAP tempo · F8 mixeur · F9 piano-roll · F10 clips
+             Ctrl+Maj+L partager (lien) · Ctrl+Maj+I importer · Ctrl+Maj+D démo
+Prof :       Ctrl+Maj+G générer · Ctrl+Maj+B développe · F3 annuler · Maj+F3 rétablir
+             Ctrl+Maj+P explique · ?question dans VIBE (F2) · Ctrl+Maj+O oreille
+             Ctrl+Maj+H hum (chanter) · F12 leçons & référence · F1 aide";
 
 /// What the command line asked for.
 #[derive(Debug, PartialEq)]

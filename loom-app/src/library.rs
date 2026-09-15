@@ -80,6 +80,13 @@ impl Library {
         let _ = std::fs::write(record, abs.to_string_lossy().as_bytes());
     }
 
+    /// A free file name for a live recording: `~/Music/loom/enregistrements/<song>-rec-N.wav`.
+    pub fn new_recording_path(song: Option<&Path>) -> PathBuf {
+        let dir = Self::user_dir().join("enregistrements");
+        let stem = song.and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "loom".into());
+        (1..).map(|i| dir.join(format!("{stem}-rec-{i}.wav"))).find(|p| !p.exists()).unwrap()
+    }
+
     /// Save, creating the parent folder if needed.
     pub fn save(path: &Path, src: &str) -> std::io::Result<()> {
         if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
