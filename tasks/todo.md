@@ -148,3 +148,18 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 - Undo/redo des chargements déjà complet et testé dans les apps natives (VIBE/IA,
   GÉNÉRER, DÉVELOPPE, HUM, leçon — 30 étapes, F3/Maj-F3/Ctrl+Y), `History` dans
   `loom-app/teacher/history.rs` ; ROADMAP.md §2 passé en ✅.
+
+**2026-09-25 — fin de la vague 5 (CI engagé) + état tout-vert confirmé.**
+- `.github/workflows/ci.yml` était décrit dans « wave 5 » et ROADMAP §7 mais jamais
+  commité (répertoire inédit → github/ jamais ajouté). Commit `5e7e9e8` : le
+  workflow rentre enfin dans l'historique. Gates : build+test workspace (stable),
+  clippy conseil (24 warnings non fatals — exit 0 → la porte `test ${PIPESTATUS[0]}
+  -eq 0` passe), `node tools/check_web.js` + `node tools/parity_test.js`.
+- Vérification locale complète : `cargo test --workspace` 331 ok · parité JS↔Rust
+  202/202 ✅ PERFECT · check_web 4/4 ✓.
+- Prochaine vague à choisir (les priorités « Ordre conseillé » du ROADMAP sont en
+  grande partie déjà construites : roll, mixeur, connaissance + explicateur) :
+  1. moteur Rust→WASM unifié qui pilote vraiment le web (§7 — la grosse dette),
+  2. notation / édition dans la vue partition (GUI),
+  3. sampler instrument visuel (slice/loop/multisample/stretch),
+  4. prof interactif multi-tours + « à la manière de X ».
