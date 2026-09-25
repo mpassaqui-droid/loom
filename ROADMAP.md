@@ -42,13 +42,15 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - **App** : **✨ GÉNÉRER**, **IA (VIBE) gratuite sans clé** + chips, **linter**,
   **autocomplétion** (Tab), raccourcis, **menu de langues** (11 + 100+),
   thèmes, **mobile**, 56 leçons, référence, tutoriel.
-- **Rust** : `loom-core` (parseur/scheduler, **71 tests**, parité bit-à-bit avec le
+- **Rust** : `loom-core` (parseur/scheduler, **101+ tests**, parité bit-à-bit avec le
   moteur JS) — couvre notes/degrés, gammes nommées **+ gammes numériques
   microtonales** (`key: d 0 1.5 3 …` quarts de ton), 7 accordages, accords, 17
-  générateurs, ~16 verbes (RNG identique), structure (`song`/`@section`/`in`),
-  **modulation `key@section`** et **timeline tempo** (`bpm`/`meter` 7/8/`accel`/tempo
-  par section : `bar_bpm`/`bar_seconds`). Reste à porter : groove/swing par voix,
-  les effets/synthèse, puis **compiler en WASM** et brancher le web dessus.
+  générateurs, ~25 verbes (RNG identique), structure (`song`/`@section`/`in`),
+  **modulation `key@section`**, **timeline tempo** (`bpm`/`meter` composé
+  `2+2+3/8`/`accel`/tempo par section : `bar_bpm`/`bar_seconds`), **poly m:n**.
+  Compilé en **WASM** : depuis vague C il **pilote le rythme du web** (par défaut),
+  la synthèse reste JS — parité **238/238**. Porté vers `loom-core` ensuite :
+  l'analyse musicale (pour exposer le prof au web), puis les effets/synthèse.
 
 ---
 
@@ -115,8 +117,12 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - 🌠 **Conversation multi-tours**, mémoire du projet, modèle local optionnel.
 
 ## 7. 🛠️ PLATEFORME / FONDATIONS
-- 🌠 **Moteur unifié Rust→WASM** : web + terminal + téléphone sur UN moteur
-  (sample-accurate, latence basse) — la grande dette technique.
+- 🔜 **Moteur unifié Rust→WASM** : depuis vague C (2026-09-25), le **Rust pilote le
+  rythme du web par défaut** (le WASM de `loom-core` décide quelles notes/timing,
+  la synthèse reste JS) ; badge 🦀 dans la barre pour revenir au moteur JS à
+  l'instant. Parité **238/238** (`node tools/parity_test.js`), couvre aussi
+  `meter: 2+2+3/8` composé + `poly m:n`. Reste : porter analyse → `loom-core`
+  pour exposer le prof via WASM, puis la synthèse/FX (latence basse, sample-accurate).
 - 🔨 **Accessibilité** (lecteur d'écran, daltoniens, grandes polices).
 - ✅ **PWA** — `web/manifest.webmanifest` + `web/sw.js` : s'installe comme une
   app (mobile/desktop), coquille préchargée, samples/… en cache au passage →
@@ -125,7 +131,8 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - ✅ **CI / tests / docs** — `.github/workflows/ci.yml` : build+test du workspace
   (stable) et **parité JS↔Rust** (node tools/parity_test.js, 202/202) + structure
   PWA (tools/check_web.js). Clippy en conseil (durcissement progressif). README à
-  jour (build, checks, statut moteur unifié).
+  jour (build, checks, statut moteur unifié). Parité remontée à **238/238**
+  (vague C : composed meter + poly m:n).
 
 ---
 

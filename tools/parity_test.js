@@ -92,6 +92,9 @@ const onsets = arr => { const m = {}; for (const e of arr) (m[e.voice] || (m[e.v
 const pieces = {
   'generators+structure': 'seed: 7\nbpm: 120\nsong: a*2 b*2\nkick: e(3,8)\nhat: ca(110,16)\nlead: walk(8) | in a\nmel@b: drunk(16)',
   'poly+jux+off+microtonal': "seed: 3\nkey: c 0 1.5 3 5 6.5 8 10\nfil: 1 4 6 3 5 1' | poly 13\nm: 1 2 3 | jux rev | off 2",
+  'meter composé 2+2+3/8': 'seed: 4\nmeter: 2+2+3/8\nlead: 1 3 5 1\' 7 5 3 4\nkick: x . . x . . x .\nhat: x x x x x x x x',
+  'poly m:n (triolet 3:2) sous métrique composée': 'seed: 4\nmeter: 2+2+3/8\nlead: 1 3 5 1\' 7 5 3 | poly 3:2\nkick: x . . x . . x| poly 2:3\nhat: x x x x x x x',
+  'poly m:n (3:2) en 4/4': "seed: 4\nlead: 1 3 5 1' 7 5 3 | poly 3:2\nkick: x . . x| poly 2:3\nhat: x x x x x x",
   'swing+groove+nudge': 'groove: mpc\nh: x x x x x x x x | swing 50\nb: x x x x | shift 0.2',
   'degrees+roman+modulation': 'key: a minor\nkey@chorus: c minor\nsong: verse*2 chorus*2\nlead: 1 3 5 1\' 7 5 3 2\npad: I . IV . V . VI .',
   'ratchets+alternation+subseq': 'seed: 9\nm: 1 [2 3] <4/5> 1*3\nk: x*2 x x <x/.>',

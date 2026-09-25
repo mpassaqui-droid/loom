@@ -19,11 +19,11 @@
 - [x] Chips « TRANSFORME » dans la GUI **et** la TUI (prof applique + explique, undo partagé).
 
 ### Vague 2 — Moteur unifié côté web : le Rust pilote le rythme du web
-- [ ] `web/index.html` : défaut du moteur Rust « ON » quand WASM est chargé (truismé par
-      parité 202/202 bit-à-bit), badge 🦀 visible + toggle pour revenir à JS à l'instant.
-- [ ] `tools/parity_test.js` : cas explicites `meter: 2+2+3/8` (composé) + `poly 3:2`
-      (triolet) s'ils manquent ; reste 202/202 PERFECT.
-- [ ] README/ROADMAP §7 : status « le moteur live (rythme/notes) est Rust quand chargé ;
+- [x] `web/index.html` : défaut du moteur Rust « ON » quand WASM est chargé (truismé par
+      parité 238/238 bit-à-bit), badge 🦀 visible + toggle pour revenir à JS à l'instant.
+- [x] `tools/parity_test.js` : cas explicites `meter: 2+2+3/8` (composé) + `poly 3:2`
+      (triolet) — parité remontée de 202/202 à **238/238 PERFECT**.
+- [x] README/ROADMAP §7 : status « le moteur live (rythme/notes) est Rust quand chargé ;
       le son reste JS » + prochaine pierre (analyzer partagé via WASM).
 
 ### Vague 3 — Vue partition (GUI)

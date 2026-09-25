@@ -96,10 +96,12 @@ parser, pattern verbs, generator tokens, and per-bar scheduler, with tests
 (101 of them). The two engines are kept **bit-identical**: `tools/parity_test.js`
 compares every voice×bar onsets of the JS engine against the Rust engine run
 through WASM (`web/pkg` / `tools/pkg-node`, rebuilt by `./build-wasm.sh`) and
-must pass 202/202. The WASM is already loaded *non-destructively* into the web
-prototype as `window.__loomRust` (an experimental A/B toggle when the build is
-present), but the JS engine is still the one producing audio — wiring the Rust
-engine in as the live driver is the large remaining item.
+must pass 238/238 (incl. composed meter `2+2+3/8` and `poly m:n`). Since the
+2026-09-25 wave, the **Rust engine drives the web's scheduling by default**: the
+WASM core decides which notes play and when, while JS keeps every voice's
+synthesis + FX. A visible 🦀 badge in the top bar shows the active engine and
+instantly reverts to the long-tested JS engine. The next step of the unify work
+is porting the analyser into `loom-core` so the prof can run through WASM too.
 
 `web/` is also a **PWA**: the manifest + service worker let it be installed as
 an app and keep playing offline (shell precached, samples cached on first
