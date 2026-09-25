@@ -12,7 +12,7 @@ use loom_app::Library;
 use loom_core::Program;
 
 use super::{Action, LoomApp};
-use loom_app::studio::{demo, learn::LearnEvents, roll, share, songline, stems::StemsJob};
+use loom_app::studio::{demo, learn::LearnEvents, roll, sampletool::SampleSpec, share, songline, stems::StemsJob};
 use crate::studio_ui::{self, DemoRun, StudioAction};
 
 impl LoomApp {
@@ -35,6 +35,15 @@ impl LoomApp {
                 self.studio.notation_voice = Some(voice.clone());
                 self.say(format!("PARTITION : « {voice} » armée — ◀ ▶ pour la transposer."));
             }
+            StudioAction::ToggleSampler => self.studio.show_sampler = !self.studio.show_sampler,
+            StudioAction::ArmSampler(voice) => {
+                self.studio.sampler_voice = Some(voice.clone());
+                if let Some(v) = self.program.voices.iter().find(|x| x.name == voice) {
+                    self.studio.sampler_spec = SampleSpec::from_synth(&v.synth);
+                }
+                self.say(format!("SAMPLER : « {voice} » armée — choisis un échantillon puis APPLIQUER."));
+            }
+            StudioAction::SamplerApply => self.sampler_apply(),
             StudioAction::KnobChanged(knob) => {
                 if let Some(engine) = engine {
                     self.studio.knobs.apply(knob, engine);
@@ -201,6 +210,9 @@ impl LoomApp {
                 .unwrap_or(0);
             studio_ui::notation::show(ui, &notes, bar, armed.as_deref(), semi, &theme, &mut studio_actions);
         }
+        if self.studio.show_sampler {
+            studio_ui::sampler::show(ui, &mut self.studio, &self.program.voices, &theme, &mut studio_actions);
+        }
         if self.studio.show_mixer {
             let peak = status.map_or(0.0, |s| s.peak());
             studio_ui::mixer::show(ui, &mut self.studio, &self.muted, peak, &theme, actions);
@@ -260,6 +272,27 @@ impl LoomApp {
                 self.say(format!("PARTITION : « {voice} » {dt:+} demi-ton(s){when}."));
             }
             Err(e) => self.warn(format!("PARTITION : {e}")),
+        }
+    }
+
+    /// SAMPLER APPLIQUER: write the draft (sample, root, window, chop,
+    /// reverse) onto the armed voice's line, undoably.
+    fn sampler_apply(&mut self) {
+        let Some(voice) = self.studio.sampler_voice.clone() else {
+            self.say("SAMPLER : choisis d'abord une voix (clic sur son chip).");
+            return;
+        };
+        match loom_app::studio::sampletool::apply_spec(&self.text, &voice, &self.studio.sampler_spec) {
+            Ok(code) => {
+                let when = self.replace_song("SAMPLER", code);
+                let sample = self.studio.sampler_spec.sample.clone().unwrap_or_default();
+                self.say(if sample.is_empty() {
+                    format!("SAMPLER : « {voice} » redevient une voix mélodique{when}.")
+                } else {
+                    format!("SAMPLER : « {voice} » joue « {sample} »{when}.")
+                });
+            }
+            Err(e) => self.warn(format!("SAMPLER : {e}")),
         }
     }
 

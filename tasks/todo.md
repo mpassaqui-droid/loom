@@ -4,12 +4,12 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
-## En cours — quatre vagues (notation · sampler · prof interactif · moteur unifié web)
+## Les quatre vagues — terminées (prof interactif · moteur unifié web · vue partition · sampler)
 
 > Décision du propriétaire (2026-09-25) : « ok for all ». Chaque vague = un incrément
 > petit, testé, commité. L'ordre = impact/effort : d'abord le prof interactif hors-ligne
 > (pure logique testable), puis le moteur unifié côté web, puis la vue partition (GUI),
-> puis l'instrument sampler (GUI).
+> puis l'instrument sampler (GUI). Les quatre vagues sont livrées (voir Review en bas).
 
 ### Vague 1 — Prof interactif « explique ET modifie » (hors-ligne, sans API)
 - [x] `loom-app/src/teacher/transform.rs` : `transform(src, kind) -> Result<Transformed, String>`
@@ -35,9 +35,9 @@
       et « réinit » pour transposer la voix armée, undo partagé via History).
 
 ### Vague 4 — Instrument sampler (GUI)
-- [ ] `loom-app/src/studio/sampletool.rs` : liste des samples + spec (sample/root/begin/end/
+- [x] `loom-app/src/studio/sampletool.rs` : liste des samples + spec (sample/root/begin/end/
       chop/reverse) → réécrit `| sample …` de la voix choisie — tests.
-- [ ] `loom-gui/src/studio_ui/sampler.rs` : panneau « SAMPLER » (liste + curseurs + mini
+- [x] `loom-gui/src/studio_ui/sampler.rs` : panneau « SAMPLER » (liste + curseurs + mini
       waveform du sample sélectionné).
 
 ## En cours — LOOM app native complète pour Omarchy (Rust)
@@ -193,9 +193,45 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
   -eq 0` passe), `node tools/check_web.js` + `node tools/parity_test.js`.
 - Vérification locale complète : `cargo test --workspace` 331 ok · parité JS↔Rust
   202/202 ✅ PERFECT · check_web 4/4 ✓.
-- Prochaine vague à choisir (les priorités « Ordre conseillé » du ROADMAP sont en
-  grande partie déjà construites : roll, mixeur, connaissance + explicateur) :
-  1. moteur Rust→WASM unifié qui pilote vraiment le web (§7 — la grosse dette),
-  2. notation / édition dans la vue partition (GUI),
-  3. sampler instrument visuel (slice/loop/multisample/stretch),
-  4. prof interactif multi-tours + « à la manière de X ».
+**2026-09-25 — Vague 1 « Prof interactif » : explique ET modifie (`c504d28`).**
+- `loom-app/src/teacher/transform.rs` (neuf) : `transform(src, kind, seed)` réécrit une
+  voix choisie (rythme `| semi N`, mode `key:`, `| unison 3`, `| reverb 0.4`, `| swing 0.25`,
+  `develop()`) tout en gardant commentaires + autres effets, sans double-dose
+  (familles déjà couvertes refusées poliment). 6 tests.
+- GUI : chips « TRANSFORME » + `TeacherAction::Transform(Kind)` + `replace_song`
+  (undo partagé). TUI : popup Alt+W (Alt+T = TAP du studio).
+- Tests : loom-app 107 → 113.
+
+**2026-09-25 — Vague 2 : le moteur Rust→WASM pilote vraiment le web (`312ffe7`).**
+- `web/index.html` : `window.__loomUseRust = true` par défaut, case à cocher cochée,
+  badge « Rust actif » / « mode JS (repli) » (repli JS instantané, try/catch),
+  parité de rendu garantie.
+- `tools/parity_test.js` : 238 cas (202 précédents + 36 voix×mesure, métriques
+  composées 2+2+3/8 et poly 3:2) → **238/238 PERFECT**.
+- README/ROADMAP/§7 + CI à jour, honnêtement. Prochaine pierre documentée :
+  déplacer `analyze.rs` + `lore.rs` dans `loom-core` (le WASM ne dépend que de core).
+
+**2026-09-25 — Vague 3 : vue partition en solfège (GUI) (`15f35ec`).**
+- `loom-app/src/studio/notation.rs` (neuf) : `staff(roll)` → portée grand format
+  (clé de sol + clé de fa, degrés, dièses/bémols, lignes supplémentaires) +
+  `transpose_voice` (réécrit le dernier `| semi`, commentaires préservés, variantes
+  `bass@drop` transposées chacune sur leur propre ligne). 5 tests.
+- `loom-gui/src/studio_ui/notation.rs` : panneau « PARTITION » — clic une note = aller à
+  sa voix + l'armer, boutons ◀ ▶ réinit transposent d'un demi-ton (annulable).
+  Pas de 𝄞/𝄢 (glyphes absents des fonts egui) : libellés « clé de sol / clé de fa ».
+- Tests : 342 ok (app 118 · audio 73 · core 101 · gui 26 · tui 24).
+
+**2026-09-25 — Vague 4 : instrument sampler (GUI).**
+- `loom-app/src/studio/sampletool.rs` (neuf) : spec d'un sample (sample/root/begin/end/
+  chop/reverse), `read` depuis le Synth (ce que l'oreille du moteur entend), `apply_verb`
+  / `apply_spec` réécrivent la ligne de la voix armée (dernier segment remplacé ou
+  ajouté, alias `s` géré, commentaires préservés, `bass@drop` visé par son nom complet,
+  voix inconnue refusée) — 6 tests, clippy propre.
+- `loom-gui/src/studio_ui/sampler.rs` : panneau « SAMPLER » — chips par voix (armée/
+  déjà-échantillonnée), liste réelle du `default_bank()` partagé avec le moteur
+  (noms + durée), racine par texte, curseurs begin/end/chop, case reverse, mini
+  waveform du sample choisi avec marqueurs begin/end, bouton APPLIQUER (annulable).
+  Bouton « SAMPLER » dans la barre du studio (entre PARTITION et CLIPS).
+- Tests : **348 ok** (app 124 · audio 73 · core 101 · gui 26 · tui 24) ; build 0 erreur.
+- Piste suivante documentée : `analyze.rs` + `lore.rs` vers `loom-core` pour
+  l'analyseur dans le WASM du web (clé de voûte du moteur unifié).

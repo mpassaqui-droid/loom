@@ -9,6 +9,7 @@ pub mod clips;
 pub mod mixer;
 pub mod notation;
 pub mod roll;
+pub mod sampler;
 pub mod timeline;
 
 use std::path::PathBuf;
@@ -24,6 +25,7 @@ use loom_app::studio::knobs::{Knob, Knobs};
 use loom_app::studio::learn::Learn;
 use loom_app::studio::loudness::{Level, Loudness};
 use loom_app::studio::mixer::Mixer;
+use loom_app::studio::sampletool::SampleSpec;
 use loom_app::studio::songline::SongEdit;
 use loom_app::studio::stems::StemsJob;
 use loom_app::studio::tap::TapTempo;
@@ -46,6 +48,12 @@ pub enum StudioAction {
     NotationTranspose(i32),
     /// Click a note on the staff: this voice gets the ◀ ▶ buttons.
     ArmNotation(String),
+    /// Show / hide the SAMPLER panel.
+    ToggleSampler,
+    /// Arm a voice for the sampler and reload its current spec.
+    ArmSampler(String),
+    /// Write the sampler draft onto the armed voice's line.
+    SamplerApply,
     /// A knob was moved on screen: send it to the engine.
     KnobChanged(Knob),
     /// Mixer strip `n` changed its fader or pan.
@@ -99,8 +107,13 @@ pub struct Studio {
     pub show_roll: bool,
     pub show_clips: bool,
     pub show_notation: bool,
+    pub show_sampler: bool,
     /// The voice the PARTITION panel's ◀ ▶ transpose.
     pub notation_voice: Option<String>,
+    /// The voice the SAMPLER panel writes on.
+    pub sampler_voice: Option<String>,
+    /// The sampler draft; only APPLIQUER writes it into the song.
+    pub sampler_spec: SampleSpec,
     /// The import box, open with what was pasted so far.
     pub import: Option<String>,
     /// The section selected on the timeline.
@@ -128,7 +141,10 @@ impl Studio {
             show_roll: false,
             show_clips: false,
             show_notation: false,
+            show_sampler: false,
             notation_voice: None,
+            sampler_voice: None,
+            sampler_spec: SampleSpec::default(),
             import: None,
             section: None,
             scope: Box::new([0.0; SCOPE_LEN]),
@@ -208,6 +224,9 @@ pub fn studio_bar(ui: &mut egui::Ui, studio: &mut Studio, theme: &Theme, tap_bpm
                 }
                 if ui.selectable_label(studio.show_notation, "PARTITION").on_hover_text("Portée : le morceau en solfège (clé de sol + clé de fa), clic une note = aller à sa voix, ◀/▶ = transposer").clicked() {
                     actions.push(StudioAction::ToggleNotation);
+                }
+                if ui.selectable_label(studio.show_sampler, "SAMPLER").on_hover_text("Faire jouer un échantillon (web/samples) par n'importe quelle voix : sample, root, begin/end, chop, reverse — APPLIQUER réécrit le code (annulable)").clicked() {
+                    actions.push(StudioAction::ToggleSampler);
                 }
                 if ui.selectable_label(studio.show_clips, "CLIPS").on_hover_text("Lancer un morceau, ou varier une voix en direct sans toucher au code (F10)").clicked() {
                     actions.push(StudioAction::ToggleClips);

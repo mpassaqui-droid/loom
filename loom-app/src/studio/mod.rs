@@ -24,6 +24,7 @@ pub mod loudness;
 pub mod mixer;
 pub mod notation;
 pub mod roll;
+pub mod sampletool;
 pub mod share;
 pub mod songline;
 pub mod stems;
