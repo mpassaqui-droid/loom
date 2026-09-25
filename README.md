@@ -93,15 +93,22 @@ This is a repo in transition, not a finished product. The browser prototype
 (`web/index.html`) runs its own hand-written JS engine, built before
 `loom-core` existed. `loom-core` is the Rust rewrite of that same language:
 parser, pattern verbs, generator tokens, and per-bar scheduler, with tests
-(101 of them). The two engines are kept **bit-identical**: `tools/parity_test.js`
+(113 of them). The two engines are kept **bit-identical**: `tools/parity_test.js`
 compares every voice×bar onsets of the JS engine against the Rust engine run
 through WASM (`web/pkg` / `tools/pkg-node`, rebuilt by `./build-wasm.sh`) and
 must pass 238/238 (incl. composed meter `2+2+3/8` and `poly m:n`). Since the
 2026-09-25 wave, the **Rust engine drives the web's scheduling by default**: the
 WASM core decides which notes play and when, while JS keeps every voice's
 synthesis + FX. A visible 🦀 badge in the top bar shows the active engine and
-instantly reverts to the long-tested JS engine. The next step of the unify work
-is porting the analyser into `loom-core` so the prof can run through WASM too.
+instantly reverts to the long-tested JS engine.
+
+In the same wave, the **offline teacher analyser moved into `loom-core`**
+(`loom_core::prof` — tonality, tuning, Plomp–Levelt acoustics, roman-numeral
+harmony + cadence, form, novelty score) and is re-exported by the native apps
+(`loom_app::prof::analyze`) and wrapped for WASM (`analyze_json`), so the prof
+runs through the same std-only code in the browser **and** natively. `analyzePiece`
+prefers the Rust analyser with its silent JS fallback, and the parity test now
+also checks the analyser line-for-line (14/14).
 
 `web/` is also a **PWA**: the manifest + service worker let it be installed as
 an app and keep playing offline (shell precached, samples cached on first

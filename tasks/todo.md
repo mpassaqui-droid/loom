@@ -4,6 +4,56 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
+## Session 2026-09-25 — analyseur du prof dans loom-core (clé de voûte du moteur unifié)
+
+> Décision du propriétaire (2026-09-25) : « y » — on lance la vague.
+> Objectif : le prof hors-ligne (`analyze.rs` + `lore.rs`) vit dans `loom-core`
+> (zéro dépendance, std-only), est ré-exporté par `loom-app` (TUI/GUI inchangées)
+> et exposé au web via `loom-wasm` (repli JS instantané comme le séquenceur).
+
+- [x] Déplacer `lore` + `analyze` dans `loom-core` (module `prof`), `cargo test -p loom-core` vert, std-only.
+- [x] Ré-exporter depuis `loom-app` (`pub use loom_core::prof::analyze`) : TUI/GUI identiques.
+- [x] Exposer `analyze_json` dans `loom-wasm` (wasm-bindgen), reconstruire le WASM.
+- [x] Brancher `web/index.html` sur l'analyse WASM (repli JS instantané, même schéma que le séquenceur).
+- [x] Parité : cas JS↔Rust de l'analyse (tonalité, harmonie, novelty) ajoutés à `tools/parity_test.js`.
+- [x] Docs (CLAUDE/README/todo) à jour + toutes les portes (tests, clippy -D, check_web, parité).
+- [x] Review finale des changements et limites.
+
+### Review
+- **Le port** : `loom-app/src/prof/{analyze,lore}.rs` → `loom-core/src/prof/` (module `prof`, std-only,
+  zéro dépendance) via `git mv` ; `loom-core` ré-exporte `analyze`, `novelty_report`,
+  `LORE`, `SCALE_LORE`, `TRADITION_LORE`. `loom-app/src/prof.rs` fait `pub use loom_core::prof::analyze;`
+  (et `lore`, `SCALE_LORE`, `TRADITION_LORE`) → TUI/GUI/exercices inchangés : `cargo test` app 114 vert.
+  `loom-wasm` expose `#[wasm_bindgen] analyze_json(src) -> Vec<String>` (même patron que `schedule_bar_json`),
+  reconstruit par `./build-wasm.sh` (web/pkg + tools/pkg-node).
+- **Web branché** : `window.__loomRust.analyze` = `w.analyze_json` ; `analyzePiece()` prend l'analyse Rust par
+  défaut (badge 🦀), repli silencieux instantané sur le moteur JS — <u>exactement</u> le schéma du séquenceur.
+- **Portes** : `cargo test --workspace` 348+12 verts (core 113 dont +12 tests analyseur, app 114, audio 73, gui 26,
+  tui 24), `cargo clippy --workspace --all-targets -- -D warnings` 0 warning, `check_web.js` 4/4 ✓,
+  `parity_test.js` : analyse 14/14 ✅ + onsets 238/238 PERFECT, `git diff --check` propre.
+- **3 vraies divergences corrrigées** (port) : (1) nouveauté sans `song:` — le web prend 8 mesures
+  nominales, Rust `len_bars().max(1)` échantillonnait deux fois la même mesure → repli à 8 dans
+  `novelty_report` (+ test régression : `kick: x x x x x x x` est bien « boucle à l'identique », `bell` non) ;
+  (2) la ligne « pourquoi » « le tempo accélère/respire … » (`parse_accel`) manquait à Rust → ajoutée
+  (ordre : drône→bend→générateurs→euclid→harmonie→swing→métrique→accel) (+ test) ; (3) écriture des
+  métriques — Rust décline « métrique composée 2+2+3 (3,5 temps) » vs le « inhabituelle » du web → le
+  repli JS reprend l'écriture Rust (`parseMeterGroups` + `beautifyBeats`, virgule française) pour coller au texte.
+- **2 normalisations documentées** dans le test de parité (pas des bugs) : le % de consonance
+  Plomp–Levelt (JS flotte en f64 avec `tuning` global stateful vs Rust stateless — 59/60 possible) → le
+  nombre est normalisé, l'étiquette reste stricte ; et sur les pièces à `key@section`, Rust empreinte
+  des notes RÉSOLUES (il entend la modulation vers le chorus), JS des jetons d'étapes abstraits → la
+  section nouveauté n'y est pas comparable ligne à ligne par conception : le test compare les verrous
+  déterministes (tonalité, accordage, étiquette acoustique, harmonie + cadence, forme, « pourquoi »)
+  strictement, et ne garde de la nouveauté que ce qui est stable.
+- **Limites notées** : (1) le repli JS de l'analyse reste l'ancien texte « analyseur » pour le cas où le
+  WASM n'est pas chargé — aligné sur Rust pour les métriques, mais sa nouveauté garde l'empreinte par
+  jetons (différence voulue, cf. ci-dessus) ; (2) `analyzePiece` JS reste *stateful* (fuite de `tuning` via
+  `noveltyReport`→`scheduleBarCapture`) — sans conséquence maintenant que Rust est la valeur par défaut,
+  et à réviser si le repli JS devait redevenir principal ; (3) la parité analyse couvre un corpus de
+  14 pièces (majeur/pythagorien/II-V-I, maqâm, microtonal, métriques simple et composée, accel,
+  raga+forme, 19-EDO, romanes+modulation fusionnée, blues, générateur walk, modulations) — étendre le
+  corpus si un cas d'école apparaît ailleurs.
+
 ## Session 2026-09-25 — qualité et vérification de l'interface
 - [x] Nettoyer les avertissements Clippy du workspace sans changer le comportement musical.
 - [x] Vérifier le sampler GUI dans une fenêtre, puis corriger les problèmes observés.

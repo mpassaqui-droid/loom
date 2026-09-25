@@ -43,8 +43,12 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
    parses every sound verb. Keep web and native in step: a new sound verb goes in
    `synth.rs` (+ test), then `loom-audio`, then `web/index.html`.
    In progress: `web/index.html` uses `loom-wasm` for scheduling by default,
-   with an instant JS fallback; synthesis and effects still run in JS. The next
-   step is moving the offline teacher analyser into `loom-core` for WASM use.
+   with an instant JS fallback; synthesis and effects still run in JS. The
+   offline teacher analyser moved into `loom-core::prof` (2026-09-25) and runs
+   through WASM (`analyze_json`) as the web's analyser by default — one teacher
+   everywhere. Remaining unify loops: any new sound verb goes in `synth.rs`
+   (+ test), then `loom-audio`, then `web/index.html`; re-check the JS-fallback
+   paths whenever the WASM engine changes.
 
 ## Session cycle (tasks/)
 - Start of session: read `tasks/todo.md` (current work) and `tasks/lessons.md` (past corrections).
