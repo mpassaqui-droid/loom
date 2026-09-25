@@ -6,7 +6,7 @@ use loom_app::Theme;
 
 use super::StudioAction;
 use crate::scene::logic::{hsl_to_rgb, voice_hue};
-use crate::studio::songline::{Section, SongEdit};
+use loom_app::studio::songline::{Section, SongEdit};
 use crate::style::color;
 
 const HEIGHT: f32 = 30.0;

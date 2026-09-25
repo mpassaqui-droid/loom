@@ -1,7 +1,7 @@
 //! The STUDIO in the window: the knobs bar and the panels (MIX, ROLL,
 //! TIMELINE, CLIPS), plus the import box.
 //!
-//! The logic lives in [`crate::studio`]; these functions only draw it and
+//! The logic lives in [`loom_app::studio`]; these functions only draw it and
 //! turn clicks into [`StudioAction`]s, which the app carries out
 //! (see `app_studio.rs`).
 
@@ -17,15 +17,15 @@ use eframe::egui::{self, Button, Id, RichText, Sense};
 use loom_app::Theme;
 use loom_audio::SCOPE_LEN;
 
-use crate::studio::clips::Clips;
-use crate::studio::demo::Demo;
-use crate::studio::knobs::{Knob, Knobs};
-use crate::studio::learn::Learn;
-use crate::studio::loudness::{Level, Loudness};
-use crate::studio::mixer::Mixer;
-use crate::studio::songline::SongEdit;
-use crate::studio::stems::StemsJob;
-use crate::studio::tap::TapTempo;
+use loom_app::studio::clips::Clips;
+use loom_app::studio::demo::Demo;
+use loom_app::studio::knobs::{Knob, Knobs};
+use loom_app::studio::learn::Learn;
+use loom_app::studio::loudness::{Level, Loudness};
+use loom_app::studio::mixer::Mixer;
+use loom_app::studio::songline::SongEdit;
+use loom_app::studio::stems::StemsJob;
+use loom_app::studio::tap::TapTempo;
 use crate::style::color;
 
 /// Room one knob needs in the knobs bar (name, slider, value), in points.
@@ -266,7 +266,7 @@ pub fn import_dialog(ctx: &egui::Context, text: &mut String, actions: &mut Vec<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::studio::clips::SLOTS;
+    use loom_app::studio::clips::SLOTS;
 
     /// Every symbol the studio draws must exist in egui's bundled fonts.
     #[test]

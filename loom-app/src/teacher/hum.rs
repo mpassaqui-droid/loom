@@ -1,6 +1,6 @@
 //! HUM — one take: a 3-2-1 countdown, then recording `Settings::seconds()`
 //! of microphone audio (with a live level), then the analysis by
-//! `loom_app::hum::melody`. The dialog shows [`HumTake::step`] each frame
+//! `crate::hum::melody`. The dialog shows [`HumTake::step`] each frame
 //! and calls [`HumTake::tick`] to pull the microphone's samples.
 //!
 //! The microphone is behind the small [`Mic`] trait, so the whole flow is
@@ -9,7 +9,7 @@
 
 use std::time::{Duration, Instant};
 
-use loom_app::hum::{self, Hum, Settings};
+use crate::hum::{self, Hum, Settings};
 use loom_audio::input::MicInput;
 
 /// Seconds of countdown before recording.

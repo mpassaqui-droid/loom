@@ -82,12 +82,12 @@ fn strip(ui: &mut egui::Ui, studio: &mut Studio, i: usize, muted: &[String], the
 }
 
 fn master_strip(ui: &mut egui::Ui, studio: &mut Studio, peak: f32, theme: &Theme, actions: &mut Vec<Action>) {
-    use crate::studio::knobs::Knob;
+    use loom_app::studio::knobs::Knob;
     ui.allocate_ui(egui::vec2(STRIP_WIDTH, 0.0), |ui| {
         ui.vertical_centered(|ui| {
             ui.label(RichText::new("MASTER").monospace().color(color(theme.accent)));
             ui.horizontal(|ui| {
-                meter(ui, crate::studio::mixer::meter_fraction(peak), peak, theme);
+                meter(ui, loom_app::studio::mixer::meter_fraction(peak), peak, theme);
                 let (min, max, step) = Knob::Volume.range();
                 let fader = egui::Slider::new(&mut studio.knobs.volume, min..=max).step_by(step as f64).vertical().show_value(false);
                 if ui.add_sized(egui::vec2(18.0, METER_HEIGHT), fader).on_hover_text("Volume général (VOL)").changed() {

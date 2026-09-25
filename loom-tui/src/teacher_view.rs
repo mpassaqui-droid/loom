@@ -4,9 +4,9 @@
 use std::time::Instant;
 
 use crate::app::{App, Mode};
-use crate::teacher::browse::{self, Row, Tab};
-use crate::teacher::ear::{level_name, Tone, LEVELS};
-use crate::teacher::hum::Step;
+use loom_app::teacher::browse::{self, Row, Tab};
+use loom_app::teacher::ear::{level_name, Tone, LEVELS};
+use loom_app::teacher::hum::Step;
 use crate::ui::{c, highlight, popup};
 use loom_app::lessons::{LESSONS, REFERENCE};
 use ratatui::layout::{Constraint, Layout};

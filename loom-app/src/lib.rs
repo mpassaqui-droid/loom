@@ -10,6 +10,8 @@ pub mod lessons;
 pub mod prof;
 pub mod library;
 pub mod share;
+pub mod studio;
+pub mod teacher;
 pub mod theme;
 pub mod vibe;
 

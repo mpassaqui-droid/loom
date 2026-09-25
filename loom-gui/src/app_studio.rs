@@ -12,7 +12,7 @@ use loom_app::Library;
 use loom_core::Program;
 
 use super::{Action, LoomApp};
-use crate::studio::{demo, learn::LearnEvents, roll, share, songline, stems::StemsJob};
+use loom_app::studio::{demo, learn::LearnEvents, roll, share, songline, stems::StemsJob};
 use crate::studio_ui::{self, DemoRun, StudioAction};
 
 impl LoomApp {

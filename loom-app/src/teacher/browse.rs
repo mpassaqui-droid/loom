@@ -1,7 +1,7 @@
 //! LEÇONS & RÉFÉRENCE — the browsable list: two tabs, a search, and a
 //! selection that skips the section headings.
 
-use loom_app::lessons::{self, Lesson, RefRow};
+use crate::lessons::{self, Lesson, RefRow};
 
 /// The two tabs of the panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

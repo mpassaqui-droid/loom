@@ -3,7 +3,7 @@
 //! panel, the ear-training window, the HUM dialog, the lessons panel and
 //! the keyboard help.
 //!
-//! The state lives in [`Teacher`] and the logic in [`crate::teacher`] and
+//! The state lives in [`Teacher`] and the logic in [`loom_app::teacher`] and
 //! `loom_app`; these functions only draw and turn clicks into
 //! [`TeacherAction`]s, which the app carries out (see `app_teacher.rs`).
 
@@ -18,11 +18,11 @@ use loom_app::lessons::Lesson;
 use loom_app::Theme;
 
 use crate::style::color;
-use crate::teacher::browse::Tab;
-use crate::teacher::demo::DemoPlay;
-use crate::teacher::ear::EarSession;
-use crate::teacher::history::History;
-use crate::teacher::hum::HumTake;
+use loom_app::teacher::browse::Tab;
+use loom_app::teacher::demo::DemoPlay;
+use loom_app::teacher::ear::EarSession;
+use loom_app::teacher::history::History;
+use loom_app::teacher::hum::HumTake;
 
 /// Something asked for with a PROF button or key.
 #[derive(Debug, Clone, PartialEq)]

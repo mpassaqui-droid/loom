@@ -7,7 +7,7 @@ use loom_app::Theme;
 
 use super::{Studio, StudioAction};
 use crate::scene::logic::{hsl_to_rgb, voice_hue};
-use crate::studio::clips::SLOTS;
+use loom_app::studio::clips::SLOTS;
 use crate::style::color;
 
 /// Draw the clips. `songs` are the songs offered for launching.

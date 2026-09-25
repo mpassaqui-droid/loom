@@ -1,12 +1,12 @@
 //! OREILLE — the ear-training panel's state: the level, the current
 //! question, what the student typed, the teacher's verdict and the score.
 //!
-//! The questions and the grading are `loom_app::ear`; this adds what a panel
+//! The questions and the grading are `crate::ear`; this adds what a panel
 //! needs: a « Réponse » button (the web's hint `(clique ?quinte pour la
 //! réponse)` gave the answer away, so it is replaced), a colour for each
 //! verdict, and « a wrong answer replays the example ».
 
-use loom_app::ear::{Exercise, Level, Score, Verdict};
+use crate::ear::{Exercise, Level, Score, Verdict};
 
 /// The levels, in the order the panel shows them, with their French names.
 pub const LEVELS: [(Level, &str); 4] =
@@ -191,7 +191,7 @@ mod tests {
         s.input = "?".into();
         s.check();
         let answer = s.revealed().unwrap();
-        assert!(loom_app::ear::RHYTHMS.contains(&answer));
+        assert!(crate::ear::RHYTHMS.contains(&answer));
         // answering after seeing the answer is graded but not counted
         s.input = answer.into();
         s.check();
@@ -200,7 +200,7 @@ mod tests {
 
         s.set_level(Level::Accords, 9);
         assert_eq!((s.level, s.revealed(), s.verdict()), (Level::Accords, None, None));
-        assert!(loom_app::ear::CHORDS.contains(&s.exercise().answer()));
+        assert!(crate::ear::CHORDS.contains(&s.exercise().answer()));
         assert_eq!(level_name(Level::Tout), "Tout");
     }
 

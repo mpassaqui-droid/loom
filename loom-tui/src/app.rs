@@ -32,7 +32,7 @@ pub enum Mode {
     /// Unsaved changes would be lost: what to do if the user confirms.
     Confirm { question: String, then: Pending },
     /// The studio's mixer (Alt+M): one row per voice, then the master knobs.
-    Mixer { row: usize, param: crate::studio::mixer::Param },
+    Mixer { row: usize, param: loom_app::studio::mixer::Param },
     /// Editing the `song:` arrangement (Alt+A), with the selected section.
     Timeline { selected: usize },
     /// The one-line import prompt (Alt+I): a `LOOM1:` code, a link or LOOM code.
@@ -44,7 +44,7 @@ pub enum Mode {
     /// HUM (Alt+H): sing a melody.
     Hum,
     /// LEÇONS & RÉFÉRENCE (Alt+L): tab, search and the selected row.
-    Lessons { tab: crate::teacher::browse::Tab, query: String, selected: usize },
+    Lessons { tab: loom_app::teacher::browse::Tab, query: String, selected: usize },
 }
 
 #[derive(Clone)]
@@ -281,7 +281,7 @@ impl App {
     pub fn nudge_volume(&mut self, delta: f32) {
         self.volume = (self.volume + delta).clamp(0.0, 1.5);
         if let Ok(e) = &self.engine { e.set_volume(self.volume); }
-        self.studio.knobs.set(crate::studio::knobs::Knob::Volume, self.volume * 100.0);
+        self.studio.knobs.set(loom_app::studio::knobs::Knob::Volume, self.volume * 100.0);
         self.info(format!("volume {:.0}%", self.volume * 100.0));
     }
 

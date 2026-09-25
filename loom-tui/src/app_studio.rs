@@ -23,16 +23,16 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::{App, Mode, Pending};
 use crate::editor::Editor;
-use crate::studio::clips::{Clips, SLOTS};
-use crate::studio::demo::Demo;
-use crate::studio::knobs::{Knob, Knobs};
-use crate::studio::learn::Learn;
-use crate::studio::loudness::Loudness;
-use crate::studio::mixer::{Mixer, Param};
-use crate::studio::songline::{self, SongEdit};
-use crate::studio::stems::StemsJob;
-use crate::studio::tap::TapTempo;
-use crate::studio::{share, demo};
+use loom_app::studio::clips::{Clips, SLOTS};
+use loom_app::studio::demo::Demo;
+use loom_app::studio::knobs::{Knob, Knobs};
+use loom_app::studio::learn::Learn;
+use loom_app::studio::loudness::Loudness;
+use loom_app::studio::mixer::{Mixer, Param};
+use loom_app::studio::songline::{self, SongEdit};
+use loom_app::studio::stems::StemsJob;
+use loom_app::studio::tap::TapTempo;
+use loom_app::studio::{share, demo};
 
 /// The demo tour, and the song to bring back when it stops.
 pub struct DemoRun {

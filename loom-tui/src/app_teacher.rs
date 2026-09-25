@@ -22,13 +22,13 @@ use loom_audio::input::MicInput;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::{App, Mode};
-use crate::teacher::browse::{self, Row, Tab};
-use crate::teacher::demo::DemoPlay;
-use crate::teacher::ear::{EarSession, LEVELS};
-use crate::teacher::history::History;
-use crate::teacher::hum::{HumTake, Step};
-use crate::teacher::route::{self, Answer, Route};
-use crate::teacher::fresh_seed;
+use loom_app::teacher::browse::{self, Row, Tab};
+use loom_app::teacher::demo::DemoPlay;
+use loom_app::teacher::ear::{EarSession, LEVELS};
+use loom_app::teacher::history::History;
+use loom_app::teacher::hum::{HumTake, Step};
+use loom_app::teacher::route::{self, Answer, Route};
+use loom_app::teacher::fresh_seed;
 
 /// The teacher's answer shown in the popup.
 pub struct ProfAnswer {

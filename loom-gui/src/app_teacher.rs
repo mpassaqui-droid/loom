@@ -14,12 +14,12 @@ use loom_audio::input::MicInput;
 use loom_core::Program;
 
 use super::{Action, LoomApp};
-use crate::teacher::browse::Tab;
-use crate::teacher::demo::DemoPlay;
-use crate::teacher::ear::EarSession;
-use crate::teacher::fresh_seed;
-use crate::teacher::hum::HumTake;
-use crate::teacher::route::{self, Answer};
+use loom_app::teacher::browse::Tab;
+use loom_app::teacher::demo::DemoPlay;
+use loom_app::teacher::ear::EarSession;
+use loom_app::teacher::fresh_seed;
+use loom_app::teacher::hum::HumTake;
+use loom_app::teacher::route::{self, Answer};
 use crate::teacher_ui::{self, LessonsView, ProfAnswer, TeacherAction};
 
 impl LoomApp {

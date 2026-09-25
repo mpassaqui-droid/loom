@@ -1,12 +1,12 @@
 //! LIEN / EXPORT / IMPORT: share a song with its knob settings.
 //!
 //! The codes themselves (`LOOM1:…`, browser links) are made and read by
-//! `loom_app::share`; this module only moves the knob values in and out.
+//! `crate::share`; this module only moves the knob values in and out.
 
 use std::path::{Path, PathBuf};
 
-use loom_app::share::{self, ShareState};
-use loom_app::Library;
+use crate::share::{self, ShareState};
+use crate::Library;
 
 use super::knobs::{Knob, Knobs};
 use super::songline;

@@ -5,7 +5,7 @@ use loom_app::Theme;
 
 use super::StudioAction;
 use crate::scene::logic::hsl_to_rgb;
-use crate::studio::roll::Roll;
+use loom_app::studio::roll::Roll;
 use crate::style::{color, mix};
 
 /// Height of the roll in a tall window, in points (the browser's 140 px).

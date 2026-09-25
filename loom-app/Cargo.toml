@@ -6,3 +6,4 @@ description = "Shared logic for LOOM's native apps (TUI + GUI): Omarchy theme, s
 
 [dependencies]
 loom-core = { path = "../loom-core" }
+loom-audio = { path = "../loom-audio" }

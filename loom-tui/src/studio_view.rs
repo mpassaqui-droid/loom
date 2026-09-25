@@ -4,10 +4,10 @@
 use crate::app::{App, MixRow, Mode};
 use crate::scene::hue_color;
 use crate::scene::logic::voice_hue;
-use crate::studio::knobs::Knob;
-use crate::studio::loudness::Level;
-use crate::studio::mixer::Param;
-use crate::studio::{roll, songline};
+use loom_app::studio::knobs::Knob;
+use loom_app::studio::loudness::Level;
+use loom_app::studio::mixer::Param;
+use loom_app::studio::{roll, songline};
 use loom_app::Rgb;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Color, Modifier, Style};

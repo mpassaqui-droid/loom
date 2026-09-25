@@ -6,7 +6,7 @@ use loom_app::Theme;
 
 use super::{LessonsView, TeacherAction};
 use crate::style::color;
-use crate::teacher::browse::{self, Row, Tab};
+use loom_app::teacher::browse::{self, Row, Tab};
 
 /// Draw the panel. The search box and the tab are edited in place.
 pub fn show(ui: &mut egui::Ui, view: &mut LessonsView, theme: &Theme, actions: &mut Vec<TeacherAction>) {

@@ -24,7 +24,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     }
 
     // the arrangement line shows when the code has a `song:`
-    let has_song = !crate::studio::songline::sections(&app.editor.text()).is_empty();
+    let has_song = !loom_app::studio::songline::sections(&app.editor.text()).is_empty();
     let [top, body, timeline, bottom] = Layout::vertical([
         Constraint::Length(1), Constraint::Min(3), Constraint::Length(u16::from(has_song)), Constraint::Length(1),
     ]).areas(f.area());

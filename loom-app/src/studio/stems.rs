@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver};
 
-use loom_app::Library;
+use crate::Library;
 use loom_audio::Sequencer;
 use loom_core::Program;
 

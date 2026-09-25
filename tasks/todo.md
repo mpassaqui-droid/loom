@@ -75,3 +75,9 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
   IA s'ajoute ensuite (comme sur le web).
 - Tests : 371 ok (core 96 · audio 70 · app 57 · gui 75 · tui 73).
 
+**2026-09-16 — studio/ et teacher/ déplacés dans loom-app.**
+- `loom-app/src/studio/` et `loom-app/src/teacher/` (logique pure) : plus de `#[path]`
+  croisé entre crates — la GUI et la TUI utilisent `loom_app::studio` /
+  `loom_app::teacher` ; `loom-app` dépend maintenant de `loom-audio`.
+- Idem EXPLIQUE (voir ci-dessus). Tests uniques : 322 ok (app 106 · audio 70 · core 96 · gui 26 · tui 24 — les tests studio/teacher ne sont plus dupliqués GUI+TUI).
+

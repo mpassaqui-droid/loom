@@ -7,7 +7,7 @@ use loom_app::Theme;
 
 use super::TeacherAction;
 use crate::style::color;
-use crate::teacher::hum::{HumTake, Step};
+use loom_app::teacher::hum::{HumTake, Step};
 
 /// Draw the dialog for the take in progress.
 pub fn show(ctx: &egui::Context, take: &HumTake, theme: &Theme, actions: &mut Vec<TeacherAction>) {

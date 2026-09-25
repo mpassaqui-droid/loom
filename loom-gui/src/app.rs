@@ -673,7 +673,7 @@ impl LoomApp {
                     ui.separator();
 
                     ui.label("Volume");
-                    let volume = crate::studio::knobs::Knob::Volume;
+                    let volume = loom_app::studio::knobs::Knob::Volume;
                     let slider = egui::Slider::new(&mut self.studio.knobs.volume, 0.0..=150.0).step_by(1.0).show_value(false);
                     if ui.add(slider).on_hover_text(self.studio.knobs.text(volume)).changed() {
                         actions.push(Action::Studio(StudioAction::KnobChanged(volume)));

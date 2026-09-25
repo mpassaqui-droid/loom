@@ -12,7 +12,7 @@
 
 use std::time::{Duration, Instant};
 
-use loom_app::ear::Demo;
+use crate::ear::Demo;
 use loom_audio::Engine;
 
 /// Stop this much before the bar ends, so the example's second loop never
@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn every_ear_example_fits_one_bar() {
-        use loom_app::ear::{Exercise, Level};
+        use crate::ear::{Exercise, Level};
         for seed in 0..40 {
             let demo = Exercise::new(Level::Tout, seed).demo();
             let program = loom_core::Program::parse(&demo.code);

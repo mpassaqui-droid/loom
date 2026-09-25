@@ -5,7 +5,7 @@ use loom_app::Theme;
 
 use super::TeacherAction;
 use crate::style::color;
-use crate::teacher::ear::{level_name, EarSession, Tone, LEVELS};
+use loom_app::teacher::ear::{level_name, EarSession, Tone, LEVELS};
 
 /// Widget id of the answer field (focused after each check).
 const ANSWER_FIELD: &str = "loom-ear-answer";

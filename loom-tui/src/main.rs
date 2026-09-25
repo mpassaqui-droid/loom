@@ -12,14 +12,7 @@
 mod app;
 mod editor;
 mod scene;
-/// The studio's logic, shared with `loom-gui` (the same files, compiled here too).
-#[path = "../../loom-gui/src/studio/mod.rs"]
-#[allow(dead_code)] // the GUI uses all of it, the terminal only part
-mod studio;
 mod studio_view;
-/// LE PROF & COMPOSITION's state, shared with `loom-gui` (the same files, compiled here too).
-#[path = "../../loom-gui/src/teacher/mod.rs"]
-mod teacher;
 mod teacher_view;
 mod ui;
 
@@ -169,7 +162,7 @@ fn play(file: &str) -> Result<(), String> {
 fn render(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
     let src = read(file)?;
     let program = loom_core::Program::parse(&src);
-    let bars = bars.unwrap_or_else(|| studio::stems::bars_to_render(&program));
+    let bars = bars.unwrap_or_else(|| loom_app::studio::stems::bars_to_render(&program));
     let samples = loom_audio::render(&src, bars, 48000);
     loom_audio::write_wav(std::path::Path::new(out), &samples, 48000).map_err(|e| e.to_string())?;
     let peak = samples.iter().fold(0.0f32, |m, x| m.max(x.abs()));
@@ -182,12 +175,12 @@ fn render_stems(file: &str, dir: &str, bars: Option<u32>) -> Result<(), String> 
     let src = read(file)?;
     let program = loom_core::Program::parse(&src);
     if program.voices.is_empty() { return Err(format!("{file} ne contient aucune voix")); }
-    let bars = bars.unwrap_or_else(|| studio::stems::bars_to_render(&program));
+    let bars = bars.unwrap_or_else(|| loom_app::studio::stems::bars_to_render(&program));
     let dir = std::path::Path::new(dir);
     std::fs::create_dir_all(dir).map_err(|e| format!("impossible de créer le dossier {} : {e}", dir.display()))?;
     let stems = loom_audio::render_stems(&src, bars, 48000);
     for (voice, samples) in &stems {
-        let path = studio::stems::stem_path(dir, voice);
+        let path = loom_app::studio::stems::stem_path(dir, voice);
         loom_audio::write_wav(&path, samples, 48000).map_err(|e| format!("{} : {e}", path.display()))?;
         let peak = samples.iter().fold(0.0f32, |m, x| m.max(x.abs()));
         println!("  {voice:<12} → {} (crête {peak:.2})", path.display());

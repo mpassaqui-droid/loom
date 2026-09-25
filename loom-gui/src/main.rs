@@ -17,10 +17,8 @@ mod editor;
 mod export;
 mod grid;
 mod scene;
-mod studio;
 mod studio_ui;
 mod style;
-mod teacher;
 mod teacher_ui;
 
 use std::path::PathBuf;

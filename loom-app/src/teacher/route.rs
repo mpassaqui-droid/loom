@@ -3,7 +3,7 @@
 //! A question first goes to the offline knowledge base (`prof::lookup`);
 //! only when it knows nothing is Claude asked (`prof::ask`).
 
-use loom_app::prof::{self, Lookup};
+use crate::prof::{self, Lookup};
 
 /// Where the VIBE box's text goes.
 #[derive(Debug, Clone, PartialEq)]
