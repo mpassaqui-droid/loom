@@ -4,6 +4,40 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
+## En cours — quatre vagues (notation · sampler · prof interactif · moteur unifié web)
+
+> Décision du propriétaire (2026-09-25) : « ok for all ». Chaque vague = un incrément
+> petit, testé, commité. L'ordre = impact/effort : d'abord le prof interactif hors-ligne
+> (pure logique testable), puis le moteur unifié côté web, puis la vue partition (GUI),
+> puis l'instrument sampler (GUI).
+
+### Vague 1 — Prof interactif « explique ET modifie » (hors-ligne, sans API)
+- [x] `loom-app/src/teacher/transform.rs` : `transform(src, kind) -> Result<Transformed, String>`
+      — transposer (semi), sombre/clair (réécrit le mode de `key:`), dense (unison),
+      sec/espace (reverb), groove (swing), varie (develop) — chaque ligne touchée garde
+      commentaire ; re-parse vérifié. Tests par transformation.
+- [x] Chips « TRANSFORME » dans la GUI **et** la TUI (prof applique + explique, undo partagé).
+
+### Vague 2 — Moteur unifié côté web : le Rust pilote le rythme du web
+- [ ] `web/index.html` : défaut du moteur Rust « ON » quand WASM est chargé (truismé par
+      parité 202/202 bit-à-bit), badge 🦀 visible + toggle pour revenir à JS à l'instant.
+- [ ] `tools/parity_test.js` : cas explicites `meter: 2+2+3/8` (composé) + `poly 3:2`
+      (triolet) s'ils manquent ; reste 202/202 PERFECT.
+- [ ] README/ROADMAP §7 : status « le moteur live (rythme/notes) est Rust quand chargé ;
+      le son reste JS » + prochaine pierre (analyzer partagé via WASM).
+
+### Vague 3 — Vue partition (GUI)
+- [ ] `loom-app/src/studio/notation.rs` : partition du roll (grande portée, têtes par voix,
+      `note_at`), + `transpose_voice(src, voice, semi)` — tests.
+- [ ] `loom-gui/src/studio_ui/notation.rs` : panneau « PARTITION » (portées + têtes + clic =
+      aller à la voix, ◀▶ demi-ton pour transposer la voix sélectionnée).
+
+### Vague 4 — Instrument sampler (GUI)
+- [ ] `loom-app/src/studio/sampletool.rs` : liste des samples + spec (sample/root/begin/end/
+      chop/reverse) → réécrit `| sample …` de la voix choisie — tests.
+- [ ] `loom-gui/src/studio_ui/sampler.rs` : panneau « SAMPLER » (liste + curseurs + mini
+      waveform du sample sélectionné).
+
 ## En cours — LOOM app native complète pour Omarchy (Rust)
 
 Décisions du propriétaire (2026-09-14) : refonte complète, TUI **et** GUI native

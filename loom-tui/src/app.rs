@@ -45,6 +45,8 @@ pub enum Mode {
     Hum,
     /// LEÇONS & RÉFÉRENCE (Alt+L): tab, search and the selected row.
     Lessons { tab: loom_app::teacher::browse::Tab, query: String, selected: usize },
+    /// TRANSFORME (Alt+W): pick an idea the prof should make audible.
+    Transform { selected: usize },
 }
 
 #[derive(Clone)]
@@ -437,7 +439,7 @@ impl App {
                 return;
             }
             Mode::Edit | Mode::Mixer { .. } | Mode::Timeline { .. } | Mode::Import { .. }
-            | Mode::Prof { .. } | Mode::Ear | Mode::Hum | Mode::Lessons { .. } => {}
+            | Mode::Prof { .. } | Mode::Ear | Mode::Hum | Mode::Lessons { .. } | Mode::Transform { .. } => {}
         }
 
         let page = self.editor_height.saturating_sub(1).max(1);

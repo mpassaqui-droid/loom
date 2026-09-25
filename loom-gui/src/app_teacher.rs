@@ -20,6 +20,7 @@ use loom_app::teacher::ear::EarSession;
 use loom_app::teacher::fresh_seed;
 use loom_app::teacher::hum::HumTake;
 use loom_app::teacher::route::{self, Answer};
+use loom_app::teacher::transform;
 use crate::teacher_ui::{self, LessonsView, ProfAnswer, TeacherAction};
 
 impl LoomApp {
@@ -53,6 +54,16 @@ impl LoomApp {
                 None => self.say("Rien à rétablir."),
             },
             TeacherAction::Explain => self.explain(),
+            TeacherAction::Transform(kind) => match transform::transform(&self.text, kind, fresh_seed() % 99 + 1) {
+                Ok(t) => {
+                    let when = self.replace_song("TRANSFORME", t.code);
+                    let mut lines = vec![kind.explanation(), String::new(), "Ce que j'ai changé :".into()];
+                    lines.extend(t.touches.iter().cloned());
+                    self.teacher.prof = Some(ProfAnswer { title: format!("TRANSFORME — {}", kind.label()), lines, is_error: false, demo: None });
+                    self.say(format!("[ prof ] « {} » : {} ligne(s) modifiée(s) — écoute la différence (F3 pour annuler){when}", kind.label(), t.touches.len()));
+                }
+                Err(why) => self.say(why),
+            },
             TeacherAction::CancelProf => {
                 if self.teacher.prof_job.take().is_some() {
                     if let Some(answer) = &mut self.teacher.prof {

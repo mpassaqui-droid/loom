@@ -37,6 +37,8 @@ pub enum TeacherAction {
     Redo,
     /// EXPLIQUE: the teacher explains the song (Ctrl+Maj+P).
     Explain,
+    /// TRANSFORME: the teacher changes the song to make an idea audible (chip).
+    Transform(loom_app::teacher::transform::Kind),
     /// Stop waiting for the teacher.
     CancelProf,
     CloseProf,
@@ -144,6 +146,21 @@ pub fn teacher_bar(ui: &mut egui::Ui, teacher: &Teacher, theme: &Theme, actions:
                     actions.push(TeacherAction::ToggleHelp);
                 }
             });
+            // TRANSFORME : the prof changes a few lines to make one idea audible.
+            ui.add_space(3.0);
+            ui.horizontal_wrapped(|ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                ui.label(RichText::new("TRANSFORME").size(13.0).strong().color(color(theme.note)))
+                    .on_hover_text("Le prof modifie ton morceau (hors-ligne) pour te faire ENTENDRE une idée — ↩ Annuler (F3) rend ton code.");
+                use loom_app::teacher::transform::Kind;
+                let kinds = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove];
+                for kind in kinds {
+                    let chip = ui.selectable_label(false, kind.label());
+                    if chip.on_hover_text(kind.explanation()).clicked() {
+                        actions.push(TeacherAction::Transform(kind));
+                    }
+                }
+            });
         });
 }
 
@@ -190,6 +207,7 @@ pub const KEYS: &[(&str, &[(&str, &str)])] = &[
             ("Ctrl+Maj+G", "GÉNÉRER un morceau neuf"),
             ("Ctrl+Maj+B", "DÉVELOPPE : faire évoluer les voix"),
             ("F3 · Maj+F3", "annuler · rétablir (VIBE, GÉNÉRER, DÉVELOPPE, HUM, leçon)"),
+            ("TRANSFORME", "le prof modifie le morceau pour te faire entendre une idée (chips sous la barre)"),
             ("Ctrl+Maj+P", "EXPLIQUE : le prof explique ton morceau"),
             ("Ctrl+Maj+O", "OREILLE : entraînement de l'oreille"),
             ("Ctrl+Maj+H", "HUM : chanter une mélodie (Échap ferme)"),

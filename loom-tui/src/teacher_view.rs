@@ -7,6 +7,7 @@ use crate::app::{App, Mode};
 use loom_app::teacher::browse::{self, Row, Tab};
 use loom_app::teacher::ear::{level_name, Tone, LEVELS};
 use loom_app::teacher::hum::Step;
+use loom_app::teacher::transform::Kind;
 use crate::ui::{c, highlight, popup};
 use loom_app::lessons::{LESSONS, REFERENCE};
 use ratatui::layout::{Constraint, Layout};
@@ -16,6 +17,9 @@ use ratatui::widgets::{List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
 
 const SPIN: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// The TRANSFORME chips, in the order the popup shows them.
+const TRANSFORMS: [Kind; 7] = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove];
 
 /// Display width of a text in terminal cells (accents count 1, emoji 2).
 fn width(text: &str) -> usize {
@@ -282,6 +286,37 @@ pub fn draw_lessons(f: &mut Frame, app: &App) {
         _ => " ↑↓ choisir · Tab onglet · tape pour chercher · Échap fermer",
     };
     f.render_widget(Paragraph::new(Line::styled(keys, dim)), footer);
+}
+
+/// TRANSFORME: one ear-idea per row, explained on the right.
+pub fn draw_transforms(f: &mut Frame, app: &App) {
+    let Mode::Transform { selected } = &app.mode else { return };
+    let t = &app.theme;
+    let area = f.area();
+    let width = area.width.saturating_sub(4).min(118);
+    let inner = popup(f, app, "TRANSFORME — le prof modifie ton morceau pour que tu ENTENDES l'idée", width, area.height.saturating_sub(2));
+    let dim = Style::new().fg(c(t.dim));
+    let accent = Style::new().fg(c(t.accent)).add_modifier(Modifier::BOLD);
+    let [body, footer] = Layout::vertical([Constraint::Min(3), Constraint::Length(1)]).areas(inner);
+    let [left, right] = Layout::horizontal([Constraint::Percentage(36), Constraint::Percentage(64)]).areas(body);
+
+    let rows: Vec<&str> = TRANSFORMS.iter().map(|k| k.label()).collect();
+    let items: Vec<ListItem> = rows.iter().map(|label| ListItem::new(format!(" {label}"))).collect();
+    let list = List::new(items).highlight_style(Style::new().bg(c(t.accent)).fg(c(t.background)).add_modifier(Modifier::BOLD));
+    let mut state = ListState::default().with_selected(Some((*selected).min(TRANSFORMS.len() - 1)));
+    f.render_stateful_widget(list, left, &mut state);
+
+    let detail_width = right.width.saturating_sub(2) as usize;
+    let mut detail: Vec<Line> = Vec::new();
+    detail.push(Line::styled(format!(" {}", TRANSFORMS[*selected].label()), accent));
+    detail.push(Line::from(""));
+    for line in wrap(&TRANSFORMS[*selected].explanation(), detail_width) {
+        detail.push(Line::from(format!(" {line}")));
+    }
+    detail.push(Line::from(""));
+    detail.push(Line::styled(" chaque ligne modifiée garde son commentaire — ↩ Annuler (F3) rend ton code.", dim));
+    f.render_widget(Paragraph::new(detail), right);
+    f.render_widget(Paragraph::new(Line::styled(" ↑↓ choisir · Entrée l'essayer · Échap fermer", dim)), footer);
 }
 
 /// At most `max` characters, with `…` when cut.

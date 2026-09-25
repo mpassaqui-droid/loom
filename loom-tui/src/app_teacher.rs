@@ -11,6 +11,7 @@
 //! | Alt+O          | OREILLE: ear training (popup)                                 |
 //! | Alt+H          | HUM: sing a melody (popup)                                    |
 //! | Alt+L          | LEÇONS & RÉFÉRENCE (popup with search)                        |
+//! | Alt+W          | TRANSFORME: the prof makes one idea audible (popup)            |
 //!
 //! This file is a child module of `app.rs`, so it can use the app's state directly.
 
@@ -18,6 +19,7 @@ use std::time::Instant;
 
 use loom_app::ear::{Demo, Level};
 use loom_app::{develop, generate, hum, prof};
+use loom_app::teacher::transform::{self, Kind};
 use loom_audio::input::MicInput;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -64,7 +66,11 @@ pub enum EditKey {
     Ear,
     Hum,
     Lessons,
+    Transform,
 }
+
+/// The TRANSFORME chips, in the order the popup shows them.
+const TRANSFORMS: [Kind; 7] = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove];
 
 /// The teacher's keys in the editor: Alt+letters, F3, and Shift+F3 or Ctrl+Y (some
 /// terminals send Shift+F3 as F15, others as a code crossterm can't read).
@@ -84,6 +90,7 @@ pub fn edit_key(key: &KeyEvent) -> Option<EditKey> {
             'o' => EditKey::Ear,
             'h' => EditKey::Hum,
             'l' => EditKey::Lessons,
+            'w' => EditKey::Transform,
             _ => return None,
         },
         _ => return None,
@@ -98,6 +105,7 @@ impl App {
             Mode::Ear => self.ear_key(key),
             Mode::Hum => self.hum_key(key),
             Mode::Lessons { .. } => self.lessons_key(key),
+            Mode::Transform { .. } => self.transform_key(key),
             Mode::Edit => {
                 if key.code == KeyCode::Esc && self.teacher.prof_job.is_some() {
                     self.cancel_prof();
@@ -120,6 +128,9 @@ impl App {
                     EditKey::Lessons => {
                         let selected = browse::move_selection(&browse::rows(Tab::Lessons, ""), 0, 0);
                         self.mode = Mode::Lessons { tab: Tab::Lessons, query: String::new(), selected };
+                    }
+                    EditKey::Transform => {
+                        self.mode = Mode::Transform { selected: 0 };
                     }
                 }
                 true
@@ -204,6 +215,39 @@ impl App {
             Ok(developed) => {
                 let when = self.replace_song("DÉVELOPPE", &developed.code);
                 self.info(format!("{} (F3){when}", developed.message()));
+            }
+            Err(why) => self.info(why),
+        }
+    }
+
+    // ---- TRANSFORME ----------------------------------------------------------
+
+    fn transform_key(&mut self, key: KeyEvent) -> bool {
+        let Mode::Transform { selected } = &mut self.mode else { return false };
+        match key.code {
+            KeyCode::Esc => self.mode = Mode::Edit,
+            KeyCode::Up | KeyCode::Char('k') => *selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => *selected = (*selected + 1).min(TRANSFORMS.len() - 1),
+            KeyCode::Enter => {
+                let kind = TRANSFORMS[*selected];
+                self.mode = Mode::Edit;
+                self.apply_transform(kind);
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// The prof changes a few lines and explains what and why.
+    fn apply_transform(&mut self, kind: Kind) {
+        match transform::transform(&self.editor.text(), kind, fresh_seed() % 99 + 1) {
+            Ok(t) => {
+                let when = self.replace_song("TRANSFORME", &t.code);
+                let mut lines = vec![kind.explanation(), String::new(), "Ce que j'ai changé :".into()];
+                lines.extend(t.touches.iter().cloned());
+                self.teacher.prof = Some(ProfAnswer { title: format!("TRANSFORME — {}", kind.label()), lines, is_error: false, demo: None });
+                self.mode = Mode::Prof { scroll: 0 };
+                self.info(format!("[ prof ] « {} » : {} ligne(s) modifiée(s) — écoute la différence (F3 pour annuler){when}", kind.label(), t.touches.len()));
             }
             Err(why) => self.info(why),
         }
@@ -480,6 +524,7 @@ mod tests {
         assert_eq!(edit_key(&key(KeyCode::Char('o'), KeyModifiers::ALT)), Some(EditKey::Ear));
         assert_eq!(edit_key(&key(KeyCode::Char('h'), KeyModifiers::ALT)), Some(EditKey::Hum));
         assert_eq!(edit_key(&key(KeyCode::Char('l'), KeyModifiers::ALT)), Some(EditKey::Lessons));
+        assert_eq!(edit_key(&key(KeyCode::Char('w'), KeyModifiers::ALT)), Some(EditKey::Transform));
         assert_eq!(edit_key(&key(KeyCode::F(3), KeyModifiers::NONE)), Some(EditKey::Undo));
         assert_eq!(edit_key(&key(KeyCode::F(3), KeyModifiers::SHIFT)), Some(EditKey::Redo));
         assert_eq!(edit_key(&key(KeyCode::F(15), KeyModifiers::NONE)), Some(EditKey::Redo));

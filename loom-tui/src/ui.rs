@@ -49,6 +49,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Mode::Ear => teacher_view::draw_ear(f, app),
         Mode::Hum => teacher_view::draw_hum(f, app),
         Mode::Lessons { .. } => teacher_view::draw_lessons(f, app),
+        Mode::Transform { .. } => teacher_view::draw_transforms(f, app),
         Mode::Edit | Mode::Vibe { .. } | Mode::Stage | Mode::Mixer { .. } | Mode::Timeline { .. } | Mode::Import { .. } => {}
     }
 }
