@@ -97,3 +97,13 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
   groupes exposés par `parse_meter_groups` ; `parse_meter` garde le comportement.
 - `loom-app` l'analyse offline nomme la métrique composée (`3+2+2 (3,5 temps)`).
   Tests : 328 ok au total (app 107 · core 98).
+
+**2026-09-17 — langage (parité web) + undo/redo vérifié.**
+- `web/index.html` : `poly 3:2` (triolet, même grille que la native) + `meter: 2+2+3/8`
+  (métrique composée) portés côté JS ; l'aide affiche le triolet. Aides à l'éditeur
+  mises à jour. `node` : script principal sans erreur de syntaxe ; tests isolés de
+  `parseMeter` (7/8=3.5, 3+2+2/8=3.5, 5/4=5, 3=3).
+- `tools/parity_test.js` (JS↔Rust sur les onsets) : 170/170 voix×mesure ✅ PERFECT.
+- Undo/redo des chargements déjà complet et testé dans les apps natives (VIBE/IA,
+  GÉNÉRER, DÉVELOPPE, HUM, leçon — 30 étapes, F3/Maj-F3/Ctrl+Y), `History` dans
+  `loom-app/teacher/history.rs` ; ROADMAP.md §2 passé en ✅.

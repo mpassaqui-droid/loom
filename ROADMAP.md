@@ -67,9 +67,9 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - 🌠 **Projets** multi-morceaux + versions + cloud.
 
 ## 2. ⌨️ CODE / LANGAGE — la langue qui grandit
-- 🔨 **Fonctions / macros / variables** (motifs et verbes définis par toi).
-- 🔨 **Polyrythmie explicite** (`3:2`), métrique composée, modulation métrique.
-- 🔨 **Undo/redo** des chargements (preset / IA / génération).
+- ✅ **Fonctions / macros / variables** (`def riff: 1 2 3 5` + `$riff`, jusqu'à 4 niveaux — motifs ET verbes).
+- ✅ **Polyrythmie explicite** : `| poly m:n` (ex. 3:2 = triolet : m pas par fenêtre de n temps), métrique composée (`meter: 3+2+2/8`), modulation métrique via `accel:`/`tempo:` par section.
+- ✅ **Undo/redo des chargements** (VIBE / IA / GÉNÉRER / DÉVELOPPE / HUM / leçon) — 30 étapes, F3 / Maj-F3 / Ctrl+Y (web : `_undo`).
 - 🌠 **Théorie du monde en profondeur** : raga (aroha/avaroha, pakad, vadi),
   maqâm (ajnas, sayr), gamelan (pathet), talas carnatiques, timelines africaines.
 - 🌠 **Harmonie fonctionnelle** : dominantes secondaires, emprunts, réharmonisation.

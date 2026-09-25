@@ -398,7 +398,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <b>euclid</b>: <i>e(k,n)</i> ou <i>e(k,n,rot)</i> &mdash; k frappes réparties sur n pas (ex. kick: e(4,16))<br>
     <b>chance</b>: suffixe <i>?</i> = probabilité (x? ~50%, x?70 = 70%) &middot; <i>seed: N</i> rend l'aléatoire reproductible<br>
     <b>rolls</b>: suffixe <i>*N</i> = ratchet/roll (N frappes dans un pas) &mdash; ex. snare: . . x*4 .<br>
-    <b>vary</b>: <i>&lt;a/b/c&gt;</i> choisit une alternative par mesure (varie le motif) &middot; <b>poly</b>: voix de longueurs différentes = polyrythmie<br>
+    <b>vary</b>: <i>&lt;a/b/c&gt;</i> choisit une alternative par mesure (varie le motif) &middot; <b>poly</b>: voix de longueurs différentes = polyrythmie ; <b>poly m:n</b> (ex. 3:2) = triolet explicite : m pas par fenêtre de n temps<br>
     <b>verbs</b> (after |): rev &middot; fast N &middot; slow N &middot; every N &lt;verb&gt; &middot; palindrome &middot; rot N &middot; iter N<br>
     <b>timbre</b> (after |): saw sine tri pulse square &middot; gain N &middot; oct N (octave par défaut des degrés)
     </p>
@@ -1432,8 +1432,10 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     if(line.slice(0,i).trim().toLowerCase()==="loop"){const w=line.slice(i+1).trim().toLowerCase();return w||null;}}return null;}
   // odd meters: meter: 7/8 -> a bar = 7 eighth-notes (= 3.5 quarters). meter: 3 = 3 beats.
   function parseMeter(text){text=noComments(text);let mb=4;for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
-    if(line.slice(0,i).trim().toLowerCase()==="meter"){const v=line.slice(i+1).trim(),m=/^(\d+)\s*\/\s*(\d+)$/.exec(v);
-      if(m){const N=+m[1],D=+m[2];if(N>0&&D>0)mb=N*4/D;}else{const n=parseFloat(v);if(!isNaN(n)&&n>0)mb=n;}}}return mb;}
+    if(line.slice(0,i).trim().toLowerCase()==="meter"){const v=line.slice(i+1).trim(),dm=/\/\s*(\d+)\s*$/.exec(v);  // métrique composée 2+2+3/8 acceptée
+      if(dm){const D=+dm[1];if(D>0){const num=v.slice(0,dm.index).trim(),gangs=num.split("+").map(x=>parseInt(x.trim(),10)).filter(x=>x>0);
+        if(gangs.length>1)mb=gangs.reduce((a,b)=>a+b,0)*4/D;else{const N=parseInt(num,10);if(N>0)mb=N*4/D;}}}
+      else{const n=parseFloat(v);if(!isNaN(n)&&n>0)mb=n;}}}return mb;}
   // modulation: key@SECTION: c minor  -> that section resolves degrees/chords in its own key
   function parseKeyMap(text){const m={};for(const raw of text.split("\n")){const line=raw.trim();if(!line||line.startsWith("#"))continue;
     const i=line.indexOf(":");if(i<0)continue;const am=/^key@(.+)$/.exec(line.slice(0,i).trim().toLowerCase());if(!am)continue;
@@ -1568,7 +1570,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="chance"){const c2=parseFloat(p[1]);chance=isNaN(c2)?0.5:Math.max(0,Math.min(1,c2>1?c2/100:c2));}
       else if(p[0]==="tgate"||p[0]==="trancegate")tgate=Math.max(1,Math.min(32,parseInt(p[1],10)||8));
       else if(p[0]==="midi")midi=Math.max(1,Math.min(16,parseInt(p[1],10)||1));
-      else if(p[0]==="poly"){const o=parseInt(p[1],10);poly=(!isNaN(o)&&o>0)?o:16;}
+      else if(p[0]==="poly"){const o=p[1];if(o&&o.includes(":")){const pm=o.split(":",2);const gm=parseInt(pm[0],10),gn=parseInt(pm[1],10);poly=(gm>0&&gn>0)?{m:gm,n:gn}:{m:1,n:1};}else{const o2=parseInt(o,10);poly=(!isNaN(o2)&&o2>0)?o2:16;}}  // poly N (polymeter) ou poly m:n (triolet explicite 3:2)
       else if(p[0]==="fm")fm={ratio:Math.max(0.1,Math.min(16,parseFloat(p[1])||2)),index:Math.max(0,Math.min(12,parseFloat(p[2])!=null&&!isNaN(parseFloat(p[2]))?parseFloat(p[2]):3)),fb:Math.max(0,Math.min(8,parseFloat(p[3])||0))};
       else if(p[0]==="eq"){const cl=x=>Math.max(-18,Math.min(18,parseFloat(x)||0));eq={l:cl(p[1]),m:cl(p[2]),h:cl(p[3])};}
       else if(p[0]==="viz")viz=p[1]||"burst";
@@ -2054,8 +2056,17 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       if(stemSolo&&v.name!==stemSolo)continue;  // stems export: render one voice at a time
       const vsc=(morphChanged&&morphChanged.has(vKey(v)))?morphNew:1;  // morph: fade-in des voix modifiées (le poly change net)
       // true polymeter: a `| poly N` voice runs its own loop at N steps/bar and
-      // drifts against the bar grid when its length != N (Reich-style phasing)
-      if(v.poly){const spb=(typeof v.poly==="number"&&v.poly>0)?v.poly:16,gstep=cycleLen/spb,toks=v.tokens,nn=toks.length;
+      // drifts against the bar grid when its length != N (Reich-style phasing).
+      // `| poly m:n` = explicit polyrhythm (triolet): n windows of m steps each.
+      if(v.poly){if(typeof v.poly==="object"&&v.poly.m>0&&v.poly.n>0){const m=v.poly.m,n=v.poly.n,total=n*m,gstep=cycleLen/total,toks=v.tokens,nn=toks.length;
+        if(nn)for(let g=0;g<total;g++){const s=bar*total+g;let tok=toks[((s%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
+          const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
+          const base=tm[0];if(base===""||base==="."||base==="~")continue;
+          let t0=barT+g*gstep,vel=1;if(g%2===1)t0+=(v.swing!=null?v.swing:sw)*gstep;
+          {const fa=v.humanize!=null?v.humanize:feelAmt;if(fa){t0+=(rng(seed,bar,v.name,g*3+7)-0.5)*fa*0.016;vel=1+(rng(seed,bar,v.name,g*3+11)-0.5)*fa*0.5;}}
+          for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2],vel*tm[3]*rampF(j,tm[2],tm[4]));}
+        continue;}
+      const spb=(typeof v.poly==="number"&&v.poly>0)?v.poly:16,gstep=cycleLen/spb,toks=v.tokens,nn=toks.length;
         if(nn)for(let i=0;i<spb;i++){const s=bar*spb+i;let tok=toks[((s%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
           const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
           const base=tm[0];if(base===""||base==="."||base==="~")continue;
