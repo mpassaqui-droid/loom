@@ -228,7 +228,7 @@ fn expand_fib_token(tok: &str) -> Option<Vec<String>> {
 /// `prime(n)` -> hits on prime positions.
 fn expand_prime_token(tok: &str) -> Option<Vec<String>> {
     let n: usize = tok.strip_prefix("prime(")?.strip_suffix(')')?.trim().parse().ok()?;
-    let is_p = |k: usize| -> bool { if k < 2 { return false; } let mut i = 2; while i * i <= k { if k % i == 0 { return false; } i += 1; } true };
+    let is_p = |k: usize| -> bool { if k < 2 { return false; } let mut i = 2; while i * i <= k { if k.is_multiple_of(i) { return false; } i += 1; } true };
     Some((0..n).map(|i| if is_p(i) { "x".into() } else { ".".into() }).collect())
 }
 /// `golden(n)` -> a golden-ratio (Beatty) rhythm, quasi-periodic.
@@ -370,7 +370,7 @@ fn expand_spectrum_token(tok: &str) -> Option<Vec<String>> {
     fn note_midi(s: &str) -> Option<i32> {
         let b = s.as_bytes();
         let base = match b.first()?.to_ascii_lowercase() { b'c'=>0,b'd'=>2,b'e'=>4,b'f'=>5,b'g'=>7,b'a'=>9,b'b'=>11,_=>return None };
-        let mut i = 1; let mut semi = base as i32;
+        let mut i = 1; let mut semi = base;
         match b.get(1) { Some(b'#') => { semi += 1; i = 2; } Some(b'b') => { semi -= 1; i = 2; } _ => {} }
         let oct: i32 = std::str::from_utf8(&b[i..]).ok()?.parse().ok()?;
         Some(12 * (oct + 1) + semi)
@@ -495,7 +495,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let tokens = stacks[0].clone();
 
         let is_drum = DRUMS.contains(&name.as_str());
-        let mut wave = if is_drum { Wave::Square } else { Wave::Square };
+        let mut wave = Wave::Square;
         let mut gain = 0.22_f32;
         let mut octave = None;
         let mut arp = None;
@@ -1253,7 +1253,7 @@ pub fn note_to_midi(note: &str) -> Option<i32> {
     let letter = (b[0] as char).to_ascii_lowercase();
     let base = match letter { 'c'=>0,'d'=>2,'e'=>4,'f'=>5,'g'=>7,'a'=>9,'b'=>11, _=>return None };
     let mut idx = 1;
-    let mut semi = base as i32;
+    let mut semi: i32 = base;
     if idx < b.len() && (b[idx] == b'#' || b[idx] == b'b') {
         if b[idx] == b'#' { semi += 1; } else { semi -= 1; }
         idx += 1;
@@ -1362,7 +1362,7 @@ fn tonic_pc(word: &str) -> Option<i32> {
     let base = match (b[0] as char).to_ascii_lowercase() {
         'c'=>0,'d'=>2,'e'=>4,'f'=>5,'g'=>7,'a'=>9,'b'=>11, _=>return None,
     };
-    let mut semi = base as i32;
+    let mut semi: i32 = base;
     if b.len() > 1 {
         match b[1] { b'#' => semi += 1, b'b' => semi -= 1, _ => {} }
     }
@@ -1805,7 +1805,7 @@ pub fn parse_bpm(src: &str) -> f64 {
         let h = line[..colon].trim().to_lowercase();
         if h == "bpm" || h == "tempo" {
             // first token must be a number (else it's a `tempo: name n …` map line)
-            if let Ok(n) = line[colon + 1..].trim().split_whitespace().next().unwrap_or("").parse::<f64>() {
+            if let Ok(n) = line[colon + 1..].split_whitespace().next().unwrap_or("").parse::<f64>() {
                 return n.clamp(40.0, 300.0);
             }
         }
@@ -2022,7 +2022,7 @@ impl Program {
                 if let Some(c) = chosen {
                     let plays = match &c.sections {
                         None => true,
-                        Some(set) => sec.map_or(false, |s| set.iter().any(|x| x == s)),
+                        Some(set) => sec.is_some_and(|s| set.iter().any(|x| x == s)),
                     };
                     if plays { out.push(c.clone()); }
                 }
@@ -2769,8 +2769,8 @@ mod tests {
         let k = parse_key("key: c major");
         let ev = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
         assert_eq!(ev.len(), 4);
-        let left: Vec<&str> = ev.iter().filter(|e| e.pan.map_or(false, |p| (p + 0.82).abs() < 1e-6)).map(|e| e.token.as_str()).collect();
-        let right: Vec<&str> = ev.iter().filter(|e| e.pan.map_or(false, |p| (p - 0.82).abs() < 1e-6)).map(|e| e.token.as_str()).collect();
+        let left: Vec<&str> = ev.iter().filter(|e| e.pan.is_some_and(|p| (p + 0.82).abs() < 1e-6)).map(|e| e.token.as_str()).collect();
+        let right: Vec<&str> = ev.iter().filter(|e| e.pan.is_some_and(|p| (p - 0.82).abs() < 1e-6)).map(|e| e.token.as_str()).collect();
         assert_eq!(left, ["c3", "d3"]);   // original, hard left
         assert_eq!(right, ["d3", "c3"]);  // reversed, hard right
     }

@@ -37,13 +37,14 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
 3. ✅ done — **Variation / generative**: euclidean rhythms, probability, mutation, seeds.
 4. ✅ done — **Polyrhythm/polymeter, tempo & meter changes.**
 5. ✅ done — **Effects, sample playback, MIDI out.** (in `web/index.html`, the JS engine.)
-6. **Port the JS engine to loom-core (Rust→WASM) so all surfaces share one engine.**
+6. **Unify the web and native engines through loom-core (Rust→WASM).**
    Native side (2026-09-14/15): `loom-audio` ports the whole browser sound engine
    (`tone/`, `inserts/`, `master/`, `sample/`, `midi.rs`), and `loom-core/src/synth.rs`
    parses every sound verb. Keep web and native in step: a new sound verb goes in
    `synth.rs` (+ test), then `loom-audio`, then `web/index.html`.
-   In progress, not finished: `web/index.html` loads `loom-wasm` as a non-destructive
-   A/B check (`window.__loomRust`), toggle off by default — JS is still the real engine.
+   In progress: `web/index.html` uses `loom-wasm` for scheduling by default,
+   with an instant JS fallback; synthesis and effects still run in JS. The next
+   step is moving the offline teacher analyser into `loom-core` for WASM use.
 
 ## Session cycle (tasks/)
 - Start of session: read `tasks/todo.md` (current work) and `tasks/lessons.md` (past corrections).
@@ -62,8 +63,7 @@ quality. The owner has a Max subscription — authenticate Claude Code with that
 (do NOT set ANTHROPIC_API_KEY, or it bills the API instead of the subscription).
 
 ## First task suggestion
-Run `cargo test -p loom-core` to confirm the core builds (88 tests as of this
-writing). Roadmap items 1-5 are already done — the real remaining work is item 6
-(finish the loom-core→WASM port, currently an experimental A/B toggle in
-`web/index.html`) and the native audio backend for `loom-tui` (explicit TODO in
-`loom-tui/src/main.rs`). Check `tasks/todo.md` for the session in progress first.
+Run `cargo test -p loom-core` to confirm the core builds (101 tests as of
+2026-09-25). Roadmap items 1-5 are done; item 6 has Rust/WASM scheduling live
+on the web, while JS still synthesizes audio. The native audio backend is in
+`loom-audio` and used by both apps. Check `tasks/todo.md` for current work.

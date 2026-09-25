@@ -99,7 +99,7 @@ fn current_scale_name(text: &str) -> Option<String> {
         let Some(colon) = line.find(':') else { continue };
         let head = line[..colon].trim().to_lowercase();
         let words: Vec<String> = line[colon + 1..].trim().to_lowercase().split_whitespace().map(str::to_string).collect();
-        if head == "key" && words.first().is_some() {
+        if head == "key" && !words.is_empty() {
             let w = words.get(1);
             if w.is_some_and(|w| !is_numeric_word(w)) { nm = w.cloned(); }
         } else if head == "scale" {
@@ -125,7 +125,7 @@ fn has_custom_key_scale(text: &str) -> bool {
         let l = l.trim();
         let Some(colon) = l.find(':') else { return false };
         if !l[..colon].trim().eq_ignore_ascii_case("key") { return false; }
-        let mut words = l[colon + 1..].trim().split_whitespace();
+        let mut words = l[colon + 1..].split_whitespace();
         let _tonic = words.next();
         let mut nums = 0usize;
         for w in words {

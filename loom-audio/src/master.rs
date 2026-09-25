@@ -286,7 +286,7 @@ mod tests {
             let t = std::time::Instant::now();
             let frames = 480000;
             for _ in 0..frames {
-                let s = Stereo { l: n.next() * 0.3, r: n.next() * 0.3 };
+                let s = Stereo { l: n.sample() * 0.3, r: n.sample() * 0.3 };
                 m.process(&MixInput { buses: vec![s, s], reverb: s.scale(0.2), delay: s.scale(0.1) });
             }
             println!("master {room:?}: {:.0} ns/sample", t.elapsed().as_nanos() as f64 / frames as f64);
@@ -364,7 +364,7 @@ mod tests {
         let mut peak = 0.0f32;
         for i in 0..(3.0 * SR) as usize {
             let loud = 4.0; // +12 dB
-            let s = Stereo { l: n.next() * loud, r: n.next() * loud };
+            let s = Stereo { l: n.sample() * loud, r: n.sample() * loud };
             let inp = MixInput { buses: vec![s, s, s], reverb: s, delay: s };
             if i % 24000 == 0 { m.duck(2.0); }
             let y = m.process(&inp);

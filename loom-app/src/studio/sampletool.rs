@@ -259,7 +259,6 @@ mod tests {
             end: Some(0.75),
             chop: Some(4),
             reverse: true,
-            ..SampleSpec::default()
         };
         let t = apply_spec(src, "bass", &spec).unwrap();
         assert!(t.contains("| sample amen"), "{t}");
@@ -298,4 +297,3 @@ mod tests {
         assert_eq!(fmt_f32(1.0), "1");
     }
 }
-

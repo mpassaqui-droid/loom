@@ -433,6 +433,7 @@ pub fn summary(changes: &[Change]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)] // Keep the long composition prompt at the end of the file.
 mod tests {
     use super::*;
 

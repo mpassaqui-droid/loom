@@ -384,7 +384,7 @@ fn draw_browser(f: &mut Frame, app: &App) {
     let mut index_of_selected = 0;
     for (i, (label, path)) in items.iter().enumerate() {
         if label != last_label {
-            list_items.push(ListItem::new(Line::styled(format!("{label}"), Style::new().fg(c(t.dim)).add_modifier(Modifier::BOLD))));
+            list_items.push(ListItem::new(Line::styled(label.to_string(), Style::new().fg(c(t.dim)).add_modifier(Modifier::BOLD))));
             last_label = label;
         }
         if i == *selected { index_of_selected = list_items.len(); }

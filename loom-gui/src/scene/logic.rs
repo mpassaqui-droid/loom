@@ -536,22 +536,19 @@ mod tests {
         let sine = |freq: f32, amp: f32| -> Vec<f32> {
             (0..FFT_SIZE).map(|i| amp * (2.0 * std::f32::consts::PI * freq * i as f32 / 48_000.0).sin()).collect()
         };
-        let mut a = Analyser::default();
-        a.wave = sine(70.0, 0.5);
+        let mut a = Analyser { wave: sine(70.0, 0.5), ..Analyser::default() };
         for _ in 0..10 { a.process(); }
         let low = a.levels;
         assert!(low.bass > 0.3 && low.treble < 0.05, "70 Hz is bass: {low:?}");
 
         // quiet enough not to saturate: the loudest bin is the sine's
-        let mut a = Analyser::default();
-        a.wave = sine(1_000.0, 0.01);
+        let mut a = Analyser { wave: sine(1_000.0, 0.01), ..Analyser::default() };
         for _ in 0..10 { a.process(); }
         let loudest = (0..a.spectrum.len()).max_by(|x, y| a.spectrum[*x].total_cmp(&a.spectrum[*y])).unwrap();
         assert_eq!(loudest, (1_000.0 / (48_000.0 / FFT_SIZE as f32)).round() as usize);
         assert!(a.spectrum[loudest] < 1.0);
 
-        let mut a = Analyser::default();
-        a.wave = sine(3_000.0, 0.5);
+        let mut a = Analyser { wave: sine(3_000.0, 0.5), ..Analyser::default() };
         for _ in 0..10 { a.process(); }
         assert!(a.levels.treble > 0.02 && a.levels.bass < 0.05, "3 kHz is treble: {:?}", a.levels);
         assert!((a.levels.level - 0.5 * 128.0 / 110.0).abs() < 0.02);

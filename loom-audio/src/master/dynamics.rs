@@ -228,7 +228,7 @@ mod tests {
         let mut n = crate::dsp::Noise::new(3);
         for i in 0..48000 {
             let amp = if i % 5000 < 50 { 8.0 } else { 0.5 };
-            let y = l.process(Stereo { l: n.next() * amp, r: n.next() * amp });
+            let y = l.process(Stereo { l: n.sample() * amp, r: n.sample() * amp });
             assert!(y.l.abs() <= 0.97 + 1e-6 && y.r.abs() <= 0.97 + 1e-6);
         }
     }

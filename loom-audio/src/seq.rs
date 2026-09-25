@@ -274,7 +274,7 @@ impl Sequencer {
             let old_keys: Vec<(String, &loom_core::Voice)> = self.program.voices.iter().map(|v| (voice_key(v), v)).collect();
             let new_keys: Vec<(String, &loom_core::Voice)> = program.voices.iter().map(|v| (voice_key(v), v)).collect();
             let changed: Vec<String> = new_keys.iter()
-                .filter(|(k, v)| old_keys.iter().find(|(ok, _)| ok == k).map_or(true, |(_, ov)| *ov != *v))
+                .filter(|(k, v)| old_keys.iter().find(|(ok, _)| ok == k).is_none_or(|(_, ov)| *ov != *v))
                 .map(|(k, _)| k.clone()).collect();
             let mut old = self.program.clone();
             old.voices.retain(|v| {
@@ -282,7 +282,7 @@ impl Sequencer {
                 changed.contains(&k) || !new_keys.iter().any(|(nk, _)| *nk == k)
             });
             self.morph = (!old.voices.is_empty() || !changed.is_empty())
-                .then(|| Morph { old, changed, start_bar: self.bar, bars });
+                .then_some(Morph { old, changed, start_bar: self.bar, bars });
         } else {
             self.morph = None;
         }
@@ -488,11 +488,11 @@ impl Sequencer {
             i = j;
             let ev = &group[0];
             let soloed = ev.synth.solo || self.channels.iter().any(|c| c.solo && c.name == ev.voice);
-            if ev.synth.mute || (any_solo && !soloed) || self.muted.iter().any(|m| *m == ev.voice) { continue; }
+            if ev.synth.mute || (any_solo && !soloed) || self.muted.contains(&ev.voice) { continue; }
             if self.stem.as_ref().is_some_and(|s| *s != ev.voice) { continue; }
             self.trigger(&group, bar_sec);
         }
-        self.queue.sort_by(|a, b| b.start.cmp(&a.start));
+        self.queue.sort_by_key(|a| std::cmp::Reverse(a.start));
     }
 
     /// The port of the browser's `trigger()` for one step of one voice.

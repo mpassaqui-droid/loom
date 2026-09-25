@@ -4,6 +4,47 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
+## Session 2026-09-25 — qualité et vérification de l'interface
+- [x] Nettoyer les avertissements Clippy du workspace sans changer le comportement musical.
+- [x] Vérifier le sampler GUI dans une fenêtre, puis corriger les problèmes observés.
+- [x] Relancer build, tests, Clippy strict et parité web ; noter les résultats.
+- [x] Faire une Review finale des changements et limites.
+
+### Review
+- **Clippy 0 warning** sur tout le workspace (`cargo clippy --workspace --all-targets -- -D warnings`),
+  y compris les 8 qui bloquaient `loom-gui` et les ~16 dans `loom-audio`/`loom-app`/`loom-core`/`loom-tui`.
+  Toujours sans changer le comportement : la grande majorité sont du style (
+  `map_or(→is_none_or/is_some_and`, `then(→then_some`, `.sort_by`→`sort_by_key(Reverse)`, `Noise::next`→`Noise::sample`
+  (renommage pur), `#![allow]` ciblés avec justification en commentaire). `git diff --check` : propre.
+- **Sampler vérifié dans une fenêtre** (hyprland, fenêtre flottante 1200×800 = taille par défaut de l'app) :
+  le panneau ancré à droite rend toutes les sections — en-tête (+ « voix … » armée + réinit), chips des voix,
+  liste du `default_bank()` avec durées, forme d'onde (± marqueurs begin/end), racine, reverse, begin/end/chop,
+  APPLIQUER. Aucun crash, l'app reste fluide. Le correctif du problème observé (panneau 170 px du bas qui
+  compactait tout) est déjà la version qu'on a : panneau droit défilable.
+- **Portes toutes vertes** : `cargo test --workspace` 348 ok (app 124 · audio 73 · core 101 · gui 26 · tui 24,
+  ni 4 ignorés), `node tools/check_web.js` 4/4 ✓, `node tools/parity_test.js` 238/238 PERFECT.
+- Limites notées : (1) le clic simulé (API hyprland lua, sans souris) ne permettant pas de dérouler jusqu'au
+  choix de sample interactif dans la fenêtre, la sélection/APPLIQUER reste validée par les tests
+  `sampletool` (réécriture des verbes, undo partagé) ; (2) en fenêtre étroite (« tuilée » à 627 px), le panneau
+  droit à 320 px par défaut mange la largeur du centre — acceptable (panneau défilable), à réévaluer si
+  l'app est surtout utilisée en demi-écran.
+
+## Session 2026-09-25 — stabiliser le sampler GUI
+- [x] Terminer le panneau sampler latéral déjà commencé : largeur, contrôles et bouton APPLIQUER.
+- [x] Vérifier la compilation, les tests workspace et les contrôles web/parité.
+- [x] Corriger les indications de statut périmées dans README, AGENTS et CLAUDE.
+- [x] Examiner le diff final et noter les limites dans une Review.
+
+### Review
+- Le panneau latéral reprend le brouillon en cours : liste d'échantillons, forme d'onde,
+  racine, reverse, begin/end/chop et APPLIQUER. Défilement du panneau complet pour
+  garder les contrôles accessibles dans une petite fenêtre.
+- `cargo test --workspace` : 348 réussis, 4 ignorés ; `cargo test -p loom-gui` :
+  26 réussis ; `node tools/check_web.js` : 4 contrôles réussis ; parité : 238/238.
+  `git diff --check` : propre.
+- Limites : affichage en fenêtre non vérifié manuellement ; `cargo clippy -p loom-gui
+  -- -D warnings` s'arrête sur 8 avertissements déjà présents dans `loom-core`.
+
 ## Les quatre vagues — terminées (prof interactif · moteur unifié web · vue partition · sampler)
 
 > Décision du propriétaire (2026-09-25) : « ok for all ». Chaque vague = un incrément

@@ -79,6 +79,8 @@ pub struct NoteOut {
     pub bus_only: Stereo,
 }
 
+// A note is created on the audio path; boxing Tone would allocate for every note.
+#[allow(clippy::large_enum_variant)]
 enum Source {
     Drum(Drum),
     Tone(Tone),

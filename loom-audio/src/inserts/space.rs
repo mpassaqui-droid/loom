@@ -166,7 +166,8 @@ fn compute_ir_geom(kind: &str, sr: f32) -> IrGeom {
 fn ir_geom(kind: &str, sr: f32) -> std::sync::Arc<IrGeom> {
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<HashMap<(&'static str, u32), Arc<IrGeom>>>> = OnceLock::new();
+    type IrCache = Mutex<HashMap<(&'static str, u32), Arc<IrGeom>>>;
+    static CACHE: OnceLock<IrCache> = OnceLock::new();
     let name: &'static str = match kind {
         "room" => "room",
         "plate" => "plate",

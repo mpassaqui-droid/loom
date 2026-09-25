@@ -66,7 +66,7 @@ impl Drum {
                 let f = exp_ramp(180.0, 45.0, 0.0, 0.09, t);
                 *phase = (*phase + f / sr) % 1.0;
                 let body = if t < 0.36 { (*phase * TAU).sin() * exp_ramp(v, 0.001, 0.0, 0.34, t) } else { 0.0 };
-                let click = click_hp.process(self.noise.next());
+                let click = click_hp.process(self.noise.sample());
                 body + if t < 0.03 { click * exp_ramp(0.5 * v, 0.001, 0.0, 0.02, t) } else { 0.0 }
             }
             Kind::Snare { p1, p2, hp } => {
@@ -78,7 +78,7 @@ impl Drum {
                     out += osc(Wave::Triangle, *p1, 0.0) * exp_ramp(0.28 * v, 0.001, 0.0, 0.09, t);
                     out += osc(Wave::Triangle, *p2, 0.0) * exp_ramp(0.16 * v, 0.001, 0.0, 0.09, t);
                 }
-                let n = hp.process(self.noise.next());
+                let n = hp.process(self.noise.sample());
                 out + if t < 0.17 { n * exp_ramp(0.5 * v, 0.001, 0.0, 0.15, t) } else { 0.0 }
             }
             Kind::Hat { phases, hp } => {
@@ -94,7 +94,7 @@ impl Drum {
             }
             Kind::Clap { bp } => {
                 // three quick noise bursts + a longer tail, all through one bandpass
-                let n = self.noise.next();
+                let n = self.noise.sample();
                 let mut env = 0.0;
                 for (i, d) in [0.0, 0.008, 0.016, 0.028].iter().enumerate() {
                     let tt = t - d;

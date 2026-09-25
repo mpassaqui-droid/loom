@@ -84,12 +84,12 @@ impl BufferPlayer {
                 let n = *p + 1;
                 let slot = i % n; // holds d[i-p-1]; d[i-p] is in the next slot
                 let x = if i < *p {
-                    noise.next()
+                    noise.sample()
                 } else {
                     let a = ring[(slot + 1) % n];
                     let b = if i == *p { a } else { ring[slot] };
                     let y = (a + b) * *gain;
-                    if *inject != 0.0 { y + noise.next() * *inject } else { y }
+                    if *inject != 0.0 { y + noise.sample() * *inject } else { y }
                 };
                 ring[slot] = x;
                 x
@@ -224,8 +224,8 @@ impl Grains {
         let grains = (0..count)
             .map(|k| {
                 let gt = k as f32 / count as f32 * dur + noise.unit() * dur / count as f32 * 0.7;
-                let cents = noise.next() * amount * 50.0;
-                let (gl, gr) = equal_power(noise.next() * 0.85);
+                let cents = noise.sample() * amount * 50.0;
+                let (gl, gr) = equal_power(noise.sample() * 0.85);
                 let start = (gt * sr) as u32;
                 Grain {
                     start,

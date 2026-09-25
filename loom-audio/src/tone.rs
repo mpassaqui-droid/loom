@@ -538,7 +538,7 @@ impl Tone {
         if let Some(nb) = &mut self.noise {
             if n0 < nb.end {
                 for i in 0..BLOCK {
-                    let x = nb.hp.process(nb.noise.next()) * nb.level;
+                    let x = nb.hp.process(nb.noise.sample()) * nb.level;
                     l[i] += x;
                     r[i] += x;
                 }

@@ -573,7 +573,7 @@ pub fn expand_macros(src: &str) -> String {
     let mut out = kept.join("\n");
     if defs.is_empty() { return out; }
     // longest names first so `$bassline` isn't eaten by `$bass`
-    defs.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    defs.sort_by_key(|a| std::cmp::Reverse(a.0.len()));
     for _ in 0..4 {
         let mut changed = false;
         let mut next = String::with_capacity(out.len());

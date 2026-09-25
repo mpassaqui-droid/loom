@@ -67,7 +67,7 @@ identically everywhere else. Everything else builds on top of it.
 ```bash
 # whole workspace (builds every crate incl. the two apps)
 cargo build --workspace
-cargo test --workspace          # 331 tests, all green
+cargo test --workspace          # 348 tests, all green
 
 # core logic only (no deps, instant)
 cargo test -p loom-core
@@ -77,7 +77,7 @@ cargo test -p loom-core
 
 # web engine sanity + JS<->Rust parity (uses the committed WASM)
 node tools/check_web.js          # index.html scripts, PWA manifest, service worker
-node tools/parity_test.js        # 202/202 voice×bar — both engines must agree
+node tools/parity_test.js        # 238/238 voice×bar — both engines must agree
 
 # native apps
 cargo run -p loom-tui --release          # terminal

@@ -77,7 +77,7 @@ impl Theme {
         let accent = get("accent").or_else(|| get("blue")).unwrap_or(d.accent);
         Theme {
             name: name.to_string(),
-            dark: map.get("mode").map_or(true, |m| m != "light"),
+            dark: map.get("mode").is_none_or(|m| m != "light"),
             background,
             panel: get("lighter_background").unwrap_or_else(|| background.mix(foreground, 0.06)),
             foreground,

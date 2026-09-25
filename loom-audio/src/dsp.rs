@@ -30,7 +30,7 @@ pub struct Noise(u32);
 
 impl Noise {
     pub fn new(seed: u32) -> Self { Noise(seed.wrapping_mul(2654435761).max(1)) }
-    pub fn next(&mut self) -> f32 {
+    pub fn sample(&mut self) -> f32 {
         let mut x = self.0;
         x ^= x << 13;
         x ^= x >> 17;
@@ -39,7 +39,7 @@ impl Noise {
         (x as f32 / u32::MAX as f32) * 2.0 - 1.0
     }
     /// Uniform 0..1.
-    pub fn unit(&mut self) -> f32 { self.next() * 0.5 + 0.5 }
+    pub fn unit(&mut self) -> f32 { self.sample() * 0.5 + 0.5 }
 }
 
 /// The filter shapes of WebAudio's `BiquadFilterNode`.
@@ -228,7 +228,7 @@ impl Lfo {
         self.phase += self.rate / sr;
         if self.phase >= 1.0 {
             self.phase -= self.phase.floor();
-            self.held = self.noise.next();
+            self.held = self.noise.sample();
         }
         out
     }

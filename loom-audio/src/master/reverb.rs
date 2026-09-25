@@ -61,10 +61,10 @@ impl FdnChannel {
         let norm = 1.0 / 8f32.sqrt();
         let mut out = 0.0;
         let mut v = [0.0f32; 8];
-        for i in 0..8 {
+        for (i, value) in v.iter_mut().enumerate() {
             let d = self.lines[i].out();
             out += d;
-            v[i] = self.lps[i].process(d);
+            *value = self.lps[i].process(d);
         }
         // fast Walsh–Hadamard transform = multiplying by the ±1 Hadamard matrix
         let mut h = 1;
