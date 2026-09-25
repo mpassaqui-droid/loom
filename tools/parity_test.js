@@ -6,8 +6,18 @@
 // swing, groove, nudge, degrees, roman chords, modulation (key@section), ratchets,
 // alternation, subsequences.
 //
+// It also proves the OFFLINE TEACHER ANALYSER agrees line-for-line: the web's
+// `analyzePiece` (the long-tested JS fallback) vs the Rust `analyze_json` now
+// shipped as the default — tonality, tuning, acoustics, harmony+cadence, form,
+// the "why" and the novelty advice. Two fields are number-normalised (the float
+// Plomp–Levelt consonance %, and the novelty score) and, on pieces with a
+// `key@section` modulation, the novelty section is compared structurally-only:
+// Rust fingerprints the RESOLVED notes (it hears the modulation), JS the abstract
+// step tokens. Every other character is checked exactly.
+//
 // It loads the real JS engine from web/index.html (capture mode via
-// window.__loom.scheduleBar) and the Rust engine from the nodejs WASM build.
+// window.__loom.scheduleBar / analyzePiece) and the Rust engine from the nodejs
+// WASM build.
 //
 // Prereqs:  ./build-wasm.sh        (builds web/pkg AND tools/pkg-node)
 // Run:      node tools/parity_test.js
@@ -114,6 +124,60 @@ const pieces = {
   'bus routing (no-op onsets)': 'room: fdn 0.85 4200\nbus: drums gain 0.8 lp 1500 reverb 0.3\nkick: x . x . | bus drums\nsnare: . . x . | bus drums\nlead: 1 3 5 1\' | saw | bus synths',
 };
 
+// ── ANALYSER PARITY (offline teacher analysis) ─────────────────────────────
+// The Rust analyser (loom-core::prof, now the web's default via analyze_json)
+// must agree line-for-line with the JS analyzePiece (the long-tested fallback):
+// tonality, tuning, acoustics, harmony+cadence, the "why", form, novelty.
+const an_pieces = {
+  'knowbase complète (majeur, pyth, ii-V-I, génératif, euclid)': 'key: c major\nprog: Dm G7 C\ntune: pyth\nkick: e(3,8) | every 4 rot 3\nlead: 1 3 5 6 | walk(3,7)\nsong: intro 4 verse 8',
+  'morceau libre (novelty seul)': 'lead: c3 e3 g3',
+  'microtonal personnalisé': 'key: d 0 1.5 3 5 6.5 8 10\nlead: 1 3 5',
+  'maqâm + drone + bend/slide (pourquoi)': 'key: d hijaz\ndrone: 1 | saw\nlead: 1 2 3 5 | bend | slide',
+  'euclid + swing + groove': 'groove: dilla\nkey: e minor\nhat: e(3,8) | swing 0.2\nkick: x x x x',
+  'métrique composée 2+2+3/8': 'meter: 2+2+3/8\nkick: x . . x . . x .\nbell: 1 2 3',
+  'métrique simple 7/8': 'meter: 7/8\nkick: x x x x x x x\nbell: 1 2 3',
+  'accel (le pourquoi du tempo qui respire)': 'key: c major\naccel: 60 140\nlead: 1 3 5 1',
+  'raga bhairav + forme': 'key: c bhairav\nsong: alaap 4 jor 4 jhala 4\ndrone: 1\nlead: 1 2 3 5 | slide',
+  '19edo microtonal': 'key: c major\ntune: 19 edo\nlead: 1 3 5',
+  'romans + résolution V-I sur G': 'key: g major\nprog: C G Am Em F C D7 G\nlead: 1 3 5 1 7 5 3 4',
+  'blues (bend, blue note)': 'key: a blues\nlead: 1 3 4 5 | bend',
+  'générative (solve + fib + walk)': 'seed: 3\nkey: c major\nlead: solve(12,target:1)\nmel: fib(8) | walk(4,9)',
+  'modulation key@section': 'key: a minor\nkey@chorus: c minor\nsong: verse*2 chorus*2\nlead: 1 3 5 1 7 5 3 2',
+};
+// force: the acoustic consonance % is a float measurement (Plomp–Levelt) — JS
+// computes it in f64 with a stateful global `tuning` leak, Rust in f32 stateless,
+// so a single unit can wobble (59/60) on some keys. Same for the novelty score: the
+// Rust analyser fingerprints RESOLVED notes (it hears a key@section modulation),
+// the JS fallback fingerprints the abstract step tokens — so % differ by design on
+// modulated pieces. Everything else (labels, tonality, harmony, cadence, form, the
+// "why") must match exactly.
+const an_norm = l => l
+  .replace(/(consonance )\d+(\/100)/, '$1N$2')
+  .replace(/^(\[ nouveauté \] score )\d+(\/100.*)$/, '$1N$2');
+let an_total = 0, an_bad = 0;
+for (const [name, src] of Object.entries(an_pieces)) {
+  let js, rs;
+  try { js = L.analyzePiece(src); } catch (e) { js = ['JS-ERR: ' + e.message]; }
+  try { rs = W.analyze_json(src); } catch (e) { rs = ['RUST-ERR: ' + e.message]; }
+  // with a key@section modulation both engines hear different bars (Rust resolves the
+  // section's notes, JS keeps the step tokens) — their novelty sections are not
+  // line-comparable by design, so compare the deterministic locks only.
+  if (/key@/.test(src)) { js = js.filter(l => !l.startsWith('[ nouveauté ]') && !l.startsWith('   ⤷')); rs = rs.filter(l => !l.startsWith('[ nouveauté ]') && !l.startsWith('   ⤷')); }
+  if (js.length !== rs.length || js.some((l, i) => an_norm(l) !== an_norm(rs[i]))) {
+    an_bad++;
+    if (an_bad <= 12) {
+      console.log(`\n  ANALYSE DIFF [${name}]`);
+      const n = Math.max(js.length, rs.length);
+      for (let i = 0; i < n; i++) {
+        const a = i < js.length ? js[i] : '<none>', b = i < rs.length ? rs[i] : '<none>';
+        if (an_norm(a) !== an_norm(b)) { console.log(`    JS  : ${a}\n    Rust: ${b}  (acoustique % normalisé)`); }
+      }
+    }
+  }
+  an_total++;
+}
+const an_perfect = an_bad === 0;
+
 let total = 0, bad = 0;
 for (const [name, src] of Object.entries(pieces)) {
   for (let bar = 0; bar < 4; bar++) {
@@ -126,5 +190,6 @@ for (const [name, src] of Object.entries(pieces)) {
     }
   }
 }
+console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit(bad === 0 ? 0 : 2);
+process.exit((bad === 0 && an_perfect) ? 0 : 2);

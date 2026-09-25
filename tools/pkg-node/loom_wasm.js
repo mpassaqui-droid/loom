@@ -1,6 +1,25 @@
 /* @ts-self-types="./loom_wasm.d.ts" */
 
 /**
+ * The offline teacher's analysis of a piece (tonality, microtuning, tonic-triad
+ * acoustics, roman-numeral harmony + cadence, "why", form, novelty score) —
+ * the browser's `analyzePiece`. Pure knowledge base, no AI: works offline in
+ * the browser exactly as in the native apps (shared `loom-core` code). Returns
+ * the lines of the report (JS joins them).
+ * @param {string} src
+ * @returns {string[]}
+ */
+function analyze_json(src) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.analyze_json(ptr0, len0);
+    var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]);
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
+}
+exports.analyze_json = analyze_json;
+
+/**
  * Tempo in BPM at a given bar (after any `accel:` ramp / per-section `tempo:`).
  * @param {string} src
  * @param {number} bar
@@ -74,6 +93,11 @@ exports.schedule_bar_json = schedule_bar_json;
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbindgen_generic_0000000000000001: function(arg0, arg1) {
+            // Cast intrinsic for `Ref(String) -> Externref`.
+            const ret = getStringFromWasm0(arg0, arg1);
+            return ret;
+        },
         __wbindgen_init_externref_table: function() {
             const table = wasm.__wbindgen_externrefs;
             const offset = table.grow(4);
@@ -88,6 +112,25 @@ function __wbg_get_imports() {
         __proto__: null,
         "./loom_wasm_bg.js": import0,
     };
+}
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
+
+let cachedDataViewMemory0 = null;
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {

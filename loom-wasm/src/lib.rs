@@ -3,6 +3,8 @@
 //! plays the returned events with Web Audio — replacing the JS parser in the
 //! prototype with this shared Rust engine. Tempo (bpm/meter/accel) comes from
 //! `program_info_json` / `bar_seconds`, so both engines share one timeline.
+//! The offline prof analysis (`analyze_json`) comes from the same std-only
+//! `loom-core::prof` code the native apps use — one teacher everywhere.
 
 use wasm_bindgen::prelude::*;
 use serde::Serialize;
@@ -71,6 +73,16 @@ pub fn bar_seconds(src: &str, bar: i32) -> f64 {
 #[wasm_bindgen]
 pub fn bar_bpm(src: &str, bar: i32) -> f64 {
     loom_core::Program::parse(src).bar_bpm(bar as i64)
+}
+
+/// The offline teacher's analysis of a piece (tonality, microtuning, tonic-triad
+/// acoustics, roman-numeral harmony + cadence, "why", form, novelty score) —
+/// the browser's `analyzePiece`. Pure knowledge base, no AI: works offline in
+/// the browser exactly as in the native apps (shared `loom-core` code). Returns
+/// the lines of the report (JS joins them).
+#[wasm_bindgen]
+pub fn analyze_json(src: &str) -> Vec<String> {
+    loom_core::prof::analyze(src)
 }
 
 /// Top-level program info (tempo, meter, arrangement length) as JSON.
