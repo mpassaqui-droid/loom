@@ -9,6 +9,18 @@ pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flan
 
 use std::sync::Arc;
 
+/// Polymeter / explicit polyrhythm on one voice, from `| poly …`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Poly {
+    /// `poly N`: run an independent N-step loop per bar and drift against the
+    /// bar grid when the token count != N (Reich-style phasing).
+    Meter(u32),
+    /// `poly m:n`: explicit polyrhythm — the bar is cut into `n` windows (the
+    /// grid), each holding `m` equally-spaced steps (a m-over-n tuplet), so a
+    /// `3:2` voice really plays three against two (triolet).
+    Grid(u32, u32),
+}
+
 /// A single voice (one line of LOOM source), already parsed.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Voice {
@@ -37,9 +49,8 @@ pub struct Voice {
     /// Per-voice timing nudge (`| shift N` / `| nudge N`): shifts the whole voice
     /// by a fraction of a step (-0.5..0.5). Positive = laid back (late), negative = pushed.
     pub nudge: f32,
-    /// Polymeter (`| poly N`): this voice runs its OWN loop of N steps per bar and
-    /// drifts against the bar grid when its token count != N (Reich-style phasing).
-    pub poly: Option<u32>,
+    /// Polymeter / explicit polyrhythm (`| poly …`).
+    pub poly: Option<Poly>,
     /// Stereo position (`| pan N`, -1 left … 1 right). `None` = centre.
     pub pan: Option<f32>,
     /// `| jux <verb>`: play the original hard-left plus a `<verb>`-transformed copy
@@ -527,7 +538,14 @@ pub fn parse(src: &str) -> Vec<Voice> {
                     nudge = nn.clamp(-0.5, 0.5);
                 }
             } else if head == "poly" {
-                poly = Some(parts.next().and_then(|x| x.parse::<u32>().ok()).unwrap_or(16).max(1));
+                let spec = parts.next().unwrap_or("16");
+                poly = Some(if let Some((m, n)) = spec.split_once(':') {
+                    let m = m.trim().parse::<u32>().ok().filter(|m| *m > 0).unwrap_or(1);
+                    let n = n.trim().parse::<u32>().ok().filter(|n| *n > 0).unwrap_or(1);
+                    Poly::Grid(m, n)
+                } else {
+                    Poly::Meter(spec.parse::<u32>().ok().unwrap_or(16).max(1))
+                });
             } else if head == "pan" {
                 // a plain number is the layer pan; sweeps/signals live in the synth
                 pan = parts.next().and_then(|x| x.parse::<f32>().ok()).map(|p| p.clamp(-1.0, 1.0));
@@ -962,24 +980,54 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
             None => k.clone(),
         });
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
-        // polymeter (`| poly N`): run an independent N-step loop indexed by the
-        // GLOBAL step count (bar*N + i), so a token list of length != N drifts
-        // against the bar grid each bar (Reich phasing). Mirrors the JS engine.
-        if let Some(spb) = v.poly {
-            let spb = spb.max(1) as usize;
-            let nn = v.tokens.len();
-            if nn > 0 {
-                for i in 0..spb {
-                    let s = bar * spb as i64 + i as i64;
-                    let idx = s.rem_euclid(nn as i64) as usize;
-                    let off = step_offset(i, spb, v, groove);
-                    let p0 = i as f32 / spb as f32 + off;
-                    let p1 = (i + 1) as f32 / spb as f32 + off;
-                    emit_token(&mut events, &v.tokens[idx], p0, p1, v, voice_key.as_ref(),
-                               base_oct, bar, seed, s.max(0) as usize, prog);
+        // polymeter / explicit polyrhythm (`| poly N` / `| poly m:n`):
+        // • `poly N` runs an independent N-step loop indexed by the GLOBAL step
+        //   count (bar*N + i), so a token list of length != N drifts against the
+        //   bar grid each bar (Reich phasing). Mirrors the JS engine.
+        // • `poly m:n` cuts the bar into n windows of m equally-spaced steps each
+        //   (a m-over-n tuplet) — 3:2 = triolet contre la grille binaire. Same
+        //   global-step bookkeeping, so it drifts exactly like `poly (n*m)` but
+        //   the grouping m-in-n is explicit (and re-accents each window with the
+        //   same tokens, i.e. a 3-token phrase lands on every 2-grid step).
+        match v.poly {
+            Some(Poly::Meter(spb)) => {
+                let spb = spb.max(1) as usize;
+                let nn = v.tokens.len();
+                if nn > 0 {
+                    for i in 0..spb {
+                        let s = bar * spb as i64 + i as i64;
+                        let idx = s.rem_euclid(nn as i64) as usize;
+                        let off = step_offset(i, spb, v, groove);
+                        let p0 = i as f32 / spb as f32 + off;
+                        let p1 = (i + 1) as f32 / spb as f32 + off;
+                        emit_token(&mut events, &v.tokens[idx], p0, p1, v, voice_key.as_ref(),
+                                   base_oct, bar, seed, s.max(0) as usize, prog);
+                    }
                 }
+                continue;
             }
-            continue;
+            Some(Poly::Grid(m, n)) => {
+                let m = m.max(1) as usize;
+                let n = n.max(1) as usize;
+                let total = n * m; // steps per bar
+                let nn = v.tokens.len();
+                if nn > 0 {
+                    for w in 0..n {
+                        for i in 0..m {
+                            let g = w * m + i; // global step index within the bar
+                            let s = bar * total as i64 + g as i64;
+                            let idx = s.rem_euclid(nn as i64) as usize;
+                            let off = step_offset(g, total, v, groove);
+                            let p0 = g as f32 / total as f32 + off;
+                            let p1 = (g + 1) as f32 / total as f32 + off;
+                            emit_token(&mut events, &v.tokens[idx], p0, p1, v, voice_key.as_ref(),
+                                       base_oct, bar, seed, s.max(0) as usize, prog);
+                        }
+                    }
+                }
+                continue;
+            }
+            None => {}
         }
         // stacks: each `;`-separated line plays simultaneously (a single line = one stack)
         let lines: &[Vec<String>] = if v.stacks.len() > 1 { &v.stacks } else { std::slice::from_ref(&v.tokens) };
@@ -1706,22 +1754,40 @@ pub fn parse_bpm(src: &str) -> f64 {
 }
 
 /// Beats per bar from `meter:`. `meter: 7/8` -> 7*4/8 = 3.5 quarter-beats;
-/// a bare `meter: 3` -> 3 beats. Default 4.
+/// a bare `meter: 3` -> 3 beats. A **composed meter** may list its beat groups,
+/// `meter: 3+2+2/8`, whose beats sum: 7/8 -> 3.5 quarter-beats (groups exposed
+/// by [`parse_meter_groups`]). Default 4.
 pub fn parse_meter(src: &str) -> f64 {
+    parse_meter_groups(src).map(|(b, _)| b).unwrap_or(4.0)
+}
+
+/// `meter:` as beats-per-bar plus its beat groups, when written composed.
+/// `meter: 3+2+2/8` -> `(3.5, Some(vec![3, 2, 2]))`; `meter: 7/8` -> `(3.5, None)`.
+pub fn parse_meter_groups(src: &str) -> Option<(f64, Option<Vec<u32>>)> {
     for raw in src.lines() {
         let line = decomment(raw).trim();
         let Some(colon) = line.find(':') else { continue };
         if line[..colon].trim().to_lowercase() != "meter" { continue; }
         let v = line[colon + 1..].trim();
         if let Some((n, d)) = v.split_once('/') {
-            if let (Ok(n), Ok(d)) = (n.trim().parse::<f64>(), d.trim().parse::<f64>()) {
-                if n > 0.0 && d > 0.0 { return n * 4.0 / d; }
+            let n = n.trim();
+            let d = d.trim().parse::<f64>().ok()?;
+            if d > 0.0 {
+                // composed: sum of the `+`-separated groups -> beats = sum*4/d
+                let groups: Vec<u32> = n.split('+').filter_map(|g| g.trim().parse::<u32>().ok().filter(|g| *g > 0)).collect();
+                if !groups.is_empty() && groups.len() > 1 {
+                    let beats = groups.iter().sum::<u32>() as f64 * 4.0 / d;
+                    return Some((beats, Some(groups)));
+                }
+                if let Ok(n) = n.parse::<f64>() {
+                    if n > 0.0 { return Some((n * 4.0 / d, None)); }
+                }
             }
         } else if let Ok(n) = v.parse::<f64>() {
-            if n > 0.0 { return n; }
+            if n > 0.0 { return Some((n, None)); }
         }
     }
-    4.0
+    None
 }
 
 /// `accel: <from> <to> [bars]` — a linear tempo ramp. `bars` = 0 means "span the
@@ -2579,7 +2645,7 @@ mod tests {
         // `| poly 13` over a 6-token list: 13 steps/bar, indexed by the GLOBAL
         // step (bar*13 + i), so the start drifts each bar (Reich phasing).
         let v = parse("fil: 1 4 6 3 5 1' | poly 13");
-        assert_eq!(v[0].poly, Some(13));
+        assert_eq!(v[0].poly, Some(Poly::Meter(13)));
         let k = parse_key("key: c major");
         let e0 = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
         assert_eq!(e0.len(), 13);                                  // N steps, not 6
@@ -2591,6 +2657,48 @@ mod tests {
         let e1 = schedule_bar_seeded(&v, k.as_ref(), 1, 0);
         assert_eq!(e1.len(), 13);
         assert_eq!(e1[0].token, "f3");
+    }
+
+    #[test]
+    fn explicit_tuplet_polyrhythm_groups_m_in_n() {
+        // `poly 3:2` = explicit 3-over-2: the bar is two 2-grid windows, each
+        // holding a triplet, so six equally-spaced steps total but the three-
+        // token phrase lands on every window (3 against the duple grid).
+        let v = parse("car: 1 2 3 | poly 3:2");
+        assert_eq!(v[0].poly, Some(Poly::Grid(3, 2)));
+        let k = parse_key("key: c major");
+        let e0 = schedule_bar_seeded(&v, k.as_ref(), 0, 0);
+        assert_eq!(e0.len(), 6);                                  // n*m steps per bar
+        // six step positions, evenly spread (1/6 apart): 1 2 3 1 2 3 — the
+        // 3-token phrase restarts at each 2-grid window = three-against-two.
+        let toks: Vec<&str> = e0.iter().map(|e| e.token.as_str()).collect();
+        assert_eq!(&toks[..3], &["c3", "d3", "e3"]);
+        assert_eq!(&toks[3..], &["c3", "d3", "e3"]);
+        for (i, e) in e0.iter().enumerate() {
+            assert!((e.phase - i as f32 / 6.0).abs() < 1e-6, "step {i}: {}", e.phase);
+        }
+        // a phrase of length != m still drifts against the window grid (bar 1
+        // starts at global step 6 -> idx 6%4 = 2), Reich-style.
+        let v2 = parse("car: 1 2 3 4 | poly 3:2");
+        let k2 = parse_key("key: c major");
+        let e1 = schedule_bar_seeded(&v2, k2.as_ref(), 1, 0);
+        assert_eq!(e1.len(), 6);
+        assert_eq!(e1[0].token, "e3");        // c3 d3 e3 f3 c3 d3 | f3 ...
+    }
+
+    #[test]
+    fn explicit_tuplet_and_meter_produce_identical_spacing() {
+        // `poly m:n` has the same global grid as `poly (n*m)`; what it changes is
+        // the wording (and thus the phrase grouping against the bar).
+        let a = parse("bell: a b c | poly 3:2");
+        let b = parse("bell: a b c | poly 6");
+        let k = parse_key("key: c major");
+        let ea = schedule_bar_seeded(&a, k.as_ref(), 0, 0);
+        let eb = schedule_bar_seeded(&b, k.as_ref(), 0, 0);
+        assert_eq!(ea.len(), eb.len());
+        assert_eq!(ea[1].phase, eb[1].phase);
+        assert_eq!(a[0].poly, Some(Poly::Grid(3, 2)));
+        assert_eq!(b[0].poly, Some(Poly::Meter(6)));
     }
 
     #[test]
@@ -2764,6 +2872,12 @@ mod tests {
         assert_eq!(parse_meter("meter: 5/4"), 5.0);
         assert_eq!(parse_meter("meter: 3"), 3.0);     // bare beat count
         assert_eq!(parse_meter("bpm: 120"), 4.0);     // default
+        // composed meter: beats sum, groups are kept
+        assert_eq!(parse_meter("meter: 3+2+2/8"), 3.5);   // 7/8 in 3+2+2
+        assert_eq!(parse_meter_groups("meter: 3+2+2/8"), Some((3.5, Some(vec![3, 2, 2]))));
+        assert_eq!(parse_meter_groups("meter: 7/8"), Some((3.5, None)));
+        assert_eq!(parse_meter_groups("meter: 3"), Some((3.0, None)));
+        assert_eq!(parse_meter_groups("bpm: 120"), None);
     }
 
     #[test]

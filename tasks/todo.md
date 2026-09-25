@@ -88,3 +88,12 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
   re-dérivée à chaque note. 3 tests : partage du cache, géométrie = calcul vierge, deux
   notes sonnent identiques. Tests : 325 ok au total (audio 73).
 
+
+**2026-09-16 — langage : polyrythmie explicite `poly m:n` + métrique composée.**
+- `loom-core` : nouveau `| poly m:n` (triolet — la mesure est coupée en n fenêtres de
+  m pas espacés : 3:2 = trois contre deux), distinct de l'ancien `| poly N` (phasing).
+  Scheduler + 2 tests (regroupement 3-dans-2, glissement de phrase, même grille que
+  `poly m*n`). `meter: 2+2+3/8` (métrique composée) accepté : temps = somme des groupés,
+  groupes exposés par `parse_meter_groups` ; `parse_meter` garde le comportement.
+- `loom-app` l'analyse offline nomme la métrique composée (`3+2+2 (3,5 temps)`).
+  Tests : 328 ok au total (app 107 · core 98).

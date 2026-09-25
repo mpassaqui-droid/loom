@@ -8,12 +8,17 @@
 
 use std::collections::{HashMap, HashSet};
 
-use loom_core::{parse_key, parse_meter, parse_prog, parse_song, token_to_freq, Program, Key};
+use loom_core::{parse_key, parse_meter_groups, parse_prog, parse_song, token_to_freq, Program, Key};
 
 use super::lore::SCALE_LORE;
 
 /// French solfège for the tonic's pitch class (the web's `NN`).
 const NOTE_NAMES: [&str; 12] = ["do", "do#", "ré", "ré#", "mi", "fa", "fa#", "sol", "sol#", "la", "la#", "si"];
+
+/// Format beats for prose: `7` -> "7", `3.5` -> "3,5", `2.25` -> "2,25".
+fn beautify_beats(m: f64) -> String {
+    if (m - m.round()).abs() < 1e-9 { format!("{}", m.round() as i64) } else { format!("{m}").replace('.', ",") }
+}
 
 /// Which tradition a scale belongs to (the web's `TRAD_OF`).
 const TRAD_OF: &[(&str, &str)] = &[
@@ -499,9 +504,14 @@ pub fn analyze(text: &str) -> Vec<String> {
     if has_swing_groove(&src) {
         why.push("le swing/groove décale les temps → ça balance (humain, pas robotique)".into());
     }
-    let meter = parse_meter(&src);
-    if meter > 0.0 && (meter - 4.0).abs() > 0.01 {
-        why.push(format!("une métrique inhabituelle ({meter} temps) déstabilise joliment le pas"));
+    if let Some((meter, groups)) = parse_meter_groups(&src) {
+        if meter > 0.0 && (meter - 4.0).abs() > 0.01 {
+            match groups {
+                Some(g) => why.push(format!("une métrique composée {} ({} temps) déstabilise joliment le pas",
+                    g.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("+"), beautify_beats(meter))),
+                None => why.push(format!("une métrique inhabituelle ({} temps) déstabilise joliment le pas", beautify_beats(meter))),
+            }
+        }
     }
     if !why.is_empty() {
         let text = why.join(" · ");
@@ -613,6 +623,17 @@ mod tests {
         let out = analyze("lead: c3 e3 g3");
         assert!(out.iter().any(|l| l.starts_with("[ nouveauté ]")), "{out:?}");
         assert!(!out.iter().any(|l| l.contains("morceau libre")), "novelty is non-empty, so no fallback: {out:?}");
+    }
+
+    #[test]
+    fn composed_meter_is_spelled_out_in_the_why_line() {
+        // `meter: 3+2+2/8` is 7/8 split 3+2+2: the analyser names the groups.
+        let out = analyze("meter: 3+2+2/8\nkick: x x x x x x x\nbell: 1 2 3");
+        let joined = out.join("\n");
+        assert!(joined.contains("métrique composée 3+2+2 (3,5 temps)"), "{joined}");
+        // a plain 7/8 keeps the short form
+        let out2 = analyze("meter: 7/8\nkick: x x x x x x x");
+        assert!(out2.join("\n").contains("métrique inhabituelle (3,5 temps)"), "{out2:?}");
     }
 
     #[test]
