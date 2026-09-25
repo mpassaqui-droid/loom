@@ -122,7 +122,10 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
   app (mobile/desktop), coquille préchargée, samples/… en cache au passage →
   **jouable hors-ligne** après une première visite, repli navigateur connecté.
 - 🌠 **Communauté** : galerie, packs, **collaboration temps réel**.
-- 🔨 **CI / tests / docs**.
+- ✅ **CI / tests / docs** — `.github/workflows/ci.yml` : build+test du workspace
+  (stable) et **parité JS↔Rust** (node tools/parity_test.js, 202/202) + structure
+  PWA (tools/check_web.js). Clippy en conseil (durcissement progressif). README à
+  jour (build, checks, statut moteur unifié).
 
 ---
 

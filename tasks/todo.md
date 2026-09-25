@@ -98,6 +98,20 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 - `loom-app` l'analyse offline nomme la métrique composée (`3+2+2 (3,5 temps)`).
   Tests : 328 ok au total (app 107 · core 98).
 
+**2026-09-18 — CI + docs (wave 5).**
+- `.github/workflows/ci.yml` : job `rust` = build + `cargo test --workspace`
+  (331 tests) + clippy conseil ; job `web` = `node tools/check_web.js` (scripts
+  index.html + manifest PWA + sw.js) + `node tools/parity_test.js` (202/202).
+  Déclenché sur main + pull requests ; cpal/midir → apt libasound2-dev.
+  `cargo fmt` pas encore une garde (base jamais rustfmt-tée — durcissement
+  progressif, documenté dans le workflow).
+- `tools/check_web.js` : validation structurelle du web/ (parse des scripts
+  inline, JSON du manifest, icônes présentes, service worker) — partagé CI/local.
+- README.md à jour : `cargo test --workspace` (331), `./build-wasm.sh` +
+  wasm-bindgen 0.2.128 (remplace l'ancienne voie wasm-pack), outils de vérif,
+  statut moteur unifié (WASM chargé non-furtif → `window.__loomRust`, parité
+  garantie, moteur live encore côté JS), PWA. ROADMAP.md §7 passé en ✅.
+
 **2026-09-18 — PWA (web/ s'installe comme une app, joue hors-ligne).**
 - `web/manifest.webmanifest` : nom/icônes 192+512+maskable (générées ImageMagick,
   monogramme LOOM vert sur noir), standalone, thème `#0b0f0b`, langue fr.

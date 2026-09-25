@@ -65,30 +65,45 @@ identically everywhere else. Everything else builds on top of it.
 
 ## Build & test
 ```bash
-# core logic (no deps, instant)
+# whole workspace (builds every crate incl. the two apps)
+cargo build --workspace
+cargo test --workspace          # 331 tests, all green
+
+# core logic only (no deps, instant)
 cargo test -p loom-core
 
-# WASM module for the browser
-cargo install wasm-pack
-wasm-pack build loom-wasm --target web
+# WASM module for the browser (web/pkg + tools/pkg-node)
+./build-wasm.sh                  # requires wasm32 target + wasm-bindgen-cli 0.2.128
+
+# web engine sanity + JS<->Rust parity (uses the committed WASM)
+node tools/check_web.js          # index.html scripts, PWA manifest, service worker
+node tools/parity_test.js        # 202/202 voice×bar — both engines must agree
 
 # native apps
 cargo run -p loom-tui --release          # terminal
 cargo run -p loom-gui --release          # window
-cargo test -p loom-audio -p loom-app     # native sound + shared app logic
 ```
 
-`loom-core` has 90 tests and all of them pass (`cargo test -p loom-core`).
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs build+test on every push
+and enforces JS/Rust parity. `cargo fmt`/`clippy -D warnings` are not yet gates:
+part of the codebase has never been rustfmt-ed (hardening in progress).
 
 ## Status
 This is a repo in transition, not a finished product. The browser prototype
-(`web/index.html`) still runs its own hand-written JS engine, built before
+(`web/index.html`) runs its own hand-written JS engine, built before
 `loom-core` existed. `loom-core` is the Rust rewrite of that same language:
-parser, pattern verbs, and scheduler, with tests. The two are not wired
-together yet. The near-term work is compiling `loom-core` to WASM and swapping
-it into the browser prototype in place of the JS engine, so all surfaces
-(browser, terminal, and any future one) share one engine instead of two
-implementations of the same language drifting apart.
+parser, pattern verbs, generator tokens, and per-bar scheduler, with tests
+(101 of them). The two engines are kept **bit-identical**: `tools/parity_test.js`
+compares every voice×bar onsets of the JS engine against the Rust engine run
+through WASM (`web/pkg` / `tools/pkg-node`, rebuilt by `./build-wasm.sh`) and
+must pass 202/202. The WASM is already loaded *non-destructively* into the web
+prototype as `window.__loomRust` (an experimental A/B toggle when the build is
+present), but the JS engine is still the one producing audio — wiring the Rust
+engine in as the live driver is the large remaining item.
+
+`web/` is also a **PWA**: the manifest + service worker let it be installed as
+an app and keep playing offline (shell precached, samples cached on first
+play). Scripts, manifest and parity are enforced by CI.
 
 A separate, more polished web demo, `loom-studio`, exists as a companion
 project and is not part of this repo.
