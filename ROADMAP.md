@@ -118,7 +118,9 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - 🌠 **Moteur unifié Rust→WASM** : web + terminal + téléphone sur UN moteur
   (sample-accurate, latence basse) — la grande dette technique.
 - 🔨 **Accessibilité** (lecteur d'écran, daltoniens, grandes polices).
-- 🔨 **PWA** (installer comme app).
+- ✅ **PWA** — `web/manifest.webmanifest` + `web/sw.js` : s'installe comme une
+  app (mobile/desktop), coquille préchargée, samples/… en cache au passage →
+  **jouable hors-ligne** après une première visite, repli navigateur connecté.
 - 🌠 **Communauté** : galerie, packs, **collaboration temps réel**.
 - 🔨 **CI / tests / docs**.
 

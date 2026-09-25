@@ -98,6 +98,17 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 - `loom-app` l'analyse offline nomme la métrique composée (`3+2+2 (3,5 temps)`).
   Tests : 328 ok au total (app 107 · core 98).
 
+**2026-09-18 — PWA (web/ s'installe comme une app, joue hors-ligne).**
+- `web/manifest.webmanifest` : nom/icônes 192+512+maskable (générées ImageMagick,
+  monogramme LOOM vert sur noir), standalone, thème `#0b0f0b`, langue fr.
+- `web/sw.js` : coquille préchargée (index.html, pkg/loom_wasm.js+wasm, icônes),
+  navigation réseau d'abord → repli coquille hors-ligne, statique (samples/*.wav,
+  pkg/*) en cache d'abord → un premier passage rend les samples joués jouables
+  hors-ligne. Activation/claims immédiats, purge des vieilles caches.
+- `web/index.html` : metas manifest/theme-color/apple-touch + enregistrement SW
+  (https ou localhost uniquement) + classe `body.standalone` (padding réduit en
+  app installée). ROADMAP.md §7 passé en ✅.
+
 **2026-09-18 — maths : Markov appris + solveur à contraintes + parité 202/202.**
 - `loom-core` + `web` : `| markov [N] learn: <phrase>` (chaînes apprises d'un morceau) —
   transition table apprise depuis la phrase, ordre N, longueur propre de la voix conservée,
