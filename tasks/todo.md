@@ -27,10 +27,12 @@
       le son reste JS » + prochaine pierre (analyzer partagé via WASM).
 
 ### Vague 3 — Vue partition (GUI)
-- [ ] `loom-app/src/studio/notation.rs` : partition du roll (grande portée, têtes par voix,
-      `note_at`), + `transpose_voice(src, voice, semi)` — tests.
-- [ ] `loom-gui/src/studio_ui/notation.rs` : panneau « PARTITION » (portées + têtes + clic =
-      aller à la voix, ◀▶ demi-ton pour transposer la voix sélectionnée).
+- [x] `loom-app/src/studio/notation.rs` : partition du roll (grande portée, têtes par voix,
+      `staff()`), + `transpose_voice(src, voice, semi)` — 5 tests (portée standard, clé de fa,
+      lignes supplémentaires, transposition avec commentaire conservé, lignes vides).
+- [x] `loom-gui/src/studio_ui/notation.rs` : panneau « PARTITION » (portées clé de sol/fa +
+      têtes colorées + lignes supplémentaires + clic = aller à la voix + armer, ◀▶ demi-ton
+      et « réinit » pour transposer la voix armée, undo partagé via History).
 
 ### Vague 4 — Instrument sampler (GUI)
 - [ ] `loom-app/src/studio/sampletool.rs` : liste des samples + spec (sample/root/begin/end/

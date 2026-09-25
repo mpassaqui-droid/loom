@@ -2,6 +2,7 @@
 //!
 //! - [`knobs`]: the master knobs VOL, SWING, ECHO, SPACE and the 3-band EQ.
 //! - [`mixer`]: one channel strip per voice (fader, pan, solo, meter).
+//! - [`notation`]: the roll read as sheet music (grand staff + transpose).
 //! - [`stems`]: every voice exported to its own WAV, on a background thread.
 //! - [`tap`]: TAP tempo.
 //! - [`loudness`]: the LUFS~ loudness meter.
@@ -21,6 +22,7 @@ pub mod knobs;
 pub mod learn;
 pub mod loudness;
 pub mod mixer;
+pub mod notation;
 pub mod roll;
 pub mod share;
 pub mod songline;

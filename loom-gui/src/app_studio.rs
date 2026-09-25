@@ -29,6 +29,12 @@ impl LoomApp {
             StudioAction::ToggleMixer => self.studio.show_mixer = !self.studio.show_mixer,
             StudioAction::ToggleRoll => self.studio.show_roll = !self.studio.show_roll,
             StudioAction::ToggleClips => self.studio.show_clips = !self.studio.show_clips,
+            StudioAction::ToggleNotation => self.studio.show_notation = !self.studio.show_notation,
+            StudioAction::NotationTranspose(dt) => self.notation_transpose(dt),
+            StudioAction::ArmNotation(voice) => {
+                self.studio.notation_voice = Some(voice.clone());
+                self.say(format!("PARTITION : « {voice} » armée — ◀ ▶ pour la transposer."));
+            }
             StudioAction::KnobChanged(knob) => {
                 if let Some(engine) = engine {
                     self.studio.knobs.apply(knob, engine);
@@ -185,6 +191,16 @@ impl LoomApp {
             let notes = roll::roll(&self.program, bar);
             studio_ui::roll::show(ui, &notes, bar, status.map(|s| s.phase()), &theme, &mut studio_actions);
         }
+        if self.studio.show_notation {
+            let bar = status.map_or(0, |s| s.song_bar());
+            let (notes, _) = loom_app::studio::notation::staff(&roll::roll(&self.program, bar));
+            let armed = self.studio.notation_voice.clone();
+            let semi = armed
+                .as_deref()
+                .and_then(|v| self.program.voices.iter().find(|x| x.name == v).map(|x| x.synth.semi.unwrap_or(0)))
+                .unwrap_or(0);
+            studio_ui::notation::show(ui, &notes, bar, armed.as_deref(), semi, &theme, &mut studio_actions);
+        }
         if self.studio.show_mixer {
             let peak = status.map_or(0.0, |s| s.peak());
             studio_ui::mixer::show(ui, &mut self.studio, &self.muted, peak, &theme, actions);
@@ -229,6 +245,21 @@ impl LoomApp {
                 self.say(message);
             }
             None => self.say("TAP : continue de taper en rythme…"),
+        }
+    }
+
+    /// PARTITION ◀/▶: transpose the armed voice by `dt` semitones, undoably.
+    fn notation_transpose(&mut self, dt: i32) {
+        let Some(voice) = self.studio.notation_voice.clone() else {
+            self.say("PARTITION : clique une note pour choisir la voix à transposer.");
+            return;
+        };
+        match loom_app::studio::notation::transpose_voice(&self.text, &voice, dt) {
+            Ok(code) => {
+                let when = self.replace_song("TRANSPOSE", code);
+                self.say(format!("PARTITION : « {voice} » {dt:+} demi-ton(s){when}."));
+            }
+            Err(e) => self.warn(format!("PARTITION : {e}")),
         }
     }
 

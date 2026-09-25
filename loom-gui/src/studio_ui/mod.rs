@@ -1,5 +1,5 @@
 //! The STUDIO in the window: the knobs bar and the panels (MIX, ROLL,
-//! TIMELINE, CLIPS), plus the import box.
+//! PARTITION, TIMELINE, CLIPS), plus the import box.
 //!
 //! The logic lives in [`loom_app::studio`]; these functions only draw it and
 //! turn clicks into [`StudioAction`]s, which the app carries out
@@ -7,6 +7,7 @@
 
 pub mod clips;
 pub mod mixer;
+pub mod notation;
 pub mod roll;
 pub mod timeline;
 
@@ -39,6 +40,12 @@ pub enum StudioAction {
     ToggleMixer,
     ToggleRoll,
     ToggleClips,
+    /// Show / hide the PARTITION (grand staff) panel.
+    ToggleNotation,
+    /// Transpose the armed voice by `n` semitones (`| semi` is rewritten).
+    NotationTranspose(i32),
+    /// Click a note on the staff: this voice gets the ◀ ▶ buttons.
+    ArmNotation(String),
     /// A knob was moved on screen: send it to the engine.
     KnobChanged(Knob),
     /// Mixer strip `n` changed its fader or pan.
@@ -91,6 +98,9 @@ pub struct Studio {
     pub show_mixer: bool,
     pub show_roll: bool,
     pub show_clips: bool,
+    pub show_notation: bool,
+    /// The voice the PARTITION panel's ◀ ▶ transpose.
+    pub notation_voice: Option<String>,
     /// The import box, open with what was pasted so far.
     pub import: Option<String>,
     /// The section selected on the timeline.
@@ -117,6 +127,8 @@ impl Studio {
             show_mixer: false,
             show_roll: false,
             show_clips: false,
+            show_notation: false,
+            notation_voice: None,
             import: None,
             section: None,
             scope: Box::new([0.0; SCOPE_LEN]),
@@ -193,6 +205,9 @@ pub fn studio_bar(ui: &mut egui::Ui, studio: &mut Studio, theme: &Theme, tap_bpm
                 }
                 if ui.selectable_label(studio.show_roll, "ROLL").on_hover_text("Piano-roll : les mélodies en blocs, clic = aller à la ligne de la voix (F9)").clicked() {
                     actions.push(StudioAction::ToggleRoll);
+                }
+                if ui.selectable_label(studio.show_notation, "PARTITION").on_hover_text("Portée : le morceau en solfège (clé de sol + clé de fa), clic une note = aller à sa voix, ◀/▶ = transposer").clicked() {
+                    actions.push(StudioAction::ToggleNotation);
                 }
                 if ui.selectable_label(studio.show_clips, "CLIPS").on_hover_text("Lancer un morceau, ou varier une voix en direct sans toucher au code (F10)").clicked() {
                     actions.push(StudioAction::ToggleClips);
