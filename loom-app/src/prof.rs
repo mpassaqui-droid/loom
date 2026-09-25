@@ -12,12 +12,12 @@
 //! prompt (who the teacher is) and a message (the task and the code). A short
 //! LOOM primer was added to the system prompt, because Claude doesn't know the
 //! language. The web's offline analysis shown before the AI answer
-//! (`analyzePiece`: harmony, consonance, form) is now [`analyze`].
+//! (`analyzePiece`: harmony, consonance, form) is now [`analyze`], moved into
+//! `loom_core::prof` and re-exported here — the same analyser the browser runs
+//! through WASM ([`loom_core::prof`]).
 
-pub mod analyze;
-pub mod lore;
-
-pub use analyze::analyze;
+pub use loom_core::prof::analyze;
+pub use loom_core::prof::lore;
 
 use std::process::Command;
 use std::time::Duration;
@@ -25,7 +25,7 @@ use std::time::Duration;
 use crate::ear::{demo, Demo};
 use crate::lessons::{normalize, REFERENCE};
 use crate::vibe::{claude_command_with, model, ClaudeJob, TIMEOUT};
-use lore::{LORE, SCALE_LORE, TRADITION_LORE};
+use loom_core::prof::lore::{LORE, SCALE_LORE, TRADITION_LORE};
 
 /// A teacher request running in the background: its result is the cleaned French answer.
 pub type Job = ClaudeJob<String>;

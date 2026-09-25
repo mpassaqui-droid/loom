@@ -7,6 +7,8 @@
 mod synth;
 pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flange, Fm, Harm, Lfo, MixSettings, Param, Reson, Room, SigShape, Synth};
 
+pub mod prof;
+
 use std::sync::Arc;
 
 /// Polymeter / explicit polyrhythm on one voice, from `| poly …`.

@@ -1,14 +1,16 @@
 //! Instant, OFFLINE analysis of a piece — the "why it sounds the way it does"
 //! report the teacher shows before (and without) the AI brain. Faithful port of
 //! the browser's `analyzePiece` + `noveltyReport` + `chordRoughness` from
-//! `web/index.html`, so the native apps give exactly the same knowledge-base
-//! answer: tonality, microtuning, acoustics of the tonic triad (Plomp–Levelt),
-//! harmony in roman numerals + cadence, the obvious "why", the form, and a
-//! measured novelty score (variety / pitch entropy / rhythm entropy).
+//! `web/index.html`, so the native apps AND the web give exactly the same
+//! knowledge-base answer: tonality, microtuning, acoustics of the tonic triad
+//! (Plomp–Levelt), harmony in roman numerals + cadence, the obvious "why", the
+//! form, and a measured novelty score (variety / pitch entropy / rhythm entropy).
+//! Lives in `loom-core` (std-only, no dependencies) so the browser can run it
+//! through `loom-wasm` and native apps through `loom-app` — one analyser everywhere.
 
 use std::collections::{HashMap, HashSet};
 
-use loom_core::{parse_key, parse_meter_groups, parse_prog, parse_song, token_to_freq, Program, Key};
+use crate::{parse_accel, parse_key, parse_meter_groups, parse_prog, parse_song, token_to_freq, Program, Key};
 
 use super::lore::SCALE_LORE;
 
@@ -342,7 +344,11 @@ fn entropy(items: &[String]) -> f64 {
 /// dense voices that loop identically. No AI — pure schedule + measurement.
 pub fn novelty_report(text: &str) -> Vec<String> {
     let program = Program::parse(text);
-    let total = program.len_bars().max(1) as i64;
+    // Same default length as the web: no `song:` arrangement -> a nominal 8-bar
+    // piece (not 1 bar, which would just re-sample the same bar and inflate the
+    // per-bar variety score).
+    let declared = program.len_bars();
+    let total = if declared > 0 { declared as i64 } else { 8 };
     let n = (total as usize).clamp(2, 10);
     // Sample bars spread across the WHOLE arrangement, so a piece that builds
     // and contrasts is judged fairly.
@@ -513,6 +519,9 @@ pub fn analyze(text: &str) -> Vec<String> {
             }
         }
     }
+    if parse_accel(&src).is_some() {
+        why.push("le tempo accélère/respire au fil du morceau".into());
+    }
     if !why.is_empty() {
         let text = why.join(" · ");
         out.push(format!("[ pourquoi ça sonne ] {text}."));
@@ -648,5 +657,23 @@ mod tests {
     fn microtonal_custom_key_reported() {
         let out = analyze("key: d 0 1.5 3 5 6.5 8 10\nlead: 1 3 5");
         assert!(out.iter().any(|l| l.contains("microtonal")), "{out:?}");
+    }
+
+    #[test]
+    fn novelty_without_song_samples_8_bars_like_the_web() {
+        // No `song:` -> the web treats the piece as a nominal 8 bars. A dense
+        // voice looping identically is then FLAGGED (8 sampled signatures, uniq 1);
+        // the old len_bars().max(1) bug sampled the same bar twice (uniq 2) and
+        // hid the repetition entirely.
+        let out = analyze("kick: x x x x x x x\nbell: 1 2 3");
+        let joined = out.join("\n");
+        assert!(joined.contains("bouclent à l'identique : kick"), "{joined}");
+        assert!(!joined.contains("bouclent à l'identique : bell"), "a 3-step voice is not dense -> not flagged: {joined}");
+    }
+
+    #[test]
+    fn accel_is_a_reason_in_the_why_line() {
+        let out = analyze("key: c major\naccel: 60 140\nlead: 1 3 5");
+        assert!(out.iter().any(|l| l.contains("le tempo accélère/respire au fil du morceau")), "{out:?}");
     }
 }
