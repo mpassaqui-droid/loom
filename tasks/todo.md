@@ -81,3 +81,10 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
   `loom_app::teacher` ; `loom-app` dépend maintenant de `loom-audio`.
 - Idem EXPLIQUE (voir ci-dessus). Tests uniques : 322 ok (app 106 · audio 70 · core 96 · gui 26 · tui 24 — les tests studio/teacher ne sont plus dupliqués GUI+TUI).
 
+**2026-09-16 — `| ir` partagé (cache de géométrie, comme `ctx._irCache[type]`).**
+- `loom-audio/src/inserts/space.rs` : la géométrie du réseau `| ir` (longueurs de lignes,
+  gains, diffuseurs, coeff de damping, niveau, t60, idle_limit) est calculée une seule fois
+  par (espace, fréquence) et partagée en `Arc` entre toutes les notes — au lieu d'être
+  re-dérivée à chaque note. 3 tests : partage du cache, géométrie = calcul vierge, deux
+  notes sonnent identiques. Tests : 325 ok au total (audio 73).
+

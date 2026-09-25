@@ -123,6 +123,68 @@ const IR_DIFFUSERS: [f32; 3] = [142.0, 379.0, 107.0];
 /// An allpass with g = 0.6 loses ~90 dB in 40 round trips.
 const IR_IDLE_TRIPS: f32 = 40.0;
 
+/// The network's immutable shape for one `(space, sample-rate)`. The browser
+/// generates each space's impulse once per context and shares it between every
+/// voice (`ctx._irCache[type]`); this plays the same trick — the geometry is
+/// computed once and shared (`Arc`) by every note, so building a note is just
+/// zeroing its own ring state, not re-deriving the whole reverb.
+struct IrGeom {
+    line_len: [usize; 4],
+    gains: [f32; 4],
+    diffuser: [usize; 3],
+    disperse: bool,
+    damp_coef: f32,
+    bright: f32,
+    norm: f32,
+    t60: f32,
+    idle_limit: u32,
+}
+
+fn compute_ir_geom(kind: &str, sr: f32) -> IrGeom {
+    let p = ir_preset(kind);
+    let t60 = t60_of(p.sec, p.decay);
+    let hr = sr * 0.5; // the network's rate
+    let scale = hr / 44100.0;
+    let line_len = IR_LINES.map(|n| (n * p.size * scale).round().max(1.0) as usize);
+    let gains = [0, 1, 2, 3].map(|i| 10f32.powf(-3.0 * line_len[i] as f32 / (hr * t60)));
+    IrGeom {
+        line_len,
+        gains,
+        diffuser: IR_DIFFUSERS.map(|n| (n * scale).round() as usize),
+        disperse: p.spring,
+        // the slowest diffuser (379) plus the spring's allpasses, 40 trips each
+        idle_limit: (IR_IDLE_TRIPS * 379.0 * scale) as u32 + if p.spring { 1000 } else { 0 },
+        damp_coef: 1.0 - (-std::f32::consts::TAU * (p.bright * 2.5).min(hr * 0.45) / hr).exp(),
+        bright: p.bright.min(hr * 0.45),
+        // the normalised IR's energy gain scales with 1/√sr; `norm` is measured at 48 kHz
+        norm: p.norm * (48000.0 / sr).sqrt(),
+        t60,
+    }
+}
+
+/// The shared per-`(space, sample-rate)` geometry, built once per session.
+fn ir_geom(kind: &str, sr: f32) -> std::sync::Arc<IrGeom> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<(&'static str, u32), Arc<IrGeom>>>> = OnceLock::new();
+    let name: &'static str = match kind {
+        "room" => "room",
+        "plate" => "plate",
+        "spring" => "spring",
+        "cathedral" => "cathedral",
+        _ => "hall",
+    };
+    let key = (name, sr.to_bits());
+    let mut cache = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
+    if let Some(g) = cache.get(&key) {
+        return Arc::clone(g);
+    }
+    let g = Arc::new(compute_ir_geom(name, sr));
+    cache.insert(key, Arc::clone(&g));
+    g
+}
+
+
 /// `| ir hall|room|plate|spring|cathedral [MIX]`.
 ///
 /// The browser convolves each voice with a multi-second generated noise IR —
@@ -164,34 +226,29 @@ pub(super) struct IrVerb {
 
 impl IrVerb {
     pub fn new(kind: &str, mix: f32, sr: f32) -> IrVerb {
+        let geom = ir_geom(kind, sr);
         let p = ir_preset(kind);
-        let t60 = t60_of(p.sec, p.decay);
         let hr = sr * 0.5; // the network's rate
-        let scale = hr / 44100.0;
-        let lines = IR_LINES.map(|n| Ring::new((n * p.size * scale).round().max(1.0) as usize));
-        let gains = [0, 1, 2, 3].map(|i| 10f32.powf(-3.0 * lines[i].len() as f32 / (hr * t60)));
         let wet = mix.clamp(0.0, 1.0);
         IrVerb {
             dry: 1.0 - wet,
             wet,
-            diffusers: IR_DIFFUSERS.map(|n| Allpass::new((n * scale).round() as usize, 0.6)),
-            disperse: p.spring.then(|| [1200.0, 2400.0, 3600.0, 4800.0].map(|f| Biquad::new(BiquadKind::Allpass, hr, f, 0.5, 0.0))),
-            lines,
-            gains,
+            diffusers: geom.diffuser.map(|n| Allpass::new(n, 0.6)),
+            disperse: geom.disperse.then(|| [1200.0, 2400.0, 3600.0, 4800.0].map(|f| Biquad::new(BiquadKind::Allpass, hr, f, 0.5, 0.0))),
+            lines: geom.line_len.map(Ring::new),
+            gains: geom.gains,
             damp: [0.0; 4],
-            damp_coef: 1.0 - (-std::f32::consts::TAU * (p.bright * 2.5).min(hr * 0.45) / hr).exp(),
-            tone: std::array::from_fn(|_| OnePole::new(sr, p.bright.min(hr * 0.45))),
-            flutter: p.spring.then(|| Osc::sine(120.0 / (std::f32::consts::TAU * p.sec), hr)),
-            // the normalised IR's energy gain scales with 1/√sr; `norm` is measured at 48 kHz
-            norm: p.norm * (48000.0 / sr).sqrt(),
-            t60,
+            damp_coef: geom.damp_coef,
+            tone: std::array::from_fn(|_| OnePole::new(sr, geom.bright)),
+            flutter: (geom.disperse).then(|| Osc::sine(120.0 / (std::f32::consts::TAU * p.sec), hr)),
+            norm: geom.norm,
+            t60: geom.t60,
             acc: 0.0,
             prev: (0.0, 0.0),
             next: (0.0, 0.0),
             odd: false,
             idle: 0,
-            // the slowest diffuser (379) plus the spring's allpasses, 40 trips each
-            idle_limit: (IR_IDLE_TRIPS * 379.0 * scale) as u32 + if p.spring { 1000 } else { 0 },
+            idle_limit: geom.idle_limit,
         }
     }
 
@@ -277,5 +334,52 @@ mod tests {
     fn reverb_times_follow_the_presets() {
         assert!(t60_of(0.5, 3.6) < 0.7 && t60_of(5.2, 1.5) > 5.0);
         assert!(t60_of(0.5, 3.6) < t60_of(1.9, 2.1) && t60_of(1.9, 2.1) < t60_of(2.8, 2.0));
+    }
+
+    /// The web caches each space's impulse per context (`ctx._irCache[type]`);
+    /// here one `IrGeom` is shared by every note of that space+rate.
+    #[test]
+    fn ir_geometry_is_cached_and_shared() {
+        let a = ir_geom("hall", 48000.0);
+        let b = ir_geom("hall", 48000.0);
+        let c = ir_geom("hall", 44100.0);
+        let d = ir_geom("plate", 48000.0);
+        assert!(std::sync::Arc::ptr_eq(&a, &b), "same space + rate shares one geometry");
+        assert!(!std::sync::Arc::ptr_eq(&a, &c), "different rate is a fresh geometry");
+        assert!(!std::sync::Arc::ptr_eq(&a, &d), "different space is a fresh geometry");
+        assert_eq!(a.t60, b.t60);
+    }
+
+    /// A cached geometry is bit-identical to one computed from scratch, so a
+    /// note built at any time (or another thread) sounds exactly the same.
+    #[test]
+    fn cached_geometry_matches_a_fresh_computation() {
+        for kind in ["room", "hall", "plate", "spring", "cathedral"] {
+            for sr in [44100.0, 48000.0] {
+                let cached = ir_geom(kind, sr);
+                let fresh = compute_ir_geom(kind, sr);
+                assert_eq!(cached.line_len, fresh.line_len, "{kind} @{sr}");
+                assert_eq!(cached.gains, fresh.gains, "{kind} @{sr}");
+                assert_eq!(cached.diffuser, fresh.diffuser, "{kind} @{sr}");
+                assert_eq!(cached.disperse, fresh.disperse, "{kind} @{sr}");
+                assert_eq!(cached.idle_limit, fresh.idle_limit, "{kind} @{sr}");
+                assert!((cached.damp_coef - fresh.damp_coef).abs() < 1e-7, "{kind} @{sr}");
+                assert!((cached.bright - fresh.bright).abs() < 1e-7, "{kind} @{sr}");
+                assert!((cached.norm - fresh.norm).abs() < 1e-7, "{kind} @{sr}");
+                assert!((cached.t60 - fresh.t60).abs() < 1e-7, "{kind} @{sr}");
+            }
+        }
+    }
+
+    /// Two notes from the shared geometry (both zeroed) ring identically.
+    #[test]
+    fn ir_notes_start_from_the_shared_geometry() {
+        let mut a = IrVerb::new("spring", 0.35, 48000.0);
+        let mut b = IrVerb::new("spring", 0.35, 48000.0);
+        for i in 0..2400u32 {
+            let x = if i == 0 { Stereo::mono(1.0) } else { Stereo::ZERO };
+            let (ya, yb) = (a.process(x, true), b.process(x, true));
+            assert!((ya.l - yb.l).abs() < 1e-6 && (ya.r - yb.r).abs() < 1e-6, "step {i}");
+        }
     }
 }
