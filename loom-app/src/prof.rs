@@ -12,9 +12,12 @@
 //! prompt (who the teacher is) and a message (the task and the code). A short
 //! LOOM primer was added to the system prompt, because Claude doesn't know the
 //! language. The web's offline analysis shown before the AI answer
-//! (`analyzePiece`: harmony, consonance, form) is not ported.
+//! (`analyzePiece`: harmony, consonance, form) is now [`analyze`].
 
+pub mod analyze;
 pub mod lore;
+
+pub use analyze::analyze;
 
 use std::process::Command;
 use std::time::Duration;

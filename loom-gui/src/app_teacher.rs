@@ -187,6 +187,7 @@ impl LoomApp {
                 }
             }
             Answer::AskClaude(question) => {
+                self.teacher.prof_explain = false;
                 self.teacher.prof_job = Some(prof::ask(&question));
                 self.teacher.prof = Some(ProfAnswer { title, lines: Vec::new(), is_error: false, demo: None });
                 self.say("Le prof réfléchit à ta question…");
@@ -199,8 +200,10 @@ impl LoomApp {
         if self.teacher.prof_job.is_some() {
             return;
         }
+        self.teacher.prof_explain = true;
         self.teacher.prof_job = Some(prof::explain(&self.text));
-        self.teacher.prof = Some(ProfAnswer { title: "EXPLIQUE — ton morceau".into(), lines: Vec::new(), is_error: false, demo: None });
+        // The web shows the offline analysis first, then the AI's answer.
+        self.teacher.prof = Some(ProfAnswer { title: "EXPLIQUE — ton morceau".into(), lines: prof::analyze(&self.text), is_error: false, demo: None });
         self.say(prof::THINKING);
     }
 
@@ -236,9 +239,18 @@ impl LoomApp {
     pub(super) fn teacher_frame(&mut self, ctx: &egui::Context) {
         if let Some(result) = self.teacher.prof_job.as_mut().and_then(prof::Job::poll) {
             self.teacher.prof_job = None;
+            let was_explain = std::mem::take(&mut self.teacher.prof_explain);
             let (lines, is_error) = match result {
                 Ok(text) => {
                     self.say("Le prof a répondu.");
+                    // EXPLIQUE: the offline lines are already shown, append the AI text.
+                    if was_explain {
+                        if let Some(answer) = &mut self.teacher.prof {
+                            answer.lines.push(text);
+                        }
+                        self.teacher.prof_explain = false;
+                        return;
+                    }
                     (vec![text], false)
                 }
                 Err(e) => {

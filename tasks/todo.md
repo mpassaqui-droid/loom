@@ -65,3 +65,13 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 - Non vérifié : écoute réelle sur enceintes, clics souris dans la GUI (logique testée), MIDI learn avec un vrai contrôleur, micro réel pour HUM.
 - Pistes : partager un `ir` par voix (CPU), déplacer `studio/` et `teacher/` de loom-gui vers loom-app, analyse hors-ligne `analyzePiece` du prof pas portée.
 
+**2026-09-16 — analyse hors-ligne du prof portée (`analyzePiece`).**
+- `loom-app/src/prof/analyze.rs` (neuf) : port du prof hors-ligne du web — tonalité + lore,
+  tradition (raga/maqam/gamelan/modes/blues…), microtonalité, accordage, consonance de
+  l'accord de tonique (Plomp–Levelt), harmonie en chiffrage romain + cadences, « pourquoi ça
+  sonne », forme (`song:`), et rapport de nouveauté (variété/hauteurs/rythme) via
+  `Program::schedule_bar`. 10 tests, `pub use prof::analyze`.
+- EXPLIQUE dans la GUI et la TUI : l'analyse hors-ligne s'affiche immédiatement, la réponse
+  IA s'ajoute ensuite (comme sur le web).
+- Tests : 371 ok (core 96 · audio 70 · app 57 · gui 75 · tui 73).
+

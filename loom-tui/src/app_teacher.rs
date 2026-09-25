@@ -45,6 +45,8 @@ pub struct Teacher {
     pub history: History,
     pub prof: Option<ProfAnswer>,
     pub prof_job: Option<prof::Job>,
+    /// The pending job is an EXPLIQUE: keep the offline analysis, append the AI text.
+    pub prof_explain: bool,
     pub demo: Option<DemoPlay>,
     /// Kept when the popup closes, so the score stays.
     pub ear: Option<EarSession>,
@@ -130,13 +132,30 @@ impl App {
     pub(super) fn teacher_tick(&mut self) {
         if let Some(result) = self.teacher.prof_job.as_mut().and_then(prof::Job::poll) {
             self.teacher.prof_job = None;
-            let (lines, is_error) = match result {
-                Ok(text) => (vec![text], false),
-                Err(e) => (vec![e], true),
-            };
-            if let Some(answer) = &mut self.teacher.prof {
-                answer.lines = lines;
-                answer.is_error = is_error;
+            let was_explain = std::mem::take(&mut self.teacher.prof_explain);
+            match result {
+                Ok(text) => {
+                    // EXPLIQUE: the offline analysis is already shown, append the AI's reply.
+                    if was_explain {
+                        if let Some(answer) = &mut self.teacher.prof {
+                            answer.lines.push(text);
+                            answer.is_error = false;
+                        }
+                    } else if let Some(answer) = &mut self.teacher.prof {
+                        answer.lines = vec![text];
+                        answer.is_error = false;
+                    }
+                }
+                Err(e) => {
+                    if let Some(answer) = &mut self.teacher.prof {
+                        if !was_explain {
+                            answer.lines = vec![e.clone()];
+                        } else {
+                            answer.lines.push(format!("[ prof ] {e}"));
+                        }
+                        answer.is_error = true;
+                    }
+                }
             }
             // the popup was closed while waiting: show the answer, unless another popup is in use
             if matches!(self.mode, Mode::Edit) {
@@ -219,8 +238,10 @@ impl App {
             self.mode = Mode::Prof { scroll: 0 };
             return;
         }
+        self.teacher.prof_explain = true;
         self.teacher.prof_job = Some(prof::explain(&self.editor.text()));
-        self.teacher.prof = Some(ProfAnswer { title: "EXPLIQUE — ton morceau".into(), lines: Vec::new(), is_error: false, demo: None });
+        // The web shows the offline analysis first, then the AI's answer.
+        self.teacher.prof = Some(ProfAnswer { title: "EXPLIQUE — ton morceau".into(), lines: prof::analyze(&self.editor.text()), is_error: false, demo: None });
         self.mode = Mode::Prof { scroll: 0 };
     }
 
@@ -248,6 +269,7 @@ impl App {
                 }
             }
             Answer::AskClaude(question) => {
+                self.teacher.prof_explain = false;
                 self.teacher.prof_job = Some(prof::ask(&question));
                 self.teacher.prof = Some(ProfAnswer { title, lines: Vec::new(), is_error: false, demo: None });
             }

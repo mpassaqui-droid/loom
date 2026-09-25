@@ -89,6 +89,8 @@ pub struct Teacher {
     pub prof: Option<ProfAnswer>,
     /// The teacher (Claude) thinking.
     pub prof_job: Option<loom_app::prof::Job>,
+    /// The pending job is an EXPLIQUE: keep the offline analysis, append the AI text.
+    pub prof_explain: bool,
     /// An example playing instead of the song.
     pub demo: Option<DemoPlay>,
     /// OREILLE, when open.
