@@ -88,10 +88,10 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 
 ## 4. 🔢 MATHS — la musique comme structure
 - ✅ euclide, automates, morse/fib, Markov, chaos, microtonal.
-- 🔨 **Markov d'ordre N**, chaînes apprises d'un morceau.
+- ✅ **Markov d'ordre N** (`| markov N`), chaînes apprises d'un morceau (`| markov learn: <phrase>`).[...]
 - 🌠 **Composition algorithmique** : L-systèmes, grammaires, stochastique (Xenakis),
   génétique/évolutionnaire, RNN/IA mélodique.
-- 🌠 **Résolution sous contraintes** (« une mélodie qui respecte ces règles »).
+- ✅ **Résolution sous contraintes** — `solve(n, target:T, ladder:L, range:lo-hi, arc)` : une mélodie qui respecte les règles (cible finale, marche max, ambitus, arc).
 - 🌠 **Maths de l'accordage** : lattices, comma pumps, explorateur N-EDO, spectres → accords.
 - 🌠 **Atelier DSP** (construire son synthé depuis les maths).
 - 🌠 **Théorie de l'information** : entropie/complexité, auto-similarité, surprise.

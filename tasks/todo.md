@@ -98,6 +98,22 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 - `loom-app` l'analyse offline nomme la métrique composée (`3+2+2 (3,5 temps)`).
   Tests : 328 ok au total (app 107 · core 98).
 
+**2026-09-18 — maths : Markov appris + solveur à contraintes + parité 202/202.**
+- `loom-core` + `web` : `| markov [N] learn: <phrase>` (chaînes apprises d'un morceau) —
+  transition table apprise depuis la phrase, ordre N, longueur propre de la voix conservée,
+  clé RNG inchangée (rien ne régresse). Tests : `markov_learns_from_a_piece`,
+  `markov_order_n_learns_from_a_piece`.
+- `loom-core` + `web` : **solveur à contraintes `solve(n,target:T,ladder:L,range:lo-hi,arc)`** —
+  remontée stochastique depuis la cible imposée (dernier pas = target), pas ≤ ladder,
+  ambitus [lo,hi], option `arc` (montée → pic → descente sur la cible), seedée/déterministe.
+  Test natif `constraint_solver_honors_the_rules` ; fix E0606 dans le draw pondéré.
+- Chaos mort (`hash_u64`, `fnv`) supprimés de `loom-core` (0 warning).
+- `web` : aide + suggestion bot + analyzeur à jour (solve/markov learn) ; ROADMAP.md §4 ✅.
+- `tools/parity_test.js` : cas markov m1-m4 + `solve` m1-m4 ajoutés → **202/202 voix×mesure
+  ✅ PERFECT** (le solveur est bit-pour-bit identique JS/Rust via WASM).
+- Toolchain WASM : `rustup target add wasm32-unknown-unknown` + `cargo install
+  wasm-bindgen-cli 0.2.128` (aligné sur Cargo.lock) ; `./build-wasm.sh` re-runs web/pkg + tools/pkg-node.
+
 **2026-09-17 — langage (parité web) + undo/redo vérifié.**
 - `web/index.html` : `poly 3:2` (triolet, même grille que la native) + `meter: 2+2+3/8`
   (métrique composée) portés côté JS ; l'aide affiche le triolet. Aides à l'éditeur

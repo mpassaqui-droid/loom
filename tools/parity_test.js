@@ -97,6 +97,8 @@ const pieces = {
   'ratchets+alternation+subseq': 'seed: 9\nm: 1 [2 3] <4/5> 1*3\nk: x*2 x x <x/.>',
   'degrade+chance (seeded drops)': 'seed: 11\nh: x x x x x x x x x x x x x x x x | degrade 40\np: 1 3 5 1\' | chance 0.6\nk: x x x x | degrade 25',
   'develop (motivic arc)': 'seed: 1\nkey: c major\nlead: 1 2 3 5 | develop\nhh: x . x x . x . x | develop',
+  'markov (ordre 1, ordre-N, phrase apprise)': 'seed: 3\nkey: c major\nm1: 3 5 7 | markov\nm2: 3 5 7 | markov learn: 1 2 1 3 1 2 4\nm3: 3 5 7 1\' 5 | markov 2 learn: 1 2 1 3 1 2 4 1 2 5\nm4: 1 2 3 5 | markov 2',
+  'contraintes solve (arc + règles)': 'seed: 3\nkey: c major\nm1: solve(12,target:1,ladder:2,range:1-5)\nm2: solve(16,target:5,ladder:3)\nm3: solve(16,target:1,ladder:2,range:1-7,arc)\nm4: solve(8,arc)',
   'rythmes du monde': 'kick: tresillo\nhat: bembe\nclap: son\nperc: baiao',
   'sieve (Xenakis)': 'kick: sieve(16,3:0,5:2)\nhat: sieve(13,2:0,3:1)\nperc: sieve(12,4:1,6:3)',
   '1/f pink': 'seed: 5\nkey: c minor\nmel: pink(16)\nmel2: 1f(13)',

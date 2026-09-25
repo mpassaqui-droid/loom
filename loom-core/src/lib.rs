@@ -699,32 +699,47 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
         }
         Some("markov") => {
             if tokens.len() < 2 { return tokens.to_vec(); }
-            // markov N: order-N (context = last N tokens). N>=2 only; N=1 keeps the original.
-            let ord = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(1).max(1);
-            if ord >= 2 {
-                let o = ord.min(tokens.len() - 1);
-                let mut tr: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-                for i in 0..tokens.len() {
-                    let key = (0..o).map(|j| tokens[(i + j) % tokens.len()].clone()).collect::<Vec<_>>().join(",");
-                    tr.entry(key).or_default().push(tokens[(i + o) % tokens.len()].clone());
+            // markov [N] [learn: <phrase…>] — chaîne d'ordre N ; avec `learn:` la
+            // chaîne est APPRISE de la phrase (un morceau existant) au lieu de la
+            // voix elle-même, mais la ligne générée garde la longueur de la voix.
+            let mut src: Vec<String> = tokens.to_vec();
+            let mut ord = 1usize;
+            if parts.get(1).copied() == Some("learn:") {
+                let ls: Vec<String> = parts[2..].iter().map(|s| s.to_string()).collect();
+                if ls.len() >= 2 { src = ls; }
+            } else {
+                ord = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(1).max(1);
+                if parts.get(2).copied() == Some("learn:") {
+                    let ls: Vec<String> = parts[3..].iter().map(|s| s.to_string()).collect();
+                    if ls.len() >= 2 { src = ls; }
                 }
-                let mut out = tokens[0..o].to_vec();
-                let mut ctx = tokens[0..o].to_vec();
+            }
+            if src.len() < 2 { return tokens.to_vec(); }
+            // markov N: order-N (context = last N tokens). N>=2 only; N=1 keeps the original.
+            if ord >= 2 {
+                let o = ord.min(src.len() - 1);
+                let mut tr: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+                for i in 0..src.len() {
+                    let key = (0..o).map(|j| src[(i + j) % src.len()].clone()).collect::<Vec<_>>().join(",");
+                    tr.entry(key).or_default().push(src[(i + o) % src.len()].clone());
+                }
+                let mut out = src[0..o].to_vec();
+                let mut ctx = src[0..o].to_vec();
                 for i in o..tokens.len() {
                     let key = ctx.join(",");
-                    let opts = tr.get(&key).cloned().unwrap_or_else(|| tokens.to_vec());
+                    let opts = tr.get(&key).cloned().unwrap_or_else(|| src.to_vec());
                     let idx = ((js_rng(seed as u32, bar, &format!("mk:{}", verb), i as i64) * (opts.len() as f64)).floor() as usize) % opts.len();
                     out.push(opts[idx].clone()); ctx.push(opts[idx].clone()); ctx.remove(0);
                 }
                 return out;
             }
             let mut trans: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-            for i in 0..tokens.len() { let a = tokens[i].clone(); let b = tokens[(i + 1) % tokens.len()].clone(); trans.entry(a).or_default().push(b); }
+            for i in 0..src.len() { let a = src[i].clone(); let b = src[(i + 1) % src.len()].clone(); trans.entry(a).or_default().push(b); }
             let mut out = Vec::with_capacity(tokens.len());
-            let mut cur = tokens[0].clone();
+            let mut cur = src[0].clone();
             for i in 0..tokens.len() {
                 out.push(cur.clone());
-                let opts = trans.get(&cur).cloned().unwrap_or_else(|| tokens.to_vec());
+                let opts = trans.get(&cur).cloned().unwrap_or_else(|| src.to_vec());
                 let idx = ((js_rng(seed as u32, bar, &format!("mk:{}", verb), i as i64) * (opts.len() as f64)).floor() as usize) % opts.len();
                 cur = opts[idx].clone();
             }
@@ -903,6 +918,65 @@ fn expand_gendy_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
     Some(out)
 }
 
+/// `solve(n[, target:T][, ladder:L][, range:lo-hi][, arc])` — RÉSOLUTION SOUS
+/// CONTRAINTES : une MÉLODIE qui respecte les règles données. Le dernier pas est
+/// FIXÉ sur `target` (la tonique par défaut), tout enchaînement reste à `ladder`
+/// degrés au plus du suivant (marche), tout reste dans `[lo,hi]` (ambitus), et
+/// `arc` impose un contour qui monte puis redescend sur la cible. Rempli à
+/// RECULONS depuis la cible — une vraie recherche, seedée (bit-identique JS).
+fn expand_solve_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("solve(")?.strip_suffix(')')?;
+    let mut it = inner.split(',');
+    let n: usize = it.next()?.trim().parse::<usize>().unwrap_or(16).clamp(1, 64);
+    let (mut target, mut ladder, mut lo, mut hi, mut arc) = (1i64, 2i64, 1i64, 7i64, false);
+    for c in it {
+        let c = c.trim();
+        if c.is_empty() { continue; }
+        if let Some(v) = c.strip_prefix("target:") { target = v.trim().parse().unwrap_or(1); }
+        else if let Some(v) = c.strip_prefix("ladder:") { ladder = v.trim().parse().unwrap_or(2); }
+        else if let Some(v) = c.strip_prefix("range:") {
+            if let Some((a, b)) = v.trim().split_once('-') { lo = a.trim().parse().unwrap_or(1); hi = b.trim().parse().unwrap_or(7); }
+        }
+        else if c == "arc" { arc = true; }
+    }
+    target = target.clamp(1, 7);
+    ladder = ladder.clamp(1, 7);
+    lo = lo.clamp(1, 7);
+    hi = hi.clamp(1, 7);
+    if lo > hi { std::mem::swap(&mut lo, &mut hi); }
+    target = target.clamp(lo, hi);
+    let mut out = vec![0i64; n];
+    out[n - 1] = target;
+    let peak = if arc { ((n as f64 * 0.62).floor() as usize).clamp(1, n.saturating_sub(2).max(1)) } else { 0 };
+    let (h, s0) = (hi.min(target + 4), (target - 1).clamp(lo, hi));
+    for i in (0..n - 1).rev() {
+        let next = out[i + 1];
+        let feasible: Vec<i64> = (lo..=hi).filter(|d| (d - next).abs() <= ladder).collect();
+        let u = js_rng(seed as u32, bar, &format!("solve:{}", i), i as i64);
+        if !arc {
+            out[i] = feasible[((u * feasible.len() as f64).floor() as usize) % feasible.len()];
+            continue;
+        }
+        let w = if i <= peak {
+            let t = i as f64 / peak as f64;
+            s0 as f64 + (h - s0) as f64 * t
+        } else {
+            let m = (n - 1 - peak).max(1) as f64;
+            h as f64 - (h - target) as f64 * ((i - peak) as f64 / m)
+        };
+        let total: f64 = feasible.iter().map(|d| 1.0 / (1.0 + ((*d as f64) - w).abs())).sum();
+        let mut acc = u * total;
+        let mut idx = feasible.len() - 1;
+        for (k, d) in feasible.iter().enumerate() {
+            let wt = 1.0 / (1.0 + ((*d as f64) - w).abs());
+            if acc < wt { idx = k; break; }
+            acc -= wt;
+        }
+        out[i] = feasible[idx];
+    }
+    Some(out.into_iter().map(|d| d.to_string()).collect())
+}
+
 /// Resolve a voice's effective tokens for a given bar (all verbs + bar-aware
 /// generative expansions applied).
 pub fn effective(voice: &Voice, bar: i64) -> Vec<String> {
@@ -921,6 +995,7 @@ fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<Stri
         else if let Some(seq) = expand_perlin_token(&tok, seed) { out.extend(seq); }
         else if let Some(seq) = expand_1f_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_gendy_token(&tok, bar, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_solve_token(&tok, bar, seed) { out.extend(seq); }
         else { out.push(tok); }
     }
     out
@@ -1586,22 +1661,7 @@ pub fn parse_chord(tok: &str, octave: i32) -> Option<Vec<i32>> {
 // testable, with no RNG state and no dependencies.
 // ---------------------------------------------------------------------------
 
-/// SplitMix64 finalizer — cheap, well-distributed integer hash.
-fn hash_u64(mut x: u64) -> u64 {
-    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    x ^ (x >> 31)
-}
-
-/// FNV-1a hash of a string (used to fold a voice name into the RNG).
-fn fnv(s: &str) -> u64 {
-    let mut h: u64 = 0xCBF2_9CE4_8422_2325;
-    for b in s.bytes() { h ^= b as u64; h = h.wrapping_mul(0x0000_0100_0000_01B3); }
-    h
-}
-
-/// Deterministic pseudo-random value in [0,1) from the performance coordinates.
+// Deterministic pseudo-random value in [0,1) from the performance coordinates.
 // 32-bit FNV-1a — identical to the JS engine's fnv() (ASCII voice names).
 fn js_fnv(s: &str) -> u32 {
     let mut h: u32 = 2166136261;
@@ -2962,6 +3022,77 @@ mod tests {
         // order-1 (no arg) unchanged — regression
         let q: Vec<String> = "1 2 3 5 6 5 3 2".split_whitespace().map(|s| s.to_string()).collect();
         assert_eq!(apply_verb(&q, "markov", 3, 5).join(" "), "1 2 1 2 1 2 3 5");
+    }
+
+    #[test]
+    fn constraint_solver_honors_the_rules() {
+        // solve(12,target:1,ladder:2,range:1-5) — un VRAI solveur : le dernier pas
+        // est la cible, chaque enchaînement reste à 2 degrés au plus (marche), tout
+        // reste dans l'ambitus 1-5 — et c'est déterministe.
+        let get = || expand_solve_token("solve(12,target:1,ladder:2,range:1-5)", 3, 5).unwrap();
+        let a = get();
+        assert_eq!(a.len(), 12);
+        assert_eq!(a.last().map(|s| s.as_str()), Some("1"));
+        let d: Vec<i64> = a.iter().map(|s| s.parse().unwrap()).collect();
+        for w in d.windows(2) {
+            assert!((w[0] - w[1]).abs() <= 2, "{a:?} : saut {}>{}", w[0], w[1]);
+        }
+        for &x in &d {
+            assert!((1..=5).contains(&x), "{a:?} : {x} hors 1-5");
+        }
+        assert_eq!(a, get(), "déterministe");
+        // sans contrainte : les défauts résolvent quand même sur la tonique 1, en marches
+        let b = expand_solve_token("solve(8)", 3, 5).unwrap();
+        assert_eq!(b.len(), 8);
+        assert_eq!(b.last().map(|s| s.as_str()), Some("1"));
+        let db: Vec<i64> = b.iter().map(|s| s.parse().unwrap()).collect();
+        for w in db.windows(2) {
+            assert!((w[0] - w[1]).abs() <= 2);
+        }
+        // arc : un pic dans les 2/3 puis une descente qui finit sur la cible
+        let arc = expand_solve_token("solve(16,target:1,ladder:2,range:1-7,arc)", 0, 9).unwrap();
+        let da: Vec<i64> = arc.iter().map(|s| s.parse().unwrap()).collect();
+        let peak_idx = da[..da.len() - 1].iter().enumerate().max_by_key(|(_, v)| *v).map(|(i, _)| i).unwrap();
+        assert!(peak_idx * 3 < da.len() * 2, "arc : pic trop tard {arc:?}");
+        assert_eq!(da.last(), Some(&1));
+        for w in da.windows(2) {
+            assert!((w[0] - w[1]).abs() <= 2);
+        }
+    }
+
+    #[test]
+    fn markov_learns_from_a_piece() {
+        // « chaînes apprises d'un morceau » : le morceau = la phrase donnée, la
+        // ligne générée garde la longueur de la voix et n'utilise que les paires
+        // du morceau appris.
+        let t: Vec<String> = "3 5 7".split_whitespace().map(|s| s.to_string()).collect();
+        let phrase = "1 2 1 3 1 2 4";
+        let a = apply_verb(&t, &format!("markov learn: {phrase}"), 3, 5);
+        assert_eq!(a.len(), t.len());
+        assert_eq!(a, apply_verb(&t, &format!("markov learn: {phrase}"), 3, 5)); // deterministic
+        // chaque transition vient des paires du morceau appris (ou bien un simple chiffre tombé par hasard)
+        let pairs: Vec<(String, String)> = "1 2 1 3 1 2 4".split_whitespace().map(|s| s.to_string()).collect::<Vec<_>>().windows(2).map(|w| (w[0].clone(), w[1].clone())).collect();
+        for w in a.windows(2) {
+            let pair = (w[0].clone(), w[1].clone());
+            assert!(pairs.contains(&pair), "transition {pair:?} hors du morceau appris");
+        }
+        // une phrase trop courte ne tombe pas en boucle : la voix revient à elle-même
+        let short = apply_verb(&t, "markov learn: 5", 3, 5);
+        assert_eq!(short.len(), t.len());
+        // sans `learn:`, comportement inchangé (régression)
+        let q: Vec<String> = "1 2 3 5 6 5 3 2".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&q, "markov", 3, 5).join(" "), "1 2 1 2 1 2 3 5");
+    }
+
+    #[test]
+    fn markov_order_n_learns_from_a_piece() {
+        let t: Vec<String> = "3 5 7 1'".split_whitespace().map(|s| s.to_string()).collect();
+        let a = apply_verb(&t, "markov 2 learn: 1 2 1 3 1 2 4 1 2 5", 3, 5);
+        assert_eq!(a.len(), t.len());
+        assert_eq!(a, apply_verb(&t, "markov 2 learn: 1 2 1 3 1 2 4 1 2 5", 3, 5));
+        // l'ordre reste 2 (pas de régression sur markov 2 sans learn)
+        let q: Vec<String> = "1 2 3 1 2 4 1 2 5".split_whitespace().map(|s| s.to_string()).collect();
+        assert_eq!(apply_verb(&q, "markov 2", 3, 5).len(), q.len());
     }
 
     #[test]
