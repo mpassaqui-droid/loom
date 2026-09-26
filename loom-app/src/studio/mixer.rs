@@ -14,6 +14,10 @@ use loom_core::Program;
 /// How fast a meter falls: ×0.85 per 60th of a second (the browser's per-frame falloff).
 const FALLOFF_PER_FRAME: f32 = 0.85;
 
+/// How fast the peak-hold marker falls: slower than the meter (~0.4 s to fade
+/// out, so a transient stays visible a few frames after the body has dropped).
+const HOLD_FALLOFF_PER_FRAME: f32 = 0.925;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Strip {
     pub name: String,
@@ -24,18 +28,25 @@ pub struct Strip {
     pub solo: bool,
     /// The meter, 0.. (above 1 = very loud), falling off smoothly.
     pub meter: f32,
+    /// The peak-hold: the highest recent level, falling slower than [`Strip::meter`].
+    pub hold: f32,
     /// Is the voice in the current code? (Strips of removed voices are kept, hidden.)
     pub present: bool,
 }
 
 impl Strip {
     fn new(name: &str) -> Strip {
-        Strip { name: name.to_string(), gain: 1.0, pan: 0.0, solo: false, meter: 0.0, present: true }
+        Strip { name: name.to_string(), gain: 1.0, pan: 0.0, solo: false, meter: 0.0, hold: 0.0, present: true }
     }
 
     /// How full to draw this strip's meter (see [`meter_fraction`]).
     pub fn meter_fraction(&self) -> f32 {
         meter_fraction(self.meter)
+    }
+
+    /// Where to draw this strip's peak-hold marker (see [`meter_fraction`]).
+    pub fn hold_fraction(&self) -> f32 {
+        meter_fraction(self.hold)
     }
 
     /// "80 %" for the fader.
@@ -167,13 +178,16 @@ impl Mixer {
     }
 
     /// Feed the meters with the engine's `voice_levels`, `dt` seconds after the
-    /// last call. A meter jumps up to a new peak and falls off slowly.
+    /// last call. A meter jumps up to a new peak and falls off slowly; the
+    /// peak-hold keeps the highest recent level a little longer.
     pub fn update_meters(&mut self, levels: &[(u32, f32)], dt: f32) {
         let fall = FALLOFF_PER_FRAME.powf((dt * 60.0).clamp(0.0, 60.0));
+        let hold_fall = HOLD_FALLOFF_PER_FRAME.powf((dt * 60.0).clamp(0.0, 60.0));
         for s in &mut self.strips {
             let salt = name_salt(&s.name);
             let level = levels.iter().filter(|(id, _)| *id == salt).map(|(_, l)| *l).fold(0.0, f32::max);
             s.meter = (s.meter * fall).max(level);
+            s.hold = (s.hold * hold_fall).max(level);
         }
     }
 }
@@ -221,10 +235,22 @@ mod tests {
         mixer.sync(&Program::parse("kick: x\nlead: c4"));
         mixer.update_meters(&[(name_salt("kick"), 0.8)], 1.0 / 60.0);
         assert_eq!((mixer.strips[0].meter, mixer.strips[1].meter), (0.8, 0.0));
+        // the peak-hold grabs the same level, and holds it high while the meter drops
+        assert_eq!(mixer.strips[0].hold, 0.8);
         mixer.update_meters(&[], 1.0 / 60.0);
         assert!((mixer.strips[0].meter - 0.68).abs() < 1e-4);
+        assert!(mixer.strips[0].hold > 0.73, "la crête doit tenir haut quand le mètre chute");
+        // a lower new peak (0.3) cannot raise the hold above the old one, yet the
+        // hold still sits above the meter (0.68×0.85=0.578 vs 0.744×0.93=0.692)
+        mixer.update_meters(&[(name_salt("kick"), 0.3)], 1.0 / 60.0);
+        assert!((mixer.strips[0].meter - 0.578).abs() < 1e-4);
+        assert!(mixer.strips[0].hold > 0.68 && mixer.strips[0].hold < 0.8);
+        // a higher new peak (0.9) drives both meter and hold up instantly
+        mixer.update_meters(&[(name_salt("kick"), 0.9)], 1.0 / 60.0);
+        assert_eq!((mixer.strips[0].meter, mixer.strips[0].hold), (0.9, 0.9));
         mixer.update_meters(&[], 1.0);
         assert!(mixer.strips[0].meter < 0.01);
+        assert!(mixer.strips[0].hold < 0.01, "la crête finit par retomber");
         // the drawn meter is in decibels: 0 dB fills 48/54, -24 dB half of that
         let at = |meter: f32| Strip { meter, ..Strip::new("x") }.meter_fraction();
         assert!((at(1.0) - 48.0 / 54.0).abs() < 1e-4);

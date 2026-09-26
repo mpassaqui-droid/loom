@@ -38,8 +38,11 @@
       begin/end + `| chop`/`| grain` déjà en place ; test `user_wav_enters_the_merged_bank`
       (wav PCM16 écrit à la main, fichier cassé refusé, conservation après `reload_bank`),
       vérifié en fenêtre (OCR : `ma_boucle`, `mon_chant`, `< up`, `recharger (N session)`).
-- [ ] **T4 · Mixeur** — VU-mètres / niveaux live par piste dans la GUI (logique `loom-audio`),
-      grips couleurs ; vérifié en fenêtre (OCR).
+- [x] **T4 · Mixeur — VU-mètres + grips couleurs** — marqueur de crête (peak-hold) par piste
+      (`Strip.hold`, chute plus lente que le mètre, testé) ; grips fader/pan teintés de la
+      couleur de la voix (`colored_grip`, scoped `Visuals` restaurés), grip MASTER en accent ;
+      mètres déjà live (`update_meters` ← `engine.voice_levels()`). Vérifié en fenêtre par
+      analyse de pixels (blocs de teinte saturée sur le fader de chaque piste, ≥5 teintes).
 - [ ] **T5 · Post-traitement GPU (web)** — bloom/feedback/glitch + 2-3 shaders neufs ;
       `check_web.js` vert.
 - [ ] Toutes les portes finales (tests workspace, clippy -D, check_web, parité, diff --check),
