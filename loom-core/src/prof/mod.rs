@@ -18,4 +18,4 @@ pub mod analyze;
 pub mod lore;
 
 pub use analyze::{analyze, novelty_report};
-pub use lore::{LORE, SCALE_LORE, TRADITION_LORE};
+pub use lore::{LORE, MOOD, SCALE_LORE, TRADITION_LORE};

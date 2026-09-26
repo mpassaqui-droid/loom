@@ -20,11 +20,17 @@
         dépendre du texte, pas du global ; vérifié par la parité).
   - [x] B3 : corpus de parité analyse enrichi (gamelan pelog/slendro, clave/samba, 17-EDO,
         raga aroha/avaroha…) → battery vert (20/20).
-- [ ] **T2 · Explicateur / prof enrichi** (`loom-core::prof` + repli JS synchronisé + parité)
-  - [ ] tension/détente & cadence (fonction tonale : repose/instable) + test.
-  - [ ] attente : note de tête, demi-pas résolutif vers la tonique + test.
-  - [ ] conseils de compositeur actionnables (cible sur temps faible, dominante secondaire…) + test.
-  - [ ] culture : humeur maqâm / rasa raga / ethos des modes (lore) + test.
+- [x] **T2 · Explicateur / prof enrichi** (`loom-core::prof` + repli JS synchronisé + parité)
+  - [x] tension/détente & cadence (fonction tonale : repose/instable) + test.
+        → ligne `[ tension ]` après `[ harmonie ]` (même scan déterministe des deux côtés).
+  - [x] attente : note de tête, demi-pas résolutif vers la tonique + test.
+        → ligne `[ attente ]` (7 suspendu qui appelle la tonique / 7→1 résolu) via `key.scale`.
+  - [x] conseils de compositeur actionnables (ambitus étroit, dominante manquante, suspens sur V)
+        + test → lignes `[ conseil ]` après le « pourquoi ».
+  - [x] culture : humeur maqâm / rasa raga / ethos des modes (lore) + test.
+        → `MOOD` (33 entrées) + ligne `   humeur : …` sous la tradition.
+  - Tout ce qui précède est MIRROIR à l'identique dans `web/index.html` (2 moteurs == 1
+    professeur) et verrouillé par la parité : ANALYSE 23/23 + onsets 238/238.
 - [ ] **T3 · Sampler instrument** — charger ses propres fichiers (navette de fichiers) dans
       `sampletool`/GUI, boucle simple ; vérifié en fenêtre (OCR).
 - [ ] **T4 · Mixeur** — VU-mètres / niveaux live par piste dans la GUI (logique `loom-audio`),

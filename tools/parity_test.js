@@ -149,6 +149,9 @@ const an_pieces = {
   'samba batucada (surdo + repique)': 'key: d dorian\nsurdo: x . x x . x x .\nrepique: e(3,8) | every 4 rot 2',
   '17-EDO (accordage à 17 divisions)': 'key: f major\ntune: 17 edo\nlead: 1 3 5 6 1',
   'raga marwa (matinal, seconde augmentée 1·2·b3·#4)': 'key: d marwa\ndrone: 1\nlead: 1 5 7 6 b3 2 | slide',
+  'attente résolue 7→1 (prog V→I)': 'key: c major\nprog: G7 C\nlead: 7 1',
+  'attente suspendue sur la note de tête (7)': 'key: c major\nlead: 1 2 3 5 7',
+  'mélodie étroite dans une 3ce + conseils': 'key: d minor\nlead: 1 2 3 1 2 3',
 };
 // force: the acoustic consonance % is a float measurement (Plomp–Levelt) —
 // done with the piece's own tuniness now (the global `tuning` leak was fixed)

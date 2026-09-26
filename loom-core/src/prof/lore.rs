@@ -97,6 +97,46 @@ pub const SCALE_LORE: &[(&str, &str)] = &[
     ("in", "pentatonique japonaise « sombre » — élégie"),
 ];
 
+/// The mood / ethos a culture lends a scale (the web's `MOOD`): shown as
+/// `humeur : …` right under the tradition line, so the teacher talks culture,
+/// not just intervals.
+#[rustfmt::skip]
+pub const MOOD: &[(&str, &str)] = &[
+    ("hijaz", "fièvre et théâtre — le désert, l'Orient"),
+    ("rast", "noblesse et stabilité — on ouvre l'œuvre sur lui"),
+    ("bayati", "la chaleur intime de la voix qui raconte"),
+    ("saba", "la beauté déchirante, la douleur noble"),
+    ("sikah", "le mystère flottant, entre les cases"),
+    ("huzam", "l'émotion à vif, brûlante"),
+    ("kurd", "la sobriété, la retenue"),
+    ("nahawand", "la chaleur feutrée du salon"),
+    ("ajam", "la joie ouverte, la fête"),
+    ("nikriz", "l'éclat exotique, la parade"),
+    ("bhairav", "la prière grave de l'aube"),
+    ("bhairavi", "la dévotion douce, le repos qui clôt"),
+    ("yaman", "la sérénité du soir qui s'ouvre"),
+    ("malkauns", "le cœur profond de la nuit"),
+    ("todi", "la sévérité brûlante de l'aube"),
+    ("marwa", "la tension suspendue, sans quinte on flotte"),
+    ("purvi", "la solennité du couchant"),
+    ("ahirbhairav", "l'apaisement du matin"),
+    ("slendro", "l'hypnose festive des temples de Java"),
+    ("pelog", "la solennité cérémonielle du gamelan sacré"),
+    ("hirajoshi", "la contemplation épurée — le wabi-sabi"),
+    ("ritusen", "la clarté pastorale des rizières"),
+    ("kumoi", "la délicatesse claire du koto"),
+    ("iwato", "l'austérité sombre de la nuit de montagne"),
+    ("insen", "la méditation minimale — l'encre et la soie"),
+    ("yo", "la paix claire de la campagne"),
+    ("in", "l'élégie sombre de la mélancolie"),
+    ("ryukyu", "le soleil des îles d'Okinawa"),
+    ("chinese", "l'équilibre antique des cinq éléments"),
+    ("blues", "minuit — la douleur qui danse"),
+    ("egyptian", "le voyage suspendu des caravanes"),
+    ("pentatonic", "l'universalité sans friction — toute la terre"),
+    ("minpent", "l'expression populaire du blues de la rue"),
+];
+
 /// Traditions in depth (origine · sens · pourquoi ça sonne · en LOOM): `(nom, lignes)`.
 #[rustfmt::skip]
 pub const TRADITION_LORE: &[(&str, &[&str])] = &[

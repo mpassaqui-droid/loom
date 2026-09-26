@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{parse_accel, parse_key, parse_meter_groups, parse_prog, parse_song, token_to_freq, Program, Key};
 
-use super::lore::SCALE_LORE;
+use super::lore::{MOOD, SCALE_LORE};
 
 /// French solfège for the tonic's pitch class (the web's `NN`).
 const NOTE_NAMES: [&str; 12] = ["do", "do#", "ré", "ré#", "mi", "fa", "fa#", "sol", "sol#", "la", "la#", "si"];
@@ -322,6 +322,61 @@ fn cadence_of(roman: &str) -> Option<&'static str> {
     None
 }
 
+/// Tension/release summary of a roman chain: where does the ear end up?
+fn tension_summary(roman: &str) -> &'static str {
+    let up: Vec<String> = roman.to_uppercase().split_whitespace().map(str::to_string).collect();
+    match up.last().map(String::as_str) {
+        Some("I") => "l'oreille retombe sur le I : repos, conclusion",
+        Some("V") => "l'oreille reste en suspens sur le V : tension non résolue",
+        Some("IV") | Some("II") | Some("VI") => "l'oreille circule (mouvement) sans conclure",
+        _ => "tension intermédiaire : ni repos net, ni vrai suspens",
+    }
+}
+
+/// Config/directive line heads that never hold melody notes (mirrored exactly
+/// on the web, so both analysers read the same "last melodic voice").
+const CONFIG_HEADS: &[&str] = &[
+    "bpm", "key", "scale", "prog", "song", "meter", "tune", "accel", "groove",
+    "tempo", "seed", "chance", "def", "swing", "title", "scene", "feel", "warmth",
+    "room", "mix", "duck", "echo", "pan", "humanize", "degrade",
+];
+
+/// Raw degree numbers (1..=7, optional `'` octave up) of the LAST melodic voice
+/// line — the voice the teacher reads last (typically the lead). Ignores config
+/// lines, `key@…` section headers and everything after a `|`. Deterministic and
+/// mirrored verbatim in the JS fallback, so both engines compute the same
+/// leading-tone / narrow-ambitus facts from the same source.
+fn last_voice_degree_tokens(src: &str) -> Vec<i32> {
+    let mut last: Vec<i32> = Vec::new();
+    for raw in src.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') { continue; }
+        let Some(colon) = line.find(':') else { continue };
+        let head = line[..colon].trim().to_lowercase();
+        let is_config = head.starts_with("key@")
+            || CONFIG_HEADS.iter().any(|c| head == *c || head.starts_with(&(c.to_string() + " ")));
+        if is_config { continue; }
+        let notes = line[colon + 1..].split('|').next().unwrap_or("");
+        let mut degs: Vec<i32> = Vec::new();
+        for t in notes.split_whitespace() {
+            let b = t.as_bytes();
+            let d = if b.len() == 1 || (b.len() == 2 && b[1] == b'\'') { b[0] as i32 - b'0' as i32 } else { -1 };
+            if (1..=7).contains(&d) { degs.push(d); }
+        }
+        if !degs.is_empty() { last = degs; }
+    }
+    last
+}
+
+/// How many semitones a degree sits above the tonic (0 = the tonic itself, 11 = a
+/// leading tone). Mirrored by the web via `key.scale[d-1]`.
+fn degree_semitone(d: i32, key: &Key) -> i32 {
+    if key.scale.is_empty() { return -1; }
+    let len = key.scale.len() as i32;
+    let idx = ((d - 1).rem_euclid(len)) as usize;
+    (key.scale[idx].round() as i32).rem_euclid(12)
+}
+
 /// Normalised Shannon entropy (0..1) of a bag of strings (the web's `ent`).
 fn entropy(items: &[String]) -> f64 {
     if items.len() < 2 { return 0.0; }
@@ -443,6 +498,9 @@ pub fn analyze(text: &str) -> Vec<String> {
         if let Some((_, trad)) = scale_name.as_deref().and_then(|sn| TRAD_OF.iter().find(|(n, _)| *n == sn)) {
             out.push(format!("   tradition : {trad} (tape ?{trad} pour l'histoire & le sens)"));
         }
+        if let Some((_, mood)) = scale_name.as_deref().and_then(|sn| MOOD.iter().find(|(n, _)| *n == sn)) {
+            out.push(format!("   humeur : {mood}"));
+        }
     }
 
     let tune = parse_tune(&src);
@@ -505,7 +563,20 @@ pub fn analyze(text: &str) -> Vec<String> {
             line.push_str(c);
         }
         out.push(line);
+        out.push(format!("[ tension ] {}", tension_summary(r)));
         why.push("la progression enchaîne tension (dominante) → détente (tonique)".into());
+    }
+    // ATTENTE — a melodic line that stops on the leading tone (a half step below
+    // the tonic) begs for resolution; 7→1 is the textbook perfect close.
+    if let Some(k) = &key {
+        let degs = last_voice_degree_tokens(&src);
+        if let Some(&la) = degs.last() {
+            if degree_semitone(la, k) == 11 {
+                out.push("[ attente ] la mélodie s'arrête sur la note de tête (7) — elle appelle la tonique, on attend la suite".into());
+            } else if degs.len() >= 2 && degree_semitone(la, k) == 0 && degree_semitone(degs[degs.len() - 2], k) == 11 {
+                out.push("[ attente ] la note de tête retombe sur la tonique : résolution parfaite, la phrase se ferme".into());
+            }
+        }
     }
     if has_swing_groove(&src) {
         why.push("le swing/groove décale les temps → ça balance (humain, pas robotique)".into());
@@ -525,6 +596,27 @@ pub fn analyze(text: &str) -> Vec<String> {
     if !why.is_empty() {
         let text = why.join(" · ");
         out.push(format!("[ pourquoi ça sonne ] {text}."));
+    }
+    // CONSEILS — short actionable composer tips (off the same deterministic scan).
+    let mut advice: Vec<String> = Vec::new();
+    if key.is_some() {
+        let degs = last_voice_degree_tokens(&src);
+        if degs.len() >= 3 {
+            let mn = *degs.iter().min().unwrap();
+            let mx = *degs.iter().max().unwrap();
+            if mx - mn <= 2 {
+                advice.push(format!("ta mélodie tourne dans {} notes (degrés {mn}→{mx}) — élargis l'ambitus vers l'octave pour plus de relief", mx - mn + 1));
+            }
+        }
+        if roman.is_none() && degs.len() >= 2 {
+            advice.push("pose une dominante (V) juste avant le retour sur la tonique : la tension appelle le repos, ta phrase gagne une direction".into());
+        }
+    }
+    if roman.as_deref().is_some_and(|r| r.to_uppercase().split_whitespace().last() == Some("V")) {
+        advice.push("ta progression reste en suspens sur la dominante — conclus sur la tonique (I) pour fermer la phrase".into());
+    }
+    for a in advice {
+        out.push(format!("[ conseil ] {a}"));
     }
 
     let song = parse_song(&src);
@@ -675,5 +767,55 @@ mod tests {
     fn accel_is_a_reason_in_the_why_line() {
         let out = analyze("key: c major\naccel: 60 140\nlead: 1 3 5");
         assert!(out.iter().any(|l| l.contains("le tempo accélère/respire au fil du morceau")), "{out:?}");
+    }
+
+    #[test]
+    fn mood_line_sits_right_under_tradition() {
+        let out = analyze("key: d hijaz\nlead: 1");
+        let i_trad = out.iter().position(|l| l.starts_with("   tradition")).unwrap();
+        let i_mood = out.iter().position(|l| l.starts_with("   humeur")).unwrap();
+        assert_eq!(i_mood, i_trad + 1, "{out:?}");
+        assert!(out[i_mood].contains("fièvre et théâtre"));
+        // scales without a culture → no humeur line (the gloss already covers them)
+        let plain = analyze("key: c major\nlead: 1 3 5");
+        assert!(!plain.iter().any(|l| l.starts_with("   humeur")), "{plain:?}");
+    }
+
+    #[test]
+    fn tension_line_where_the_progression_lands() {
+        let repos = analyze("key: c major\nprog: G7 F C\nlead: 1 3 5 6");
+        assert!(repos.iter().any(|l| l == "[ tension ] l'oreille retombe sur le I : repos, conclusion"), "{repos:?}");
+        let suspens = analyze("key: c major\nprog: C F G\nlead: 1 2 3");
+        assert!(suspens.iter().any(|l| l == "[ tension ] l'oreille reste en suspens sur le V : tension non résolue"), "{suspens:?}");
+    }
+
+    #[test]
+    fn attente_leading_tone_and_resolution() {
+        let susp = analyze("key: c major\nlead: 1 2 3 5 7");
+        assert!(susp.iter().any(|l| l.starts_with("[ attente ] la mélodie s'arrête sur la note de tête")), "{susp:?}");
+        let res = analyze("key: c major\nprog: G7 C\nlead: 7 1");
+        assert!(res.iter().any(|l| l.starts_with("[ attente ] la note de tête retombe sur la tonique")), "{res:?}");
+        // natural minor's 7th is a whole step below the tonic -> no claim of leading tone
+        let minr = analyze("key: a minor\nlead: 1 3 5 7");
+        assert!(!minr.iter().any(|l| l.starts_with("[ attente ]")), "{minr:?}");
+    }
+
+    #[test]
+    fn narrow_melody_gets_a_composer_tip() {
+        let out = analyze("key: d minor\nlead: 1 2 3 1 2 3");
+        assert!(out.iter().any(|l| l.starts_with("[ conseil ] ta mélodie tourne dans 3 notes")), "{out:?}");
+        assert!(out.iter().any(|l| l.contains("pose une dominante (V)")), "{out:?}");
+    }
+
+    #[test]
+    fn teacher_lines_stay_in_order() {
+        let out = analyze("key: c major\nsong: intro 4\nprog: G7 C\nlead: 7 1");
+        let keep = ["harmonie", "tension", "attente", "pourquoi", "forme", "nouveauté"];
+        let order: Vec<&str> = out.iter().filter_map(|l| {
+            let rest = l.strip_prefix("[ ")?;
+            let head = rest.split([' ', ']']).next()?;
+            keep.contains(&head).then_some(head)
+        }).collect();
+        assert_eq!(order, keep, "{out:?}");
     }
 }
