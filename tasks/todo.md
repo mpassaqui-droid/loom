@@ -12,14 +12,14 @@
 - [x] **T0 · Docs en vérité** — ROADMAP/README/CLAUDE cohérents avec la réalité
       (analyse portée ✅, clippy strict ✅, parité 238/238 + analyse 14/14, CI = Mac via Claude,
       pistes futures relabellées).
-- [ ] **T1 · Consolidation du moteur unifié**
-  - [ ] B1 : `tasks/ci-mac.md` — note de passage pour la CI du Mac (commandes exactes :
+- [x] **T1 · Consolidation du moteur unifié**
+  - [x] B1 : `tasks/ci-mac.md` — note de passage pour la CI du Mac (commandes exactes :
         `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`,
         `node tools/check_web.js`, `node tools/parity_test.js`, `git diff --check`).
-  - [ ] B2 : repli JS — retirer la fuite d'état `tuning` dans `analyzePiece` (l'acoustique doit
+  - [x] B2 : repli JS — retirer la fuite d'état `tuning` dans `analyzePiece` (l'acoustique doit
         dépendre du texte, pas du global ; vérifié par la parité).
-  - [ ] B3 : corpus de parité analyse enrichi (gamelan pelog/slendro, clave/samba, 17-EDO,
-        raga aroha/avaroha…) → battery vert.
+  - [x] B3 : corpus de parité analyse enrichi (gamelan pelog/slendro, clave/samba, 17-EDO,
+        raga aroha/avaroha…) → battery vert (20/20).
 - [ ] **T2 · Explicateur / prof enrichi** (`loom-core::prof` + repli JS synchronisé + parité)
   - [ ] tension/détente & cadence (fonction tonale : repose/instable) + test.
   - [ ] attente : note de tête, demi-pas résolutif vers la tonique + test.

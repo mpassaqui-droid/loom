@@ -143,17 +143,25 @@ const an_pieces = {
   'blues (bend, blue note)': 'key: a blues\nlead: 1 3 4 5 | bend',
   'générative (solve + fib + walk)': 'seed: 3\nkey: c major\nlead: solve(12,target:1)\nmel: fib(8) | walk(4,9)',
   'modulation key@section': 'key: a minor\nkey@chorus: c minor\nsong: verse*2 chorus*2\nlead: 1 3 5 1 7 5 3 2',
+  'gamelan pelog (pentatonique indonésienne)': 'key: d pelog\nkempul: x . . . x . . .\nlead: 1 3 5 1 3 5 1 3',
+  'gamelan slendro + euclide': 'key: e slendro\nbonang: 1 2 3 5 6 | every 2 rev\nkendang: e(3,8)',
+  'clave afro-cubaine 3-2': 'key: c major\nclave: x . x . x x . x\nguagua: x x . . x x . .',
+  'samba batucada (surdo + repique)': 'key: d dorian\nsurdo: x . x x . x x .\nrepique: e(3,8) | every 4 rot 2',
+  '17-EDO (accordage à 17 divisions)': 'key: f major\ntune: 17 edo\nlead: 1 3 5 6 1',
+  'raga marwa (matinal, seconde augmentée 1·2·b3·#4)': 'key: d marwa\ndrone: 1\nlead: 1 5 7 6 b3 2 | slide',
 };
-// force: the acoustic consonance % is a float measurement (Plomp–Levelt) — JS
-// computes it in f64 with a stateful global `tuning` leak, Rust in f32 stateless,
-// so a single unit can wobble (59/60) on some keys. Same for the novelty score: the
-// Rust analyser fingerprints RESOLVED notes (it hears a key@section modulation),
-// the JS fallback fingerprints the abstract step tokens — so % differ by design on
-// modulated pieces. Everything else (labels, tonality, harmony, cadence, form, the
-// "why") must match exactly.
+// force: the acoustic consonance % is a float measurement (Plomp–Levelt) —
+// done with the piece's own tuniness now (the global `tuning` leak was fixed)
+// but f64-in-JS vs f32-in-WASM can still wobble by a unit on some keys. Likewise
+// the NOVELTY numbers: JS fingerprints the abstract step tokens while the Rust
+// analyser fingerprints RESOLVED notes (it even hears a key@section modulation) —
+// so score/variété/hauteurs/rythme % differ by construction on some pieces, not
+// by bug. We normalise those NUMBERS and keep the ADVICE lines (the repeat-flags
+// `⤷` and the décision bands) strictly exact. Everything deterministic (tonality,
+// accordage labels, acoustique labels, harmonie+cadence, forme, the "why") is strict.
 const an_norm = l => l
   .replace(/(consonance )\d+(\/100)/, '$1N$2')
-  .replace(/^(\[ nouveauté \] score )\d+(\/100.*)$/, '$1N$2');
+  .replace(/^\[ nouveauté \] score \d+\/100.*$/, '[ nouveauté ] score N/100');
 let an_total = 0, an_bad = 0;
 for (const [name, src] of Object.entries(an_pieces)) {
   let js, rs;
