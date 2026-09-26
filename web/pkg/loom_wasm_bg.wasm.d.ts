@@ -5,6 +5,7 @@ export const analyze_json: (a: number, b: number) => [number, number];
 export const bar_bpm: (a: number, b: number, c: number) => number;
 export const bar_seconds: (a: number, b: number, c: number) => number;
 export const program_info_json: (a: number, b: number) => [number, number];
+export const render_json: (a: number, b: number, c: number, d: number) => [number, number];
 export const schedule_bar_json: (a: number, b: number, c: number) => [number, number];
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;

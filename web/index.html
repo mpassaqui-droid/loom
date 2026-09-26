@@ -7149,7 +7149,119 @@ const THEME_AA={
     const cl=cycleLen,out=_cap.map(o=>({voice:o.v,phase:o.t/cl,tok:o.tok,drum:o.drum,pan:o.pan}));
     _cap=prev;return out;
   }
-  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+
+  // P6-1 UNIFIED RENDERER mirror (deterministic mono PCM).
+  // Consumes the SAME Rust-scheduled events (schedule_bar_json, extended with
+  // `dur` + the resolved v1 `synth` subset) and draws each note through pure JS
+  // DSP: waveform oscillators, unison/detune, sub & double layers, the same
+  // state-variable filter (static or swept) and ADSR/gate. Float32Array output
+  // with Math.fround on every feedback/phase state, op-for-op with the Rust
+  // renderer in loom-core/src/render.rs — tools/parity_test.js proves numeric
+  // parity with loom-wasm render_json. Not used by live playback (v1 = compute/
+  // export engine); the parity harness reads it via window.__loom.renderPCM.
+  function renderPCM(evsArr,barSecs,sr){
+    sr=(sr&&sr>0)?sr:44100;
+    const F=Math.fround;
+    const TAU=F(2*Math.PI);
+    const sinPi=p=>Math.sin(F(F(p)*TAU));
+    const wave=(w,p)=>{
+      if(w==='sine')return sinPi(p);
+      if(w==='square')return p<0.5?1:-1;
+      if(w==='sawtooth')return F(F(2*p)-1);
+      return p<0.5?F(F(F(4*p))-1):F(F(3)-F(F(4*p)));
+    };
+    const wrapP=p=>F(p-Math.floor(p));
+    const adsr=(t,gate,A,D,S,R)=>{
+      const a=F(Math.max(0,A)),d=F(Math.max(0,D)),r=F(Math.max(0,R)),s=F(Math.min(1,Math.max(0,S)));
+      let body;
+      if(t<a){body=a<=0?1:F(F(t)/a);}
+      else if(d<=0){body=s;}
+      else if(t<F(a+d)){body=F(1-F(F(1-s)*F(F(F(t)-F(a))/d)));}
+      else{body=s;}
+      if(t<gate)return body;
+      const rn=F(F(t)-F(gate));
+      return rn<r?F(F(body)*F(1-F(F(rn)/r))):0;
+    };
+    const svf=(x,fc,q,ft,st)=>{
+      const lim=5,lim2=F(sr*0.48);
+      const c=F(Math.max(lim,Math.min(lim2,fc)));
+      const g=F(Math.tan(F(F(Math.PI)*F(F(c)/sr))));
+      const k=F(F(1)/q);
+      const a1=F(F(1)/F(F(1)+F(F(g)*F(F(g)+k))));
+      const a2=F(F(g)*F(a1));
+      const a3=F(F(g)*F(a2));
+      const v3=F(F(x)-F(st.ic2));
+      const v1=F(F(F(a1)*F(st.ic1))+F(F(a2)*F(v3)));
+      const v2=F(F(st.ic2)+F(F(F(a2)*F(st.ic1))+F(F(a3)*F(v3))));
+      st.ic1=F(F(2*v1)-F(st.ic1));
+      st.ic2=F(F(2*v2)-F(st.ic2));
+      const high=F(F(x)-F(F(F(k)*F(v1))+F(v2)));
+      if(ft===0)return v2;      // lowpass
+      if(ft===1)return high;    // highpass
+      if(ft===2)return v1;      // bandpass
+      return F(F(v2)-F(high));  // notch
+    };
+    const barFrames=[],nb=Math.min(evsArr.length,barSecs.length);
+    let total=0;
+    for(let b=0;b<nb;b++){const n=Math.round(F(F(barSecs[b])*sr));barFrames.push(n);total+=n;}
+    const buf=new Float32Array(total);
+    let frame=0;
+    for(let b=0;b<nb;b++){
+      const sec=F(barSecs[b]);
+      for(const e of evsArr[b]){
+        if(e.is_drum)continue;
+        const f0=e.freq;
+        if(!(f0>0)||!isFinite(f0))continue;
+        const st=e.synth||{};
+        const ft=(st.ft===undefined||st.ft===null)?-1:st.ft;
+        const q=F(Math.min(20,Math.max(0.1,st.q||1)));
+        let c0=800,c1=800;
+        if(st.cutoff){c0=st.cutoff.a;c1=st.cutoff.b;}
+        const nUni=Math.max(1,st.unison||0);
+        const det=Math.max(0,st.detune||0);
+        const sub=F(Math.min(1,Math.max(0,st.sub||0)));
+        const dub=F(Math.min(1,Math.max(0,st.double||0)));
+        const env=st.env?st.env:[0.003,0.015,0.92,0.05];
+        const dur=F(F(e.dur)*sec);
+        const gate=F(F(dur)*(st.gate||1));
+        const rel=Math.max(0,env[3]);
+        const n=Math.ceil(F(F(F(gate)+F(rel))*sr));
+        const start=frame+Math.floor(F(F(F(e.phase)*sec)*sr));
+        const amp=F(F(e.gain)*(e.vel==null?1:e.vel));
+        const uniPh=[];for(let k2=0;k2<nUni;k2++)uniPh.push(F(k2/(nUni+1)));
+        let subPh=0,dubPh=0,ic1=0,ic2=0,stt={ic1,ic2};
+        for(let i=0;i<n;i++){
+          const ix=start+i;
+          if(ix>=buf.length)break;
+          const t=F(i/sr);
+          const a=F(amp*adsr(t,gate,env[0],env[1],env[2],env[3]));
+          let out=0;
+          for(let k=0;k<nUni;k++){
+            const ratio=nUni>1?Math.pow(2,F(F(F(F(k*2)/(nUni-1))-1)*F(det/1200))):1;
+            const fk=F(F(f0)*F(ratio));
+            const ph=uniPh[k];
+            out=F(out+wave(e.wave,ph));
+            uniPh[k]=wrapP(F(ph+F(fk/sr)));
+          }
+          out=F(F(out)/nUni);
+          if(sub>0){out=F(out+F(sub*sinPi(subPh)));subPh=wrapP(F(subPh+F(F(F(f0)/2)/sr)));}
+          if(dub>0){out=F(out+F(dub*wave(e.wave,dubPh)));dubPh=wrapP(F(dubPh+F(F(F(f0)*2)/sr)));}
+          let fout=out;
+          if(ft>=0){
+            const fc=c1===c0?c0:F(F(c0)+F(F(F(c1)-F(c0))*Math.min(1,F(F(t)/dur))));
+            stt={ic1,ic2};
+            fout=svf(out,fc,q,ft,stt);
+            ic1=stt.ic1;ic2=stt.ic2;
+          }
+          buf[ix]+=F(F(a)*fout);
+        }
+      }
+      frame+=barFrames[b];
+    }
+    return buf;
+  }
+
+    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,renderPCM,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

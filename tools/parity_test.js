@@ -194,6 +194,50 @@ for (const [name, src] of Object.entries(an_pieces)) {
 }
 const an_perfect = an_bad === 0;
 
+// ── RENDER PARITY (P6-1 unified engine: deterministic mono PCM DSP) ──────────
+// Both DSP paths consume the IDENTICAL Rust-scheduled event stream
+// (schedule_bar_json, extended with `dur` + the resolved v1 `synth` subset) and
+// the same `bar_seconds` — so this compares ONLY the DSP (waveform oscillators,
+// unison/detune/sub/double, state-variable filter static-or-swept, ADSR x gate),
+// never the scheduler (already proven bit-for-bit above).
+// Rust computes in f32; the JS mirror frounds every feedback/phase state, so the
+// samples should agree to ~1e-6..1e-3 (a Math.sin/tan/pow last-ulp is possible).
+const rd_pieces = {
+  'sine + env ADSR': 'key: c major\nlead: 1 3 5 1 5 3 1 | sine | env 0.01 0.15 0.8 0.3',
+  'square + lp balayé': 'key: a minor\nlead: 1 5 3 1 | square | lp 300..4000 q 3 | env 0.01 0.2 0.6 0.1',
+  'saw + hp q élevé': 'key: c major\nlead: 1 2 3 5 3 2 | saw | hp 500 q 4',
+  'supersaw (unison 7)': 'key: e minor\nlead: 1 3 5 1 | supersaw',
+  'unison 4 + detune 25 + bp': 'key: d major\nlead: 1 5 3 1 | saw | unison 4 | detune 25 | bp 1200 q 1.5',
+  'sub + double octaves': 'key: f minor\nlead: 1 3 5 1 | tri | sub 0.6 | double 0.25',
+  'notch + gate court': 'key: c major\nlead: 1 1 1 1 | saw | notch 800 q 1 | gate 0.5 | env 0.005 0.05 0.5 0.05',
+  'pelog microtonal': 'key: d pelog\nlead: 1 3 5 1 | saw | lp 900 q 1.2',
+  'drums ignorés + mélodie': 'kick: x . x .\nhat: x x x x\nkey: c major\nlead: 1 3 5 1 | sine | env 0.01 0.1 0.8 0.05',
+};
+const RQ_BARS = 2, RQ_SR = 44100;
+let rd_total = 0, rd_bad = 0, rd_worst = 0;
+for (const [name, src] of Object.entries(rd_pieces)) {
+  try {
+    const evsArr = [], barSecs = [];
+    for (let b = 0; b < RQ_BARS; b++) { evsArr.push(JSON.parse(W.schedule_bar_json(src, b))); barSecs.push(W.bar_seconds(src, b)); }
+    const js = L.renderPCM(evsArr, barSecs, RQ_SR);
+    const rs = W.render_json(src, RQ_BARS, RQ_SR);
+    rd_total++;
+    if (js.length !== rs.length) { rd_bad++; console.log(`  RENDER LEN DIFF [${name}] JS ${js.length} Rust ${rs.length}`); continue; }
+    let worst = 0, loose = 0;
+    for (let i = 0; i < rs.length; i++) {
+      const d = Math.abs(rs[i] - js[i]);
+      if (d > worst) worst = d;
+      if (d > 5e-3) loose++;
+    }
+    if (worst > rd_worst) rd_worst = worst;
+    if (worst > 5e-3 || loose > rs.length * 0.0001) {
+      rd_bad++;
+      if (rd_bad <= 8) console.log(`  RENDER DIFF [${name}] worst ${worst.toExponential(2)} loose=${loose}/${rs.length}`);
+    }
+  } catch (e) { rd_bad++; rd_total++; console.log(`  RENDER ERR [${name}] ${e.message}`); }
+}
+console.log(`\nRENDER parity (P6-1 DSP, JS renderPCM <-> Rust render_json, échantillon par échantillon): ${rd_total - rd_bad}/${rd_total} pièces  worst diff ${rd_worst.toExponential(2)}  ${rd_bad === 0 ? '✅' : '⚠️ ' + rd_bad + ' diffs'}`);
+
 let total = 0, bad = 0;
 for (const [name, src] of Object.entries(pieces)) {
   for (let bar = 0; bar < 4; bar++) {
@@ -208,4 +252,4 @@ for (const [name, src] of Object.entries(pieces)) {
 }
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && an_perfect) ? 0 : 2);
+process.exit((bad === 0 && an_perfect && rd_bad === 0) ? 0 : 2);

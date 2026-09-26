@@ -27,6 +27,17 @@ export function bar_seconds(src: string, bar: number): number;
 export function program_info_json(src: string): string;
 
 /**
+ * Render `bars` bars of `src` into mono f32 PCM samples via the unified
+ * std-only renderer (`loom-core::render`, P6-1) — waveform osc + unison/sub/
+ * double layers, svf filter (static or swept), ADSR×gate, at sample rate `sr`.
+ * Deterministic: same input ⇒ bit-identical buffer. The JS DSP mirror
+ * (`renderPCM` in `web/index.html`) consumes the SAME events via
+ * `schedule_bar_json` + `bar_seconds`, so `tools/parity_test.js` proves
+ * numeric DSP parity. Returns a `Float32Array`.
+ */
+export function render_json(src: string, bars: number, sr: number): Float32Array;
+
+/**
  * Schedule one bar and return its events as JSON for the JS audio layer.
  */
 export function schedule_bar_json(src: string, bar: number): string;

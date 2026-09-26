@@ -70,6 +70,29 @@ function program_info_json(src) {
 exports.program_info_json = program_info_json;
 
 /**
+ * Render `bars` bars of `src` into mono f32 PCM samples via the unified
+ * std-only renderer (`loom-core::render`, P6-1) — waveform osc + unison/sub/
+ * double layers, svf filter (static or swept), ADSR×gate, at sample rate `sr`.
+ * Deterministic: same input ⇒ bit-identical buffer. The JS DSP mirror
+ * (`renderPCM` in `web/index.html`) consumes the SAME events via
+ * `schedule_bar_json` + `bar_seconds`, so `tools/parity_test.js` proves
+ * numeric DSP parity. Returns a `Float32Array`.
+ * @param {string} src
+ * @param {number} bars
+ * @param {number} sr
+ * @returns {Float32Array}
+ */
+function render_json(src, bars, sr) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.render_json(ptr0, len0, bars, sr);
+    var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
+}
+exports.render_json = render_json;
+
+/**
  * Schedule one bar and return its events as JSON for the JS audio layer.
  * @param {string} src
  * @param {number} bar
@@ -114,6 +137,11 @@ function __wbg_get_imports() {
     };
 }
 
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     const mem = getDataViewMemory0();
@@ -131,6 +159,14 @@ function getDataViewMemory0() {
         cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
     }
     return cachedDataViewMemory0;
+}
+
+let cachedFloat32ArrayMemory0 = null;
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
 }
 
 function getStringFromWasm0(ptr, len) {

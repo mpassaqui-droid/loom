@@ -9,6 +9,67 @@
 use wasm_bindgen::prelude::*;
 use serde::Serialize;
 
+/// The v1 sound-design subset the unified renderer understands (see
+/// `loom-core::render`). Serialized on every event so the JS DSP mirror consumes
+/// **exactly the same** resolved synth params as the Rust renderer — the mirror
+/// never interprets `|` verbs itself, it only reads this resolved form.
+#[derive(Serialize)]
+struct SynthV1 {
+    /// Filter cutoff `(a, b)` Hz; `a == b` = static, `a != b` = linear sweep
+    /// across the note. LFO signals are flattened to their base level (v1).
+    cutoff: Option<CutoffV1>,
+    /// Filter type: 0 lowpass, 1 highpass, 2 bandpass, 3 notch (None = none).
+    ft: Option<u8>,
+    /// Resonance 0.1..20 (resolved default 1).
+    q: f32,
+    /// ADSR `[a, d, s, r]` seconds/level (None = default env).
+    env: Option<[f32; 4]>,
+    /// Note-gate multiplier.
+    gate: f32,
+    /// Unison voice count (0 = none).
+    unison: u32,
+    /// Detune in cents between unison voices.
+    detune: f32,
+    /// `| sub N` — sine one octave below, 0..1.
+    sub: f32,
+    /// `| double N` — octave-up layer, 0..1.
+    double: f32,
+}
+
+#[derive(Serialize)]
+struct CutoffV1 {
+    a: f32,
+    b: f32,
+}
+
+fn synth_v1(s: &loom_core::Synth) -> SynthV1 {
+    use loom_core::{FilterType, Param};
+    let cutoff = match s.cutoff {
+        Some(Param::Const(x)) => Some(CutoffV1 { a: x, b: x }),
+        Some(Param::Sweep { a, b }) => Some(CutoffV1 { a, b }),
+        Some(Param::Signal { a, .. }) => Some(CutoffV1 { a, b: a }), // v1: LFO -> base
+        None if s.filter_type.is_some() => Some(CutoffV1 { a: 800.0, b: 800.0 }),
+        None => None,
+    };
+    let ft = s.filter_type.map(|f| match f {
+        FilterType::Lowpass => 0u8,
+        FilterType::Highpass => 1,
+        FilterType::Bandpass => 2,
+        FilterType::Notch => 3,
+    });
+    SynthV1 {
+        cutoff,
+        ft,
+        q: s.q.unwrap_or(1.0),
+        env: s.env.map(|e| [e.a, e.d, e.s, e.r]),
+        gate: s.gate.unwrap_or(1.0),
+        unison: s.unison.unwrap_or(0),
+        detune: s.detune.unwrap_or(0.0),
+        sub: s.sub.unwrap_or(0.0),
+        double: s.double.unwrap_or(0.0),
+    }
+}
+
 #[derive(Serialize)]
 struct JsEvent {
     phase: f32,
@@ -23,6 +84,10 @@ struct JsEvent {
     freq: Option<f32>,
     /// Stereo pan (-1..1) for this event's layer (jux/off split, `| pan N`).
     pan: Option<f32>,
+    /// Step length (fraction of the bar) this event occupies.
+    dur: f32,
+    /// v1 renderer sound design (see [`SynthV1`]).
+    synth: SynthV1,
 }
 
 #[derive(Serialize)]
@@ -57,9 +122,22 @@ pub fn schedule_bar_json(src: &str, bar: i32) -> String {
         JsEvent {
             phase: e.phase, voice: e.voice, wave: wave_name(e.wave).to_string(),
             gain: e.gain, is_drum: e.is_drum, vel: e.vel, freq, pan: e.pan, token: e.token,
+            dur: e.dur, synth: synth_v1(&e.synth),
         }
     }).collect();
     serde_json::to_string(&js).unwrap_or_else(|_| "[]".to_string())
+}
+
+/// Render `bars` bars of `src` into mono f32 PCM samples via the unified
+/// std-only renderer (`loom-core::render`, P6-1) — waveform osc + unison/sub/
+/// double layers, svf filter (static or swept), ADSR×gate, at sample rate `sr`.
+/// Deterministic: same input ⇒ bit-identical buffer. The JS DSP mirror
+/// (`renderPCM` in `web/index.html`) consumes the SAME events via
+/// `schedule_bar_json` + `bar_seconds`, so `tools/parity_test.js` proves
+/// numeric DSP parity. Returns a `Float32Array`.
+#[wasm_bindgen]
+pub fn render_json(src: &str, bars: u32, sr: f32) -> Vec<f32> {
+    loom_core::render::render_program(src, bars as usize, sr)
 }
 
 /// Duration of a given bar in seconds, honouring `meter:` and `accel:`/`tempo:`.

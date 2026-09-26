@@ -517,3 +517,72 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 - Tests : **348 ok** (app 124 · audio 73 · core 101 · gui 26 · tui 24) ; build 0 erreur.
 - Piste suivante documentée : `analyze.rs` + `lore.rs` vers `loom-core` pour
   l'analyseur dans le WASM du web (clé de voûte du moteur unifié).
+
+## Session 2026-09-25 — P6 (cadré) : moteur unifié synthèse/FX WASM — P6-1 livré
+
+> « ok pour tout » sur P6, chantier séparé à cadrer. Vue d'architecture après
+> reconnaissance : `loom-core/src/synth.rs` n'est qu'un **descripteur** (parse des
+> `| verbes`), le rendu vit dans `loom-audio` (`tone.rs`, `master.rs`, `dsp.rs`…)
+> côté natif et dans les nœuds WebAudio/`tone()` côté web. P6 converge vers **un
+> moteur de rendu PCM déterministe en `loom-core` (std-only), exposé par
+> `loom-wasm`**, avec miroir JS + parité numérique — exactement le patron déjà
+> éprouvé pour l'analyseur et le scheduling. Découpage en 4 pierres :
+
+- [ ] **P6-2 (futur)** · master FX (warmth/duck/limiter) + envois (echo/reverb
+  fdn/flanger/phaser) + normalize/limit + export WAV — portés depuis `loom-audio`.
+- [ ] **P6-3 (futur)** · sources riches (wt/partials/fm/pluck/bow/reed/bell/grain/
+  sync/pwm/noise), LFO/LFO2 (cutoff/pitch/pan/gain), inserts (drive/fold/crush/
+  redux), drums synthétisés (kick/hat/snare/perc), stéréo + pan law, `slide`/
+  `bend`/`glide` — vérifiés pierre par pierre (parité numérique croissante).
+- [ ] **P6-4 (futur)** · brancher le moteur WASM derrière un AudioWorklet pour le
+  playback **live** (remplacer la chaîne `tone()`/`buildGraph`) + A/B toggle.
+
+- [x] **P6-1 · Noyau de rendu PCM déterministe (voix mélodiques, mono)** — cette
+  session. `loom-core/src/render.rs` (neuf, std-only, sans dépendance) rend
+  `render_program(src, bars, sr) -> Vec<f32>` : il consomme **exactement les
+  événements du scheduler Rust** (`Program::parse` + `schedule_bar`, donc la même
+  clé/microtonalité/`key@section` que le moteur) et tire chaque note comme un
+  instrument. V1 couvre : oscillateurs sine/square/saw/triangle, `| unison N` +
+  `| detune`, `| sub`, `| double`, filtre statique ou balayé (lp/hp/bp/notch, q),
+  `| env ADSR` × `| gate`, amplitude = vel × gain. Hors v1 (ignorés,
+  documentés P6-2/P6-3) : wt/partials/fm/noise/pluck/bow/reed/bell/grain/sync/pwm/
+  slide/bend/wow/lfo/inserts/drums/pan(FX stéréo)/sends. Fidélité : `schedule_bar_json`
+  gagne `dur` + `synth` (sous-ensemble v1) → **le miroir JS consomme le même flux
+  d'événements Rust** = parité de DSP pure (scheduling déjà prouvé bit à bit).
+  Miroir JS `renderPCM` dans `web/index.html` (Float32Array + `Math.fround` sur
+  les états) ; `tools/parity_test.js` gagne une section RENDER (max diff + taux de
+  samples dans une tolérance, corpus dédié 9 pièces × 2 mesures × 44100 Hz).
+  Exposé WASM : `render_json(src, bars, sr) -> Float32Array`.
+
+→ **P6-1 FAIT, commit `b15ae95`** : `loom-core/src/render.rs` (10 tests) —
+  parité RENDER **9/9 pièces, worst diff 7.75e-7** (3 ordres de grandeur sous le
+  seuil) grâce à la discipline `Math.fround` op-pour-op (seules tan/sin/pow font
+  1 ulp). Grille : workspace 114/77/134/26/24 · clippy -D 0 · check_web 4/4 ·
+  parité 9/9 + 24/24 + 278/278 · diff --check clean. Cette fois la glue
+  `loom_wasm.js` **change** (+36 lignes) car `render_json` ajoute un export WASM
+  (le cas P5 ne touchait que le `.wasm`). `web/index.html` expose
+  `window.__loom.renderPCM` (miroir) + JSynth `dur` dans `schedule_bar_json` ;
+  `loom-wasm` sérialise le sous-ensemble v1 du `Synth` résolu sur chaque
+  événement → les deux DSP consomment **un seul et même flux d'événements Rust**.
+
+---
+
+## Review — P6-1 (moteur unifié, pierre 1)
+
+- **Fait** : le « son » a maintenant un moteur déterministe std-only dans
+  `loom-core` (rendu PCM mono, f32), exporté en WASM (`render_json`) et miroité
+  en JS (`renderPCM`) avec **parité numérique vérifiée sur 9 pièces × 2 mesures ×
+  44100 Hz** (worst 7.75e-7). Même patron que l'analyseur et le scheduling :
+  Rust = autorité, JS = repli/frein, harnais de parité en garde-fou.
+- **Levier d'architecture** : `schedule_bar_json` porte maintenant `dur` + le
+  sous-ensemble v1 du `Synth` (résolu : défauts appliqués, LFO aplati) — le
+  miroir JS ne réinterprète plus jamais les `|` verbes. C'est la fondation des
+  pierres P6-2 (master FX/envois/WAV) et P6-3 (wt/fm/pluck/drums/inserts).
+- **Honnêteté** : v1 = voix mélodiques mono, 9 features de source/env (pas les
+  70 champs du `Synth`) ; drums, percussions, wt/fm/noise/pluck/… documentés
+  comme P6-2/P6-3. Aucun changement du playback live (toujours WebAudio JS).
+- **Côté CI/Mac** : relecture audio à l'oreille impossible en local (pas de
+  sortie audio dans le harnais) — la parité numérique est la preuve de
+  cohérence. Un `ffmpeg` peut démontrer le PCM (spectre) si besoin.
+- **Rappel** : tout changement de `loom-core` → `./build-wasm.sh` + recommit des
+  `_bg.wasm` (et de la glue quand un export change).
