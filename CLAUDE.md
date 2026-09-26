@@ -67,7 +67,8 @@ quality. The owner has a Max subscription — authenticate Claude Code with that
 (do NOT set ANTHROPIC_API_KEY, or it bills the API instead of the subscription).
 
 ## First task suggestion
-Run `cargo test -p loom-core` to confirm the core builds (101 tests as of
-2026-09-25). Roadmap items 1-5 are done; item 6 has Rust/WASM scheduling live
-on the web, while JS still synthesizes audio. The native audio backend is in
-`loom-audio` and used by both apps. Check `tasks/todo.md` for current work.
+Run `cargo test -p loom-core` to confirm the core builds (113 tests as of
+2026-09-25, analyser compris). Roadmap items 1-6 sont faits ; reste du moteur
+unifié la synthèse/FX en Rust. Le prof s'appuie sur `loom_core::prof` (analyse
+unifiée web+natif). La CI se fait sur le Mac du propriétaire via Claude (pas
+GitHub Actions). Check `tasks/todo.md` for current work.

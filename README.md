@@ -67,7 +67,7 @@ identically everywhere else. Everything else builds on top of it.
 ```bash
 # whole workspace (builds every crate incl. the two apps)
 cargo build --workspace
-cargo test --workspace          # 348 tests, all green
+cargo test --workspace          # 350 tests, all green
 
 # core logic only (no deps, instant)
 cargo test -p loom-core
@@ -84,9 +84,12 @@ cargo run -p loom-tui --release          # terminal
 cargo run -p loom-gui --release          # window
 ```
 
-CI (GitHub Actions, `.github/workflows/ci.yml`) runs build+test on every push
-and enforces JS/Rust parity. `cargo fmt`/`clippy -D warnings` are not yet gates:
-part of the codebase has never been rustfmt-ed (hardening in progress).
+The project gates are run on the owner's Mac via Claude (not GitHub Actions — the
+`.github` workflow was removed because a plain token cannot push `workflows/`
+without extra scope). Gates: `cargo test --workspace`, `cargo clippy
+--workspace --all-targets -- -D warnings` (strict, 0 warning), `node
+tools/check_web.js`, `node tools/parity_test.js`. `cargo fmt --check` is not a
+gate yet: part of the codebase has never been rustfmt-ed (hardening in progress).
 
 ## Status
 This is a repo in transition, not a finished product. The browser prototype
@@ -112,7 +115,8 @@ also checks the analyser line-for-line (14/14).
 
 `web/` is also a **PWA**: the manifest + service worker let it be installed as
 an app and keep playing offline (shell precached, samples cached on first
-play). Scripts, manifest and parity are enforced by CI.
+play). Scripts, manifest and parity are re-checked by the project gates at each
+wave.
 
 A separate, more polished web demo, `loom-studio`, exists as a companion
 project and is not part of this repo.

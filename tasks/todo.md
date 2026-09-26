@@ -4,6 +4,36 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
+## Session 2026-09-25 — « tout » : consolidation du moteur, explicateur prof, studio (samples · mixeur · GPU)
+
+> Décision du propriétaire : « je veux tout fini, fait tout » — on exécute le menu
+> dans l'ordre d'effort croissant ; chaque piste = incrément testé + commité.
+
+- [x] **T0 · Docs en vérité** — ROADMAP/README/CLAUDE cohérents avec la réalité
+      (analyse portée ✅, clippy strict ✅, parité 238/238 + analyse 14/14, CI = Mac via Claude,
+      pistes futures relabellées).
+- [ ] **T1 · Consolidation du moteur unifié**
+  - [ ] B1 : `tasks/ci-mac.md` — note de passage pour la CI du Mac (commandes exactes :
+        `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`,
+        `node tools/check_web.js`, `node tools/parity_test.js`, `git diff --check`).
+  - [ ] B2 : repli JS — retirer la fuite d'état `tuning` dans `analyzePiece` (l'acoustique doit
+        dépendre du texte, pas du global ; vérifié par la parité).
+  - [ ] B3 : corpus de parité analyse enrichi (gamelan pelog/slendro, clave/samba, 17-EDO,
+        raga aroha/avaroha…) → battery vert.
+- [ ] **T2 · Explicateur / prof enrichi** (`loom-core::prof` + repli JS synchronisé + parité)
+  - [ ] tension/détente & cadence (fonction tonale : repose/instable) + test.
+  - [ ] attente : note de tête, demi-pas résolutif vers la tonique + test.
+  - [ ] conseils de compositeur actionnables (cible sur temps faible, dominante secondaire…) + test.
+  - [ ] culture : humeur maqâm / rasa raga / ethos des modes (lore) + test.
+- [ ] **T3 · Sampler instrument** — charger ses propres fichiers (navette de fichiers) dans
+      `sampletool`/GUI, boucle simple ; vérifié en fenêtre (OCR).
+- [ ] **T4 · Mixeur** — VU-mètres / niveaux live par piste dans la GUI (logique `loom-audio`),
+      grips couleurs ; vérifié en fenêtre (OCR).
+- [ ] **T5 · Post-traitement GPU (web)** — bloom/feedback/glitch + 2-3 shaders neufs ;
+      `check_web.js` vert.
+- [ ] Toutes les portes finales (tests workspace, clippy -D, check_web, parité, diff --check),
+      commits poussés, Review.
+
 ## Session 2026-09-25 — analyseur du prof dans loom-core (clé de voûte du moteur unifié)
 
 > Décision du propriétaire (2026-09-25) : « y » — on lance la vague.
