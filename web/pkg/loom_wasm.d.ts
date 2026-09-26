@@ -22,9 +22,25 @@ export function bar_bpm(src: string, bar: number): number;
 export function bar_seconds(src: string, bar: number): number;
 
 /**
+ * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
+ * consumes these on top of the `schedule_bar_json` events — same Rust defaults.
+ */
+export function mix_json(src: string): string;
+
+/**
  * Top-level program info (tempo, meter, arrangement length) as JSON.
  */
 export function program_info_json(src: string): string;
+
+/**
+ * Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
+ * P6-1 note engine (dry) + note inserts (`| echo/flange/phaser`) + sends
+ * (`| reverb`/`| delay`) into the master reverb + ping-pong + duck + warmth
+ * saturator + lookahead limiter (`loom-core::render_fx`, deterministic). The
+ * JS mirror (`renderFX` in `web/index.html`) consumes the same `schedule_bar_json`
+ * events + `mix_json`, so the parity harness proves DSP identity.
+ */
+export function render_fx_json(src: string, bars: number, sr: number): Float32Array;
 
 /**
  * Render `bars` bars of `src` into mono f32 PCM samples via the unified
@@ -38,6 +54,13 @@ export function program_info_json(src: string): string;
 export function render_json(src: string, bars: number, sr: number): Float32Array;
 
 /**
+ * Render through the full pipeline and encode as a 16-bit mono WAV (normalized
+ * to 0.97, 44-byte header). Returns the raw bytes — `tools/parity_test.js`
+ * verifies the header + decodes the PCM against the JS mirror's `wavBytes`.
+ */
+export function render_wav(src: string, bars: number, sr: number): Uint8Array;
+
+/**
  * Schedule one bar and return its events as JSON for the JS audio layer.
  */
 export function schedule_bar_json(src: string, bar: number): string;
@@ -49,8 +72,11 @@ export interface InitOutput {
     readonly analyze_json: (a: number, b: number) => [number, number];
     readonly bar_bpm: (a: number, b: number, c: number) => number;
     readonly bar_seconds: (a: number, b: number, c: number) => number;
+    readonly mix_json: (a: number, b: number) => [number, number];
     readonly program_info_json: (a: number, b: number) => [number, number];
+    readonly render_fx_json: (a: number, b: number, c: number, d: number) => [number, number];
     readonly render_json: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly render_wav: (a: number, b: number, c: number, d: number) => [number, number];
     readonly schedule_bar_json: (a: number, b: number, c: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

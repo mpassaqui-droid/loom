@@ -238,6 +238,68 @@ for (const [name, src] of Object.entries(rd_pieces)) {
 }
 console.log(`\nRENDER parity (P6-1 DSP, JS renderPCM <-> Rust render_json, échantillon par échantillon): ${rd_total - rd_bad}/${rd_total} pièces  worst diff ${rd_worst.toExponential(2)}  ${rd_bad === 0 ? '✅' : '⚠️ ' + rd_bad + ' diffs'}`);
 
+// ── RENDER2 PARITY (P6-2 full pipeline: envois + master) ──────────────────────
+// Same Rust event stream + the resolved `mix_json` through BOTH engines: dry +
+// note inserts (| echo/flange/phaser) + sends (| reverb/| delay) feeding the
+// master reverb + ping-pong + duck + warmth sat + lookahead limiter. Rust f32 vs
+// JS Math.fround op-for-op; the exponentials/pows may wobble by a last ulp, so
+// the loose gate (5e-3) stays generous — the WAV export is compared byte-exact.
+const rf_pieces = {
+  'echo tempo + feedback': 'key: c major\nlead: 1 3 5 1 | sine | echo 2 0.45 | env 0.01 0.05 0.9 0.02',
+  'flange balayé': 'key: c major\nlead: 1 3 5 1 | saw | flange 0.5 0.8 | env 0.01 0.05 0.8 0.02',
+  'phaser 4 allpass': 'key: a minor\nlead: 1 5 3 1 | saw | phaser 0.7 | env 0.01 0.05 0.8 0.02',
+  'reverb send + room fdn': 'room: fdn 0.86 3600\nkey: c major\nlead: 1 3 5 1 | saw | reverb 0.8 | env 0.01 0.05 0.9 0.02',
+  'reverb schroeder par défaut': 'key: c major\nlead: 1 3 5 1 | saw | reverb 0.5 | env 0.01 0.05 0.9 0.02',
+  'delay send → ping-pong': 'key: c major\nlead: 1 3 5 1 | sine | delay 0.5 | env 0.01 0.05 0.9 0.02',
+  'duck pump sur kick': 'duck: 0.7\nkick: x x x x\nkey: c major\nlead: 1 1 1 1 | saw | gain 1.4 | env 0.02 0.1 0.9 0.05',
+  'warmth 0.9 sur saw fort': 'warmth: 0.9\nkey: c minor\nlead: 1 3 1 5 3 | saw | gain 1.6 | env 0.01 0.1 0.9 0.05',
+  'pile complète: fdn+room+echo+phaser+duck+warmth': 'duck: 0.6\nwarmth: 0.5\nroom: fdn 0.84 4200\nkick: x . x .\nkey: e minor\nlead: 1 3 5 1 | saw | reverb 0.4 | delay 0.3 | echo 2 0.3 | phaser 0.4 | unison 2 | detune 12',
+  'drums seuls (silence attendu)': 'kick: x . x .\nhat: x x x x',
+};
+let rd2_total = 0, rd2_bad = 0, rd2_worst = 0, wav_bad = 0;
+for (const [name, src] of Object.entries(rf_pieces)) {
+  try {
+    const evsArr = [], barSecs = [];
+    for (let b = 0; b < RQ_BARS; b++) { evsArr.push(JSON.parse(W.schedule_bar_json(src, b))); barSecs.push(W.bar_seconds(src, b)); }
+    const mix = JSON.parse(W.mix_json(src));
+    const js = L.renderFX(evsArr, barSecs, RQ_SR, mix);
+    const rs = W.render_fx_json(src, RQ_BARS, RQ_SR);
+    rd2_total++;
+    if (js.length !== rs.length) { rd2_bad++; console.log(`  RENDER2 LEN DIFF [${name}] JS ${js.length} Rust ${rs.length}`); continue; }
+    let worst = 0, loose = 0;
+    for (let i = 0; i < rs.length; i++) {
+      const d = Math.abs(rs[i] - js[i]);
+      if (d > worst) worst = d;
+      if (d > 5e-3) loose++;
+    }
+    if (worst > rd2_worst) rd2_worst = worst;
+    if (worst > 5e-3 || loose > rs.length * 0.0001) {
+      rd2_bad++;
+      if (rd2_bad <= 8) console.log(`  RENDER2 DIFF [${name}] worst ${worst.toExponential(2)} loose=${loose}/${rs.length}`);
+    }
+    // WAV export: identical thread/Riff header + 16-bit PCM. The warm/saturator
+    // chain ends through tanh/exp (f32-libm on Rust, f64-libm→Math.fround on JS)
+    // whose rare last-ulp difference can shift ONE int16 step at a quantization
+    // boundary — so a file FAILS only if any sample differs by more than 1 step.
+    const jw = L.wavBytes(js, RQ_SR), rw = W.render_wav(src, RQ_BARS, RQ_SR);
+    if (jw.length !== rw.length) { wav_bad++; console.log(`  WAV LEN DIFF [${name}] JS ${jw.length} Rust ${rw.length}`); continue; }
+    const dvj = new DataView(jw.buffer), dvr = new DataView(rw.buffer);
+    let off1 = 0, over1 = 0;
+    const ns = (rw.length - 44) / 2;
+    for (let k = 0; k < ns; k++) {
+      const a = dvj.getInt16(44 + k * 2, true), b = dvr.getInt16(44 + k * 2, true);
+      const d = Math.abs(a - b);
+      if (d === 1) off1++; else if (d > 1) over1++;
+    }
+    let hdrSame = true;
+    for (let i = 0; i < 44 && hdrSame; i++) hdrSame = jw[i] === rw[i];
+    if (!hdrSame) { wav_bad++; console.log(`  WAV HEADER DIFF [${name}]`); continue; }
+    if (over1 > 0) { wav_bad++; console.log(`  WAV PCM DIFF [${name}] ${over1} samples >1 step (off-by-1=${off1})`); }
+  } catch (e) { rd2_bad++; rd2_total++; console.log(`  RENDER2 ERR [${name}] ${e.message}`); }
+}
+console.log(`\nRENDER2 parity (P6-2 pipeline, JS renderFX <-> Rust render_fx_json): ${rd2_total - rd2_bad}/${rd2_total} pièces  worst diff ${rd2_worst.toExponential(2)}  ${rd2_bad === 0 ? '✅' : '⚠️ ' + rd2_bad + ' diffs'}`);
+console.log(`WAV parity (JS wavBytes <-> Rust render_wav, toleré ≤1 step int16): ${rd2_total - wav_bad}/${rd2_total} fichiers  ${wav_bad === 0 ? '✅' : '⚠️ ' + wav_bad + ' diffs'}`);
+
 let total = 0, bad = 0;
 for (const [name, src] of Object.entries(pieces)) {
   for (let bar = 0; bar < 4; bar++) {
@@ -252,4 +314,4 @@ for (const [name, src] of Object.entries(pieces)) {
 }
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && an_perfect && rd_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

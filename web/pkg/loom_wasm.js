@@ -46,6 +46,27 @@ export function bar_seconds(src, bar) {
 }
 
 /**
+ * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
+ * consumes these on top of the `schedule_bar_json` events — same Rust defaults.
+ * @param {string} src
+ * @returns {string}
+ */
+export function mix_json(src) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.mix_json(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Top-level program info (tempo, meter, arrangement length) as JSON.
  * @param {string} src
  * @returns {string}
@@ -63,6 +84,27 @@ export function program_info_json(src) {
     } finally {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
+}
+
+/**
+ * Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
+ * P6-1 note engine (dry) + note inserts (`| echo/flange/phaser`) + sends
+ * (`| reverb`/`| delay`) into the master reverb + ping-pong + duck + warmth
+ * saturator + lookahead limiter (`loom-core::render_fx`, deterministic). The
+ * JS mirror (`renderFX` in `web/index.html`) consumes the same `schedule_bar_json`
+ * events + `mix_json`, so the parity harness proves DSP identity.
+ * @param {string} src
+ * @param {number} bars
+ * @param {number} sr
+ * @returns {Float32Array}
+ */
+export function render_fx_json(src, bars, sr) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.render_fx_json(ptr0, len0, bars, sr);
+    var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
 }
 
 /**
@@ -84,6 +126,24 @@ export function render_json(src, bars, sr) {
     const ret = wasm.render_json(ptr0, len0, bars, sr);
     var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
+}
+
+/**
+ * Render through the full pipeline and encode as a 16-bit mono WAV (normalized
+ * to 0.97, 44-byte header). Returns the raw bytes — `tools/parity_test.js`
+ * verifies the header + decodes the PCM against the JS mirror's `wavBytes`.
+ * @param {string} src
+ * @param {number} bars
+ * @param {number} sr
+ * @returns {Uint8Array}
+ */
+export function render_wav(src, bars, sr) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.render_wav(ptr0, len0, bars, sr);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
 }
 
@@ -145,6 +205,11 @@ function getArrayJsValueFromWasm0(ptr, len) {
     }
     wasm.__externref_drop_slice(ptr, len);
     return result;
+}
+
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
 let cachedDataViewMemory0 = null;

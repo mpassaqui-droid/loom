@@ -528,7 +528,7 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
 > `loom-wasm`**, avec miroir JS + parité numérique — exactement le patron déjà
 > éprouvé pour l'analyseur et le scheduling. Découpage en 4 pierres :
 
-- [ ] **P6-2 (futur)** · master FX (warmth/duck/limiter) + envois (echo/reverb
+- [x] **P6-2** · master FX (warmth/duck/limiter) + envois (echo/reverb
   fdn/flanger/phaser) + normalize/limit + export WAV — portés depuis `loom-audio`.
 - [ ] **P6-3 (futur)** · sources riches (wt/partials/fm/pluck/bow/reed/bell/grain/
   sync/pwm/noise), LFO/LFO2 (cutoff/pitch/pan/gain), inserts (drive/fold/crush/
@@ -586,3 +586,96 @@ Mesures : showcase en live ≈ 20 % d'un cœur, 22 Mo ; rendu hors-ligne 11–40
   cohérence. Un `ffmpeg` peut démontrer le PCM (spectre) si besoin.
 - **Rappel** : tout changement de `loom-core` → `./build-wasm.sh` + recommit des
   `_bg.wasm` (et de la glue quand un export change).
+
+## Session 2026-09-26 — P6-2 (cadré) : master FX + envois + normalize/WAV
+
+> La chaîne native (`loom-audio/src/master.rs` + `master/{dynamics,reverb}.rs` +
+> `inserts/space.rs` + `inserts/color.rs`) est riche et stéréo/f64. P6-2 l'expose
+> en **mono déterministe** dans `loom-core` (std-only) avec les **topologies
+> natives exactes** : chaque brique est un port op-pour-op (f32) de la version
+> mono des mêmes algorithmes → miroir JS `Math.fround`, parité échantillon par
+> échantillon. Le grain de l'entrée est LE note engine de P6-1 (factorisé en
+> `NoteCtx`/`note_sample`, partagé entre `render_program` et le nouveau chemin).
+
+### Modèle du pipeline `render_full(src, bars, sr) -> Vec<f32>` (2 phases)
+
+Phase 1 (dépôts, par événement via `schedule_bar`) : pour chaque note, `v =
+note_sample(...)` (identique P6-1) ; `dry[ix] += v`, puis inserts note :
+- `| echo DIV FB` (retard feedback tempo-sync, ligne par note) : `y=ring.out()`
+  `ring.push(undenormal(0.45·v + fb·y))`, wet `fx[ix]+=y` (ligne `ring` par note,
+  taille `round(clamp(barSec/div,0.01,2)·sr)`, fb clamp 0..0.95, `n` étendu de la
+  queue `Echo::tail`).
+- `| flange RATE DEPTH` (128-ring balayé, 0.5 fb, `(x+dl)·0.6`) : remplace le sec
+  `fx += out − v`.
+- `| phaser N` (4 allpass RBJ 400+350k ±900·sin, Q 0.7, refresh/32) : ajoute le
+  chaînage `fx += chainAP(v)` (le sec reste).
+- `| reverb N` → `rev_in[ix] += v` (taux plein, comme le câblage natif).
+- `| delay N` → `echo_in[ix] += v·N` (les `| reverb`/`| delay` restent au niveau
+  du voile sauf retard).
+
+Phase 2 (mix+master) : `bus = dry + fx` ; `rev_in += bus` ; `echo_in += bus`
+(le bus alimente TOUJOURS les deux retours, câblage natif) ; passe unique :
+1. `space = FDN8.process(rev_in[i])` (lignes FDN_TIMES ×8, lp par ligne damp
+   `room: fdn DAMP` défaut 4200, decay défaut 0.84 clamp 0..0.97, FWH·1/√8,
+   2 allpass 0.0047/0.0019 @0.5) ; `echo = ping.process(echo_in[i])` (ligne
+   mono 0.2 s, fb 0.32, len `max(Q,round(0.2·sr))`).
+2. `mix = bus·duck_gain + echo·0.15 + space·0.18` (0.18 = SPACE_SEND, 0.15 =
+   ECHO_SEND natifs). `duck:` : chaque événement batterie pompe
+   `duck_gain = max(0.05, 1−duck)`, glissade 1-pôle vers 1 avec
+   `τ = min(0.12, bar/8)` (coef par bar).
+3. mastering : `x = sat(x, warmth)` (LoomSat EXACT : `g=1+4w`, `comp=1/(1+0.6w)`,
+   mid=(prev+x)·0.5, `((mid·g)T + (x·g)T)·0.5·comp`) → `x = lim_brick(x)`
+   (LoomLim EXACT : lookahead 128, attaque instantanée, release
+   `(1−0.0009)^(48000/sr)`, `min(need[])`, plafond 0.97) → `clamp(−1,1)`.
+   Glue comp / EQ maître non portés (documenté honnêtement).
+4. Queue : buffer étendu de `FX_TAIL = 2.0 s` (queue FDN/echo capturée).
+
+### Exports & miroirs
+- loom-core : `render_full` (ci-dessus) + `render_wav(src,bars,sr) -> Vec<u8>`
+  (16 bit mono : normalize à 0.97 si crete >0 puis encodage i16, entête WAV 44 B
+  RIFF/fmt PCM mono).
+- loom-wasm : `render_fx_json(src,bars,sr)`, `mix_json(src)` (`{duck,warmth,
+  room:{kind,decay,damp}}` — l'autorité reste Rust), `render_wav(src,bars,sr)` ;
+  `SynthV1` étendu (`echo{div,fb}`, `flange{rate,depth}`, `phaser`, `reverb`,
+  `delay`).
+- web : miroirs `renderFX(evsArr,barSecs,sr,mix)` + `wavBytes(pcm,sr)` dans
+  `window.__loom` (le note engine JS est factorisé et partagé avec `renderPCM`).
+- parity_test : section RENDER2 (chemin FX complet) sur 9 pièces × 2 mesures ×
+  44100, mix Rust autorité ; seuils calibrés sur les diffs réels.
+
+### Portes
+`cargo test --workspace` · clippy -D · check_web 4/4 · parity (timing+analyse+
+RENDER+RENDER2) · `render_program`/`renderPCM` inchangés (parité P6-1 intacte) ·
+WAV vérifié (entête + longueur + décodage) · `./build-wasm.sh` (loom-core touché) ·
+`git diff --check` · commit + push.
+
+→ **P6-2 FAIT** : `loom-core/src/render_fx.rs` (12 tests, std-only, 800+ lignes) +
+refactor `render.rs` → `NoteCtx`/`NoteParam`/`note_sample` partagé (14 tests) +
+exports WASM (`render_fx_json`, `render_wav`, `mix_json`, `SynthV1` étendu).
+Miroir JS : bloc DSP partagé (`F/TAU/wave/svf/biquad/allpass/ring/duckCoef`) +
+`noteSample` (factorisé de l'ancien renderPCM, parité P6-1 **intacte**) +
+`renderFX` (dépôts dry/rev/ech + inserts note + master duck/ping/verb/sat/lim) +
+`wavBytes` (en-tête 44 B + norm 0.97 + i16 half-away-from-zero — le bug
+`bytes.set` sans offset corrompait l'en-tête, corrigé).
+Grille : workspace 114/77/144/26/24 · clippy -D 0 · check_web 4/4 · parité
+RENDER 9/9 (worst 7.75e-7) + RENDER2 **10/10 (worst 2.5e-7)** + WAV 10/10
+(toléré ≤1 step int16, 1 ulp de tanh/exp) + ANALYSE 24/24 + onsets 278/278 ·
+diff --check clean. WAV natif rejoué par ffprobe (pcm_s16le mono 44,1 kHz,
+6,0 s = 4+tail).
+
+## Review — P6-2 (maitre FX, pierre 2)
+- **Fait** : le pipeline FX complet (envois note + master) est porté en mono
+  déterministe dans `loom-core` (rendu `render_full`), exporté WASM
+  (`render_fx_json`/`render_wav`) et miroité JS (`renderFX`/`wavBytes`) avec
+  parité échantillon par échantillon 10/10 (worst 2.5e-7) et WAV identique à
+  ≤1 step int16 près. Topologies natives mono conservées (sauf ping-pong : une
+  ligne mono au lieu de 2 croisées L/R — documenté) ; constantes natives
+  (`SPACE_SEND=0.18`, `ECHO_SEND=0.15`, Q `1/√2`, lookahead 128, plafond 0.97).
+- **Levier** : le note engine JS est désormais UNE seule fonction `noteSample`
+  partagée par `renderPCM` et `renderFX` (factorisation op-pour-op vérifiée par
+  re-run des 134 tests avant ajout FX, puis parité P6-1 à l'identique).
+- **Honnêteté** : glue/EQ maître natifs non portés ; reverb Schroeder par défaut
+  vs FDN si `room: fdn DAMP DECAY` (parité sur les deux) ; `room_kind`/`mix_json`
+  = l'autorité Rust résolue consommée par le miroir (jamais les `|` verbes).
+- **Côté CI/Mac** : relecture audio à l'oreille impossible en local — la parité
+  numérique + ffprobe (durée/format valides) sont la preuve.

@@ -34,6 +34,16 @@ struct SynthV1 {
     sub: f32,
     /// `| double N` — octave-up layer, 0..1.
     double: f32,
+    /// `| echo DIV FB` — per-note tempo feedback delay `[div, fb]` (None = none).
+    echo: Option<[f32; 2]>,
+    /// `| flange RATE DEPTH` — swept delay `[rate, depth]` (None = none).
+    flange: Option<[f32; 2]>,
+    /// `| phaser N` — level 0..1 of the 4-allpass phaser (None = none).
+    phaser: Option<f32>,
+    /// `| reverb N` — level 0..1 of the send to the master reverb (None = none).
+    reverb: Option<f32>,
+    /// `| delay N` — level 0..1 of the send to the master ping-pong (None = none).
+    delay: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -67,6 +77,11 @@ fn synth_v1(s: &loom_core::Synth) -> SynthV1 {
         detune: s.detune.unwrap_or(0.0),
         sub: s.sub.unwrap_or(0.0),
         double: s.double.unwrap_or(0.0),
+        echo: s.echo.map(|e| [e.div, e.fb]),
+        flange: s.flange.map(|f| [f.rate, f.depth]),
+        phaser: s.phaser,
+        reverb: s.reverb,
+        delay: s.delay,
     }
 }
 
@@ -138,6 +153,58 @@ pub fn schedule_bar_json(src: &str, bar: i32) -> String {
 #[wasm_bindgen]
 pub fn render_json(src: &str, bars: u32, sr: f32) -> Vec<f32> {
     loom_core::render::render_program(src, bars as usize, sr)
+}
+
+/// The resolved mix directives both engines share for a piece (P6-2): duck
+/// depth, master warmth drive and the master reverb algorithm. Defaults are
+/// applied Rust-side so the JS `renderFX` mirror reads plain numbers.
+#[derive(Serialize)]
+struct MixV1 {
+    /// `duck: N` 0..0.95 sidechain pump depth (0 = off).
+    duck: f32,
+    /// `warmth: N` 0..1 master saturator drive (resolved default 0.3).
+    warmth: f32,
+    /// `"fdn"` = feedback delay network; anything else = Schroeder.
+    room_kind: String,
+    /// FDN decay 0..0.97 (Schroeder keeps its fixed 0.8-ish gain).
+    room_decay: f32,
+    /// FDN damping cutoff in Hz.
+    room_damp: f32,
+}
+
+/// Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
+/// consumes these on top of the `schedule_bar_json` events — same Rust defaults.
+#[wasm_bindgen]
+pub fn mix_json(src: &str) -> String {
+    let mix = &loom_core::Program::parse(src).mix;
+    let room = &mix.room;
+    let out = MixV1 {
+        duck: mix.duck,
+        warmth: mix.warmth,
+        room_kind: room.kind.clone().unwrap_or_default(),
+        room_decay: room.decay.unwrap_or(0.84),
+        room_damp: room.damp.unwrap_or(4200.0),
+    };
+    serde_json::to_string(&out).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
+/// P6-1 note engine (dry) + note inserts (`| echo/flange/phaser`) + sends
+/// (`| reverb`/`| delay`) into the master reverb + ping-pong + duck + warmth
+/// saturator + lookahead limiter (`loom-core::render_fx`, deterministic). The
+/// JS mirror (`renderFX` in `web/index.html`) consumes the same `schedule_bar_json`
+/// events + `mix_json`, so the parity harness proves DSP identity.
+#[wasm_bindgen]
+pub fn render_fx_json(src: &str, bars: u32, sr: f32) -> Vec<f32> {
+    loom_core::render_fx::render_full(src, bars as usize, sr)
+}
+
+/// Render through the full pipeline and encode as a 16-bit mono WAV (normalized
+/// to 0.97, 44-byte header). Returns the raw bytes — `tools/parity_test.js`
+/// verifies the header + decodes the PCM against the JS mirror's `wavBytes`.
+#[wasm_bindgen]
+pub fn render_wav(src: &str, bars: u32, sr: f32) -> Vec<u8> {
+    loom_core::render_fx::render_wav(src, bars as usize, sr)
 }
 
 /// Duration of a given bar in seconds, honouring `meter:` and `accel:`/`tempo:`.

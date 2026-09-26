@@ -7159,48 +7159,123 @@ const THEME_AA={
   // renderer in loom-core/src/render.rs — tools/parity_test.js proves numeric
   // parity with loom-wasm render_json. Not used by live playback (v1 = compute/
   // export engine); the parity harness reads it via window.__loom.renderPCM.
+  // ------------------------------------------------------------------
+  // P6-2 shared DSP core — op-for-op mirror of loom-core/src/render.rs +
+  // render_fx.rs. `F = Math.fround` after every +,-,*,/ (f32 discipline);
+  // only the transcendents (sin/tan/exp/tanh/pow/log) may differ by 1 ulp
+  // on either side, which the parity harness tolerates. BOTH renderPCM and
+  // renderFX draw notes through the SAME `noteSample` so a piece renders the
+  // same dry tone however it is exported.
+  // ------------------------------------------------------------------
+  const F=Math.fround;
+  const TAU=F(2*Math.PI);
+  const PI_F=F(Math.PI);
+  const SQRT1_2_F=F(Math.SQRT1_2);
+  const sinPi=p=>Math.sin(F(F(p)*TAU));
+  const wave=(w,p)=>{
+    if(w==='sine')return sinPi(p);
+    if(w==='square')return p<0.5?1:-1;
+    if(w==='sawtooth')return F(F(2*p)-1);
+    return p<0.5?F(F(F(4*p))-1):F(F(3)-F(F(4*p)));
+  };
+  const wrapP=p=>F(p-Math.floor(p));
+  const adsr=(t,gate,A,D,S,R)=>{
+    const a=F(Math.max(0,A)),d=F(Math.max(0,D)),r=F(Math.max(0,R)),s=F(Math.min(1,Math.max(0,S)));
+    let body;
+    if(t<a){body=a<=0?1:F(F(t)/a);}
+    else if(d<=0){body=s;}
+    else if(t<F(a+d)){body=F(1-F(F(1-s)*F(F(F(t)-F(a))/d)));}
+    else{body=s;}
+    if(t<gate)return body;
+    const rn=F(F(t)-F(gate));
+    return rn<r?F(F(body)*F(1-F(F(rn)/r))):0;
+  };
+  const svf=(x,fc,q,ft,st,sr)=>{
+    const lim=5,lim2=F(sr*0.48);
+    const c=F(Math.max(lim,Math.min(lim2,fc)));
+    const g=F(Math.tan(F(F(PI_F)*F(F(c)/sr))));
+    const k=F(F(1)/q);
+    const a1=F(F(1)/F(F(1)+F(F(g)*F(F(g)+k))));
+    const a2=F(F(g)*F(a1));
+    const a3=F(F(g)*F(a2));
+    const v3=F(F(x)-F(st.ic2));
+    const v1=F(F(F(a1)*F(st.ic1))+F(F(a2)*F(v3)));
+    const v2=F(F(st.ic2)+F(F(F(a2)*F(st.ic1))+F(F(a3)*F(v3))));
+    st.ic1=F(F(2*v1)-F(st.ic1));
+    st.ic2=F(F(2*v2)-F(st.ic2));
+    const high=F(F(x)-F(F(F(k)*F(v1))+F(v2)));
+    if(ft===0)return v2;      // lowpass
+    if(ft===1)return high;    // highpass
+    if(ft===2)return v1;      // bandpass
+    return F(F(v2)-F(high));  // notch
+  };
+  const undenormal=x=>Math.abs(x)<1e-18?0:x;
+  // One sample of the note: oscillators+layers into the SVF. `c` is the note
+  // ctx {nUni,uni[],subPh,dubPh,ic1,ic2}; `st` the resolved params
+  // {ft,q,c0,c1,det,sub,dub}. Advances c. Returns the (unscaled) fout.
+  const noteSample=(c,st,wf,f0,dur,i,sr)=>{
+    const t=F(i/sr);
+    let out=0;
+    for(let k=0;k<c.nUni;k++){
+      const ratio=c.nUni>1?Math.pow(2,F(F(F(F(k*2)/(c.nUni-1))-1)*F(st.det/1200))):1;
+      const fk=F(F(f0)*F(ratio));
+      const ph=c.uni[k];
+      out=F(out+wf(ph));
+      c.uni[k]=wrapP(F(ph+F(fk/sr)));
+    }
+    out=F(F(out)/c.nUni);
+    if(st.sub>0){out=F(out+F(st.sub*sinPi(c.subPh)));c.subPh=wrapP(F(c.subPh+F(F(F(f0)/2)/sr)));}
+    if(st.dub>0){out=F(out+F(st.dub*wf(c.dubPh)));c.dubPh=wrapP(F(c.dubPh+F(F(F(f0)*2)/sr)));}
+    if(st.ft<0)return out;
+    const fc=st.c1===st.c0?st.c0:F(F(st.c0)+F(F(F(st.c1)-F(st.c0))*Math.min(1,F(F(t)/dur))));
+    return svf(out,fc,st.q,st.ft,c,sr);
+  };
+  // Biquad (DF1, RBJ coefficients, native denormal guard on y1).
+  const bqSet=(bq,kind,sr,freq,q)=>{
+    const fc=Math.min(sr*0.49,Math.max(10,freq));
+    const qq=Math.max(1e-4,q);
+    const w=F(F(F(F(2)*F(PI_F))*F(fc))/sr);
+    const cw=F(Math.cos(w)),sw=F(Math.sin(w));
+    const alpha=F(F(sw)/F(F(2)*F(qq)));
+    let b0,b1,b2,a0,a1,a2;
+    if(kind===0){ // lowpass
+      b0=F(F(1-cw)/2);b1=F(1-cw);b2=b0;
+      a0=F(F(1)+F(alpha));a1=F(F(-2)*F(cw));a2=F(F(1)-F(alpha));
+    }else{        // allpass
+      b0=F(F(1)-F(alpha));b1=F(F(-2)*F(cw));b2=F(F(1)+F(alpha));
+      a0=F(F(1)+F(alpha));a1=F(F(-2)*F(cw));a2=F(F(1)-F(alpha));
+    }
+    bq.b0=F(F(b0)/a0);bq.b1=F(F(b1)/a0);bq.b2=F(F(b2)/a0);
+    bq.a1=F(F(a1)/a0);bq.a2=F(F(a2)/a0);
+  };
+  const newBiquad=(kind,sr,freq,q)=>{const bq={b0:0,b1:0,b2:0,a1:0,a2:0,x1:0,x2:0,y1:0,y2:0};bqSet(bq,kind,sr,freq,q);return bq;};
+  const bqProcess=(bq,x)=>{
+    let y=F(F(bq.b0)*x);
+    y=F(F(y)+F(F(bq.b1)*bq.x1));
+    y=F(F(y)+F(F(bq.b2)*bq.x2));
+    y=F(F(y)-F(F(bq.a1)*bq.y1));
+    y=F(F(y)-F(F(bq.a2)*bq.y2));
+    bq.x2=bq.x1;bq.x1=x;
+    bq.y2=bq.y1;
+    bq.y1=Math.abs(y)<1e-20?0:y;
+    return bq.y1;
+  };
+  const mkRing=(l)=>({buf:new Float32Array(l),pos:0,l});
+  const ringOut=r=>r.buf[r.pos];
+  const ringPush=(r,x)=>{r.buf[r.pos]=x;r.pos+=1;if(r.pos===r.l)r.pos=0;};
+  const newAllpass=(len,g)=>({ring:mkRing(len),g});
+  const allpassProcess=(ap,x)=>{
+    const d=ringOut(ap.ring);
+    ringPush(ap.ring,undenormal(F(F(x)+F(F(ap.g)*d))));
+    return F(F(d)-F(F(ap.g)*x));
+  };
+  const duckCoef=(barSec,sr)=>{
+    const tau=F(Math.min(F(0.12),F(F(barSec)/8)));
+    return F(1-Math.exp(F(F(-1)/F(F(tau)*sr))));
+  };
+
   function renderPCM(evsArr,barSecs,sr){
     sr=(sr&&sr>0)?sr:44100;
-    const F=Math.fround;
-    const TAU=F(2*Math.PI);
-    const sinPi=p=>Math.sin(F(F(p)*TAU));
-    const wave=(w,p)=>{
-      if(w==='sine')return sinPi(p);
-      if(w==='square')return p<0.5?1:-1;
-      if(w==='sawtooth')return F(F(2*p)-1);
-      return p<0.5?F(F(F(4*p))-1):F(F(3)-F(F(4*p)));
-    };
-    const wrapP=p=>F(p-Math.floor(p));
-    const adsr=(t,gate,A,D,S,R)=>{
-      const a=F(Math.max(0,A)),d=F(Math.max(0,D)),r=F(Math.max(0,R)),s=F(Math.min(1,Math.max(0,S)));
-      let body;
-      if(t<a){body=a<=0?1:F(F(t)/a);}
-      else if(d<=0){body=s;}
-      else if(t<F(a+d)){body=F(1-F(F(1-s)*F(F(F(t)-F(a))/d)));}
-      else{body=s;}
-      if(t<gate)return body;
-      const rn=F(F(t)-F(gate));
-      return rn<r?F(F(body)*F(1-F(F(rn)/r))):0;
-    };
-    const svf=(x,fc,q,ft,st)=>{
-      const lim=5,lim2=F(sr*0.48);
-      const c=F(Math.max(lim,Math.min(lim2,fc)));
-      const g=F(Math.tan(F(F(Math.PI)*F(F(c)/sr))));
-      const k=F(F(1)/q);
-      const a1=F(F(1)/F(F(1)+F(F(g)*F(F(g)+k))));
-      const a2=F(F(g)*F(a1));
-      const a3=F(F(g)*F(a2));
-      const v3=F(F(x)-F(st.ic2));
-      const v1=F(F(F(a1)*F(st.ic1))+F(F(a2)*F(v3)));
-      const v2=F(F(st.ic2)+F(F(F(a2)*F(st.ic1))+F(F(a3)*F(v3))));
-      st.ic1=F(F(2*v1)-F(st.ic1));
-      st.ic2=F(F(2*v2)-F(st.ic2));
-      const high=F(F(x)-F(F(F(k)*F(v1))+F(v2)));
-      if(ft===0)return v2;      // lowpass
-      if(ft===1)return high;    // highpass
-      if(ft===2)return v1;      // bandpass
-      return F(F(v2)-F(high));  // notch
-    };
     const barFrames=[],nb=Math.min(evsArr.length,barSecs.length);
     let total=0;
     for(let b=0;b<nb;b++){const n=Math.round(F(F(barSecs[b])*sr));barFrames.push(n);total+=n;}
@@ -7212,47 +7287,33 @@ const THEME_AA={
         if(e.is_drum)continue;
         const f0=e.freq;
         if(!(f0>0)||!isFinite(f0))continue;
-        const st=e.synth||{};
-        const ft=(st.ft===undefined||st.ft===null)?-1:st.ft;
-        const q=F(Math.min(20,Math.max(0.1,st.q||1)));
-        let c0=800,c1=800;
-        if(st.cutoff){c0=st.cutoff.a;c1=st.cutoff.b;}
-        const nUni=Math.max(1,st.unison||0);
-        const det=Math.max(0,st.detune||0);
-        const sub=F(Math.min(1,Math.max(0,st.sub||0)));
-        const dub=F(Math.min(1,Math.max(0,st.double||0)));
-        const env=st.env?st.env:[0.003,0.015,0.92,0.05];
+        const st0=e.synth||{};
+        const st={};
+        st.ft=(st0.ft===undefined||st0.ft===null)?-1:st0.ft;
+        st.q=F(Math.min(20,Math.max(0.1,st0.q||1)));
+        st.c0=800;st.c1=800;
+        if(st0.cutoff){st.c0=st0.cutoff.a;st.c1=st0.cutoff.b;}
+        st.det=Math.max(0,st0.detune||0);
+        st.sub=F(Math.min(1,Math.max(0,st0.sub||0)));
+        st.dub=F(Math.min(1,Math.max(0,st0.double||0)));
+        const nUni=Math.max(1,st0.unison||0);
+        const env=st0.env?st0.env:[0.003,0.015,0.92,0.05];
         const dur=F(F(e.dur)*sec);
-        const gate=F(F(dur)*(st.gate||1));
+        const gate=F(F(dur)*(st0.gate||1));
         const rel=Math.max(0,env[3]);
         const n=Math.ceil(F(F(F(gate)+F(rel))*sr));
         const start=frame+Math.floor(F(F(F(e.phase)*sec)*sr));
         const amp=F(F(e.gain)*(e.vel==null?1:e.vel));
-        const uniPh=[];for(let k2=0;k2<nUni;k2++)uniPh.push(F(k2/(nUni+1)));
-        let subPh=0,dubPh=0,ic1=0,ic2=0,stt={ic1,ic2};
+        if(!(amp>0)||isNaN(amp))continue;
+        const c={nUni,uni:[],subPh:0,dubPh:0,ic1:0,ic2:0};
+        for(let k2=0;k2<nUni;k2++)c.uni.push(F(k2/(nUni+1)));
+        const wf=p=>wave(e.wave,p);
         for(let i=0;i<n;i++){
           const ix=start+i;
           if(ix>=buf.length)break;
           const t=F(i/sr);
           const a=F(amp*adsr(t,gate,env[0],env[1],env[2],env[3]));
-          let out=0;
-          for(let k=0;k<nUni;k++){
-            const ratio=nUni>1?Math.pow(2,F(F(F(F(k*2)/(nUni-1))-1)*F(det/1200))):1;
-            const fk=F(F(f0)*F(ratio));
-            const ph=uniPh[k];
-            out=F(out+wave(e.wave,ph));
-            uniPh[k]=wrapP(F(ph+F(fk/sr)));
-          }
-          out=F(F(out)/nUni);
-          if(sub>0){out=F(out+F(sub*sinPi(subPh)));subPh=wrapP(F(subPh+F(F(F(f0)/2)/sr)));}
-          if(dub>0){out=F(out+F(dub*wave(e.wave,dubPh)));dubPh=wrapP(F(dubPh+F(F(F(f0)*2)/sr)));}
-          let fout=out;
-          if(ft>=0){
-            const fc=c1===c0?c0:F(F(c0)+F(F(F(c1)-F(c0))*Math.min(1,F(F(t)/dur))));
-            stt={ic1,ic2};
-            fout=svf(out,fc,q,ft,stt);
-            ic1=stt.ic1;ic2=stt.ic2;
-          }
+          const fout=noteSample(c,st,wf,f0,dur,i,sr);
           buf[ix]+=F(F(a)*fout);
         }
       }
@@ -7261,7 +7322,294 @@ const THEME_AA={
     return buf;
   }
 
-    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,renderPCM,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+  // ------------------------------------------------------------------
+  // P6-2 FULL-PIPELINE mirror: the same events + `mix_json` through the
+  // note engine (dry), note inserts (| echo/flange/phaser), sends
+  // (| reverb/| delay), master reverb + ping-pong + duck + warmth sat +
+  // lookahead limiter. Mirror of loom-core/src/render_fx.rs (mono).
+  // ------------------------------------------------------------------
+  function renderFX(evsArr,barSecs,sr,mix){
+    sr=(sr&&sr>0)?sr:44100;
+    mix=mix||{};
+    const duck=Math.min(0.95,Math.max(0,mix.duck||0));
+    const warmth=Math.min(1,Math.max(0,(mix.warmth==null?0.3:mix.warmth)));
+    const roomKind=String(mix.room_kind||'');
+    const fdnDecay=Math.min(0.97,Math.max(0,mix.room_decay==null?0.84:mix.room_decay));
+    const fdnDamp=mix.room_damp==null?4200:Number(mix.room_damp);
+    const FX_TAIL=2.0;
+    const SPACE_SEND=F(F(0.20)*F(0.9)); // native 0.18
+    const ECHO_SEND=F(0.15);
+    const QUANTUM_F=128;
+    const barFrames=[],nb=Math.min(evsArr.length,barSecs.length);
+    let total=0;
+    for(let b=0;b<nb;b++){const n=Math.round(F(F(barSecs[b])*sr));barFrames.push(n);total+=n;}
+    if(total===0)return new Float32Array(0);
+    const len=total+Math.round(F(F(FX_TAIL)*sr));
+    const dry=new Float32Array(len),fx=new Float32Array(len),rev=new Float32Array(len),ech=new Float32Array(len);
+    let frame=0;
+    // ---------------- phase 1: per-event deposits ----------------
+    for(let b=0;b<nb;b++){
+      const sec=F(barSecs[b]);
+      for(const e of evsArr[b]){
+        if(e.is_drum)continue;
+        const f0=e.freq;
+        if(!(f0>0)||!isFinite(f0))continue;
+        const st0=e.synth||{};
+        const st={};
+        st.ft=(st0.ft===undefined||st0.ft===null)?-1:st0.ft;
+        st.q=F(Math.min(20,Math.max(0.1,st0.q||1)));
+        st.c0=800;st.c1=800;
+        if(st0.cutoff){st.c0=st0.cutoff.a;st.c1=st0.cutoff.b;}
+        st.det=Math.max(0,st0.detune||0);
+        st.sub=F(Math.min(1,Math.max(0,st0.sub||0)));
+        st.dub=F(Math.min(1,Math.max(0,st0.double||0)));
+        const nUni=Math.max(1,st0.unison||0);
+        const env=st0.env?st0.env:[0.003,0.015,0.92,0.05];
+        const dur=F(F(e.dur)*sec);
+        const amp=F(F(e.gain)*(e.vel==null?1:e.vel));
+        if(!(amp>0)||isNaN(amp))continue;
+        const gate=F(F(dur)*(st0.gate||1));
+        const rel=Math.max(0,env[3]);
+        const n=Math.ceil(F(F(F(gate)+F(rel))*sr));
+        const start=frame+Math.floor(F(F(F(e.phase)*sec)*sr));
+        let echo=null;
+        if(st0.echo){
+          const div=Math.max(0.01,st0.echo[0]);
+          const ds=Math.min(2,Math.max(0.01,F(F(sec)/F(div))));
+          const l=Math.max(1,Math.round(F(F(ds)*sr)));
+          echo={buf:new Float32Array(l),pos:0,l,fb:Math.min(0.95,Math.max(0,st0.echo[1])),delayS:F(F(l)/sr)};
+        }
+        let flange=null;
+        if(st0.flange){
+          flange={buf:new Float32Array(128),pos:0,lfo:0,rate:Math.max(0,st0.flange[0]),depth:F(Math.min(1,Math.max(0,st0.flange[1]))),sr};
+        }
+        let phaser=null;
+        if(st0.phaser!=null&&st0.phaser>0){
+          const lvl=Math.max(0,st0.phaser);
+          const aps=[];for(let k=0;k<4;k++)aps.push(newBiquad(1,sr,F(F(400)+F(F(k)*F(350))),0.7));
+          phaser={aps,lfo:0,count:0,rate:F(F(0.25)+F(F(lvl)*F(1.4))),sr};
+        }
+        const revLvl=st0.reverb==null?0:Math.min(1,Math.max(0,st0.reverb));
+        const delayLvl=st0.delay==null?0:Math.min(1,Math.max(0,st0.delay));
+        let echoTail=0;
+        if(echo){const rp=echo.fb>0?Math.ceil(Math.log(1e-3)/Math.log(echo.fb)):0;echoTail=Math.min(30,echo.delayS*(rp+1));}
+        const nMax=Math.ceil(F(F(F(F(gate)+F(rel))+F(echoTail))*sr));
+        const c={nUni,uni:[],subPh:0,dubPh:0,ic1:0,ic2:0};
+        for(let k2=0;k2<nUni;k2++)c.uni.push(F(k2/(nUni+1)));
+        const wf=p=>wave(e.wave,p);
+        for(let i=0;i<nMax;i++){
+          const ix=start+i;
+          if(ix>=len)break;
+          const active=i<n;
+          let v=0;
+          if(active){
+            const t=F(i/sr);
+            const a=F(amp*adsr(t,gate,env[0],env[1],env[2],env[3]));
+            v=F(F(a)*noteSample(c,st,wf,f0,dur,i,sr));
+          }
+          if(active){
+            dry[ix]+=v;
+            if(revLvl>0)rev[ix]+=v;
+            if(delayLvl>0)ech[ix]+=F(F(v)*F(delayLvl));
+          }
+          let pre=v;
+          if(active&&flange){
+            const y=flangeProcess(flange,pre);
+            fx[ix]+=F(F(y)-F(pre));
+            pre=y;
+          }
+          if(active&&phaser){
+            const ch=phaserChain(phaser,pre);
+            fx[ix]+=ch;
+            pre=F(F(pre)+F(ch));
+          }
+          if(echo){ // the ring continues through its tail (zero input)
+            const y=echoProcess(echo,pre);
+            fx[ix]+=y;
+          }
+        }
+      }
+      frame+=barFrames[b];
+    }
+    // ---------------- phase 2: mix + master ----------------
+    const verb=roomKind==='fdn'?mkFdn(sr,fdnDecay,fdnDamp):mkSchroeder(sr);
+    const ping=mkRing(Math.max(QUANTUM_F,Math.round(F(F(0.2)*sr))));
+    const sat={prev:0};
+    const lim=newLimiter(sr,0.97);
+    let duckGain=1,coef=0;
+    const trig=[];
+    if(duck>0){
+      let bf=0;
+      for(let b=0;b<nb;b++){
+        const sec=F(barSecs[b]);
+        for(const e of evsArr[b]){if(e.is_drum)trig.push(bf+Math.floor(F(F(F(e.phase)*sec)*sr)));}
+        bf+=barFrames[b];
+      }
+      trig.sort((a,z)=>a-z);
+      coef=duckCoef(barSecs[0],sr);
+    }
+    const out=new Float32Array(len);
+    let tr=0,barIdx=0,barStart=0;
+    for(let i=0;i<len;i++){
+      while(tr<trig.length&&trig[tr]<=i){duckGain=Math.max(0.05,1-duck);tr++;}
+      if(barIdx+1<barFrames.length&&i>=barStart+barFrames[barIdx]){barStart+=barFrames[barIdx];barIdx++;if(duck>0)coef=duckCoef(barSecs[barIdx],sr);}
+      duckGain=F(F(duckGain)+F(F(1-duckGain)*F(coef)));
+      const bus=F(F(dry[i])+F(fx[i]));
+      let m=F(F(bus)*F(duckGain));
+      m=F(F(m)+F(F(ECHO_SEND)*F(pingProcess(ping,F(F(ech[i])+F(bus))))));
+      m=F(F(m)+F(F(SPACE_SEND)*F(verbProcess(verb,F(F(rev[i])+F(bus))))));
+      m=satProcess(sat,m,warmth);
+      m=limProcess(lim,m);
+      out[i]=F(Math.max(-1,Math.min(1,m)));
+    }
+    return out;
+    // ---- phase 1 + 2 local helpers (hoisted) ----
+    function flangeProcess(fl,x){
+      const lfo=sinPi(fl.lfo);
+      fl.lfo=wrapP(F(fl.lfo+F(F(fl.rate)/fl.sr)));
+      const t1=F(F(F(lfo)*F(0.5))+F(0.5));
+      const t2=F(F(F(t1)*F(fl.depth))*F(60));
+      const ds=F(F(2)+F(t2));
+      const ri=F(F(fl.pos)-ds);
+      const r0=F(Math.floor(ri));
+      const fr=F(ri-r0);
+      let i0=((r0|0)%128+128)%128;
+      const i1=(i0+1)%128;
+      const dl=F(F(fl.buf[i0])+F(F(F(fl.buf[i1])-F(fl.buf[i0]))*fr));
+      fl.buf[fl.pos]=undenormal(F(F(x)+F(F(dl)*F(0.5))));
+      fl.pos=(fl.pos+1)%128;
+      return F(F(F(x)+F(dl))*F(0.6));
+    }
+    function phaserChain(ph,x){
+      const l=sinPi(ph.lfo);
+      ph.lfo=wrapP(F(ph.lfo+F(F(ph.rate)/ph.sr)));
+      if((ph.count%32)===0){
+        for(let k=0;k<4;k++){bqSet(ph.aps[k],1,ph.sr,F(F(F(400)+F(F(k)*F(350)))+F(F(900)*F(l))),0.7);}
+      }
+      ph.count=(ph.count+1)>>>0;
+      let v=x;
+      for(const ap of ph.aps)v=bqProcess(ap,v);
+      return v;
+    }
+    function echoProcess(ec,x){
+      const fb=ec.fb;
+      const y=ringOut(ec);
+      ringPush(ec,undenormal(F(F(F(0.45)*x)+F(F(fb)*y))));
+      return y;
+    }
+    function pingProcess(ring,x){
+      const d=ringOut(ring);
+      ringPush(ring,undenormal(F(x+F(F(0.32)*d))));
+      return d;
+    }
+    function satProcess(sat,x,drive){
+      const g=F(1+F(F(drive)*F(4)));
+      const comp=F(F(1)/F(F(1)+F(F(drive)*F(0.6))));
+      const mid=F(F(F(sat.prev)+F(x))*F(0.5));
+      sat.prev=x;
+      return F(F(F(Math.tanh(F(F(mid)*g))+Math.tanh(F(F(x)*g)))*F(0.5))*comp);
+    }
+    function newLimiter(sr,ceiling){
+      const rel=F(1-F(Math.pow(F(F(1)-F(0.0009)),F(F(48000)/sr))));
+      return {ceiling,buf:new Float32Array(128),need:new Float32Array(128).fill(1),
+              pos:0,g:1,release:rel,min:1,minPos:0};
+    }
+    function limProcess(lim,x){
+      const peak=Math.abs(x);
+      const tg=peak>lim.ceiling?lim.ceiling/peak:1;
+      if(tg<lim.g)lim.g=tg;else lim.g=F(lim.g+F(F(1-lim.g)*F(lim.release)));
+      const p=lim.pos;
+      const g=Math.min(lim.min,Math.min(lim.g,tg));
+      const out=F(F(lim.buf[p])*F(g));
+      lim.buf[p]=x;
+      lim.need[p]=tg;
+      if(tg<=lim.min){lim.min=tg;lim.minPos=p;}
+      else if(lim.minPos===p){
+        let mi=p,mv=tg;
+        for(let k=0;k<128;k++){const v=lim.need[k];if(v<mv){mv=v;mi=k;}}
+        lim.min=mv;lim.minPos=mi;
+      }
+      lim.pos=(p+1)%128;
+      return out;
+    }
+    function mkFdn(sr,decay,damp){
+      const times=[0.0431,0.0530,0.0617,0.0727,0.0843,0.0937,0.1051,0.1153];
+      const norm=F(F(1)/F(Math.sqrt(8)));
+      const lines=times.map(t=>mkRing(Math.max(QUANTUM_F,Math.round(F(F(t)*sr)))));
+      const lps=[];for(let k=0;k<8;k++)lps.push(newBiquad(0,sr,damp,SQRT1_2_F));
+      const aps=[newAllpass(Math.max(QUANTUM_F,Math.round(F(F(0.0047)*sr))),F(0.5)),
+                 newAllpass(Math.max(QUANTUM_F,Math.round(F(F(0.0019)*sr))),F(0.5))];
+      return {fdn:true,lines,lps,norm,decay:F(decay),aps};
+    }
+    function mkSchroeder(sr){
+      const combs=[0.0297,0.0371,0.0411,0.0437].map(t=>({ring:mkRing(Math.max(QUANTUM_F,Math.round(F(F(t)*sr)))),lp:newBiquad(0,sr,3800,SQRT1_2_F)}));
+      const aps=[newAllpass(Math.max(QUANTUM_F,Math.round(F(F(0.005)*sr))),F(0.5)),
+                 newAllpass(Math.max(QUANTUM_F,Math.round(F(F(0.0017)*sr))),F(0.5))];
+      return {fdn:false,combs,aps};
+    }
+    function verbProcess(verb,x){
+      if(verb.fdn){
+        let out=0;const v=new Float32Array(8);
+        for(let i=0;i<8;i++){const d=ringOut(verb.lines[i]);out=F(F(out)+F(d));v[i]=bqProcess(verb.lps[i],d);}
+        let h=1;
+        while(h<8){
+          for(let i0=0;i0<8;i0+=h*2){
+            for(let j=0;j<h;j++){
+              const a=v[i0+j],bb=v[i0+h+j];
+              v[i0+j]=F(F(a)+F(bb));
+              v[i0+h+j]=F(F(a)-F(bb));
+            }
+          }
+          h*=2;
+        }
+        for(let i=0;i<8;i++){
+          const g1=F(F(verb.norm)*x);
+          const g2=F(F(F(F(v[i])*F(verb.norm))*F(verb.decay)));
+          const gsum=F(F(g1)+F(g2));
+          ringPush(verb.lines[i],undenormal(gsum));
+        }
+        const y=allpassProcess(verb.aps[0],out);
+        return allpassProcess(verb.aps[1],y);
+      }
+      let sum=0;
+      for(const cb of verb.combs){
+        const d=ringOut(cb.ring);
+        sum=F(F(sum)+F(d));
+        ringPush(cb.ring,undenormal(F(F(x)+F(F(0.8)*F(bqProcess(cb.lp,d))))));
+      }
+      const y=allpassProcess(verb.aps[0],sum);
+      return allpassProcess(verb.aps[1],y);
+    }
+  }
+
+  // Encode f32 PCM as a 16-bit mono WAV (44-byte header, normalized to 0.97) —
+  // mirror of loom-core::render_fx::render_wav.
+  function wavBytes(pcm,sr){
+    sr=(sr&&sr>0)?sr:44100;
+    const n=pcm.length;
+    let peak=0;
+    for(let i=0;i<n;i++){const a=Math.abs(pcm[i]);if(a>peak)peak=a;}
+    const norm=peak>1e-9?F(F(0.97)/peak):1;
+    const bytes=new Uint8Array(44+n*2);
+    const dv=new DataView(bytes.buffer);
+    bytes.set([0x52,0x49,0x46,0x46],0);dv.setUint32(4,36+n*2,true);
+    bytes.set([0x57,0x41,0x56,0x45],8);
+    bytes.set([0x66,0x6d,0x74,0x20],12);dv.setUint32(16,16,true);
+    dv.setUint16(20,1,true);dv.setUint16(22,1,true);
+    dv.setUint32(24,Math.round(sr),true);dv.setUint32(28,Math.round(sr)*2,true);
+    dv.setUint16(32,2,true);dv.setUint16(34,16,true);
+    bytes.set([0x64,0x61,0x74,0x61],36);dv.setUint32(40,n*2,true);
+    for(let i=0;i<n;i++){
+      const v=Math.max(-1,Math.min(1,F(F(pcm[i])*F(norm))));
+      const r=F(F(v)*F(32767));
+      let s=Math.sign(r)*Math.round(Math.abs(r)); // round-half-away-from-zero
+      if(s<-32768)s=-32768;else if(s>32767)s=32767;
+      dv.setInt16(44+i*2,s,true);
+    }
+    return bytes;
+  }
+
+    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

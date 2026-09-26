@@ -10,6 +10,7 @@ pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flan
 /// Deterministic mono PCM renderer (P6-1 of the unified synthesis/FX engine) —
 /// std-only, no dependencies; consumes the Rust scheduler's events directly.
 pub mod render;
+pub mod render_fx;
 
 pub mod prof;
 

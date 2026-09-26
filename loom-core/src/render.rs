@@ -24,11 +24,11 @@ use std::f32::consts::PI;
 
 /// Default envelope used when a voice has no `| env` (short attack/decay, no
 /// clicks at the note gates). Must match the JS mirror.
-const DEFAULT_ENV: Env = Env { a: 0.003, d: 0.015, s: 0.92, r: 0.05 };
+pub(crate) const DEFAULT_ENV: Env = Env { a: 0.003, d: 0.015, s: 0.92, r: 0.05 };
 /// Fallback low-pass cutoff when a filter type is set but no `A..B`/value was
 /// given (the web's synth parser also defaults to 800 Hz). Only used when a
 /// filter is present.
-const DEFAULT_CUTOFF: f32 = 800.0;
+pub(crate) const DEFAULT_CUTOFF: f32 = 800.0;
 
 /// Render `bars` bars of `src` into mono PCM (f32, -1..1), at sample rate `sr`.
 /// The total length is the sum of `round(bar_seconds(bar) * sr)` over the bars —
@@ -74,7 +74,7 @@ fn render_event(buf: &mut [f32], base: usize, sec: f32, e: Event, sr: f32) {
 
 /// Raw band-limited(*) oscillator shapes over a 0..1 phase. (*) square/saw/tri
 /// are naive (aliasing is fine for a deterministic compute engine).
-fn wave(w: Wave, p: f32) -> f32 {
+pub(crate) fn wave(w: Wave, p: f32) -> f32 {
     match w {
         Wave::Sine => sin_pi(p),
         Wave::Square => {
@@ -95,18 +95,18 @@ fn wave(w: Wave, p: f32) -> f32 {
     }
 }
 
-fn sin_pi(p: f32) -> f32 {
+pub(crate) fn sin_pi(p: f32) -> f32 {
     (p * 2.0 * PI).sin()
 }
 
 /// Wrap a phase into 0..1.
-fn wrap(p: f32) -> f32 {
+pub(crate) fn wrap(p: f32) -> f32 {
     p - p.floor()
 }
 
 /// ADSR envelope: attack [0,a] -> decay [a,a+d] 1→s -> sustain -> release after
 /// the gate [gate, gate+r] (started from the current level, so it is continuous).
-fn adsr(t: f32, gate: f32, e: Env) -> f32 {
+pub(crate) fn adsr(t: f32, gate: f32, e: Env) -> f32 {
     let a = e.a.max(0.0);
     let d = e.d.max(0.0);
     let r = e.r.max(0.0);
@@ -139,7 +139,7 @@ fn adsr(t: f32, gate: f32, e: Env) -> f32 {
 /// The filter cutoff range: `(c0, c1)` with `c0 == c1` meaning a constant cutoff
 /// and `c0 != c1` a linear sweep across the note. LFO-type signals are treated
 /// as their base level (v1 — LFOs are P6-3).
-fn cutoff_span(c: Option<Param>) -> (f32, f32) {
+pub(crate) fn cutoff_span(c: Option<Param>) -> (f32, f32) {
     match c {
         Some(Param::Const(x)) => (x, x),
         Some(Param::Sweep { a, b }) => (a, b),
@@ -149,7 +149,7 @@ fn cutoff_span(c: Option<Param>) -> (f32, f32) {
 }
 
 /// Current cutoff at note time `t` (seconds), sweeping linearly over the note.
-fn sweep(c0: f32, c1: f32, t: f32, dur: f32) -> f32 {
+pub(crate) fn sweep(c0: f32, c1: f32, t: f32, dur: f32) -> f32 {
     if c1 == c0 {
         c0
     } else {
@@ -159,7 +159,7 @@ fn sweep(c0: f32, c1: f32, t: f32, dur: f32) -> f32 {
 
 /// 2-pole state-variable filter (svf) — one sample. `ic1/ic2` are the integrator
 /// states of this note (per-event, reset at the note start).
-fn svf(x: f32, fc: f32, q: f32, kind: FilterType, sr: f32, ic1: &mut f32, ic2: &mut f32) -> f32 {
+pub(crate) fn svf(x: f32, fc: f32, q: f32, kind: FilterType, sr: f32, ic1: &mut f32, ic2: &mut f32) -> f32 {
     let fc = fc.clamp(5.0, sr * 0.48);
     let g = (PI * fc / sr).tan();
     let k = 1.0 / q;
@@ -180,6 +180,88 @@ fn svf(x: f32, fc: f32, q: f32, kind: FilterType, sr: f32, ic1: &mut f32, ic2: &
     }
 }
 
+/// The note's per-sample oscillator/filter parameters, resolved once per event
+/// (shared by the raw `render_program` and the full FX pipeline — ONE definition
+/// of "what a note sounds like" in Rust).
+pub(crate) struct NoteParam {
+    pub(crate) n_uni: usize,
+    pub(crate) detune: f32,
+    pub(crate) sub: f32,
+    pub(crate) dub: f32,
+    pub(crate) ft: Option<FilterType>,
+    pub(crate) q: f32,
+    pub(crate) c0: f32,
+    pub(crate) c1: f32,
+}
+
+impl NoteParam {
+    pub(crate) fn of(s: &Synth) -> NoteParam {
+        NoteParam {
+            n_uni: s.unison.unwrap_or(0).max(1) as usize,
+            detune: s.detune.unwrap_or(0.0).max(0.0),
+            sub: s.sub.unwrap_or(0.0).clamp(0.0, 1.0),
+            dub: s.double.unwrap_or(0.0).clamp(0.0, 1.0),
+            ft: s.filter_type,
+            q: s.q.unwrap_or(1.0).clamp(0.1, 20.0),
+            c0: cutoff_span(s.cutoff).0,
+            c1: cutoff_span(s.cutoff).1,
+        }
+    }
+}
+
+/// The note's per-sample state: oscillator phases + filter integrators, reset at
+/// the note start and advanced by [`note_sample`] each sample.
+pub(crate) struct NoteCtx {
+    pub(crate) uni_ph: Vec<f32>,
+    pub(crate) sub_ph: f32,
+    pub(crate) dub_ph: f32,
+    pub(crate) ic1: f32,
+    pub(crate) ic2: f32,
+}
+
+impl NoteCtx {
+    pub(crate) fn new(p: &NoteParam) -> NoteCtx {
+        NoteCtx {
+            uni_ph: (0..p.n_uni).map(|i| i as f32 / (p.n_uni as f32 + 1.0)).collect(),
+            sub_ph: 0.0,
+            dub_ph: 0.0,
+            ic1: 0.0,
+            ic2: 0.0,
+        }
+    }
+}
+
+/// One sample of the note: oscillators (unison/detune + sub/double layers) into
+/// the SVF (static or swept), advancing the note's phase/filter state.
+pub(crate) fn note_sample(c: &mut NoteCtx, p: &NoteParam, i: usize, sr: f32, freq: f32, dur: f32, w: Wave) -> f32 {
+    let t = i as f32 / sr;
+    let mut out = 0.0f32;
+    for (k, ph) in c.uni_ph.iter_mut().enumerate() {
+        let ratio = if p.n_uni > 1 {
+            let pos = k as f32 * 2.0 / (p.n_uni as f32 - 1.0) - 1.0;
+            2.0f32.powf(pos * (p.detune / 1200.0))
+        } else {
+            1.0
+        };
+        let fk = freq * ratio;
+        out += wave(w, *ph);
+        *ph = wrap(*ph + fk / sr);
+    }
+    out /= p.n_uni as f32;
+    if p.sub > 0.0 {
+        out += p.sub * sin_pi(c.sub_ph);
+        c.sub_ph = wrap(c.sub_ph + (freq / 2.0) / sr);
+    }
+    if p.dub > 0.0 {
+        out += p.dub * wave(w, c.dub_ph);
+        c.dub_ph = wrap(c.dub_ph + (freq * 2.0) / sr);
+    }
+    match p.ft {
+        None => out,
+        Some(kind) => svf(out, sweep(p.c0, p.c1, t, dur), p.q, kind, sr, &mut c.ic1, &mut c.ic2),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_note(buf: &mut [f32], start: usize, freq: f32, dur: f32, amp: f32, w: Wave, s: &Synth, sr: f32) {
     if amp <= 0.0 || amp.is_nan() {
@@ -189,53 +271,15 @@ fn render_note(buf: &mut [f32], start: usize, freq: f32, dur: f32, amp: f32, w: 
     let env = s.env.unwrap_or(DEFAULT_ENV);
     let rel = env.r.max(0.0);
     let n = ((gate + rel) * sr).ceil() as usize;
-    // --- oscillators ---
-    let n_uni = s.unison.unwrap_or(0).max(1) as usize;
-    let detune = s.detune.unwrap_or(0.0).max(0.0);
-    let sub = s.sub.unwrap_or(0.0).clamp(0.0, 1.0);
-    let dub = s.double.unwrap_or(0.0).clamp(0.0, 1.0);
-    // --- filter ---
-    let ft = s.filter_type;
-    let q = s.q.unwrap_or(1.0).clamp(0.1, 20.0);
-    let (c0, c1) = cutoff_span(s.cutoff);
-    // --- per-note state ---
-    let mut uni_ph: Vec<f32> = (0..n_uni).map(|i| i as f32 / (n_uni as f32 + 1.0)).collect();
-    let mut sub_ph = 0.0f32;
-    let mut dub_ph = 0.0f32;
-    let (mut ic1, mut ic2) = (0.0f32, 0.0f32);
+    let p = NoteParam::of(s);
+    let mut c = NoteCtx::new(&p);
     for i in 0..n {
         let ix = start + i;
         if ix >= buf.len() {
             break;
         }
-        let t = i as f32 / sr;
-        let a = amp * adsr(t, gate, env);
-        let mut out = 0.0f32;
-        for (k, ph) in uni_ph.iter_mut().enumerate() {
-            let ratio = if n_uni > 1 {
-                let pos = k as f32 * 2.0 / (n_uni as f32 - 1.0) - 1.0;
-                2.0f32.powf(pos * (detune / 1200.0))
-            } else {
-                1.0
-            };
-            let fk = freq * ratio;
-            out += wave(w, *ph);
-            *ph = wrap(*ph + fk / sr);
-        }
-        out /= n_uni as f32;
-        if sub > 0.0 {
-            out += sub * sin_pi(sub_ph);
-            sub_ph = wrap(sub_ph + (freq / 2.0) / sr);
-        }
-        if dub > 0.0 {
-            out += dub * wave(w, dub_ph);
-            dub_ph = wrap(dub_ph + (freq * 2.0) / sr);
-        }
-        let fout = match ft {
-            None => out,
-            Some(kind) => svf(out, sweep(c0, c1, t, dur), q, kind, sr, &mut ic1, &mut ic2),
-        };
-        buf[ix] += a * fout;
+        let a = amp * adsr(i as f32 / sr, gate, env);
+        buf[ix] += a * note_sample(&mut c, &p, i, sr, freq, dur, w);
     }
 }
 
