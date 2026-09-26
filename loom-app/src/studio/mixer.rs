@@ -79,10 +79,21 @@ pub enum Param {
     Pan,
 }
 
+/// A `send:` effect return in the mixeur: one fader per return (its wet level).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SendStrip {
+    pub name: String,
+    pub kind: String,
+    /// Wet that comes back, 0..1 (default 1 = as routed by `| send`).
+    pub level: f32,
+}
+
 #[derive(Default)]
 pub struct Mixer {
     /// The current voices first (in the code's order), then the hidden ones.
     pub strips: Vec<Strip>,
+    /// The declared `send:` returns, in code order.
+    pub sends: Vec<SendStrip>,
 }
 
 impl Mixer {
@@ -103,6 +114,12 @@ impl Mixer {
             self.strips.push(strip);
         }
         self.strips.extend(old.into_iter().map(|s| Strip { present: false, meter: 0.0, ..s }));
+        // returns: rebuild from the code, keeping each fader where the user left it
+        let old_sends = std::mem::take(&mut self.sends);
+        for s in &program.mix.sends {
+            let level = old_sends.iter().find(|o| o.name == s.name).map_or(1.0, |o| o.level);
+            self.sends.push(SendStrip { name: s.name.clone(), kind: s.kind.clone(), level });
+        }
     }
 
     /// The strips of the voices in the code.
@@ -119,6 +136,18 @@ impl Mixer {
             engine.set_voice_pan(&s.name, s.pan);
             engine.set_solo(&s.name, s.solo);
         }
+        for s in &self.sends {
+            engine.set_send_level(&s.name, s.level);
+        }
+    }
+
+    /// Wet fader of a return, 0..1.
+    pub fn set_send_level(&mut self, index: usize, level: f32, engine: Option<&Engine>) {
+        let Some(s) = self.sends.get_mut(index) else { return };
+        s.level = level.clamp(0.0, 1.0);
+        if let Some(e) = engine {
+            e.set_send_level(&s.name, s.level);
+        }
     }
 
     /// Back to neutral (another song was opened), in the engine too.
@@ -126,10 +155,14 @@ impl Mixer {
         for s in &mut self.strips {
             *s = Strip { present: s.present, ..Strip::new(&s.name) };
         }
+        for s in &mut self.sends {
+            s.level = 1.0;
+        }
         if let Some(engine) = engine {
             self.apply(engine);
         }
         self.strips.retain(|s| s.present);
+        self.sends.clear();
     }
 
     pub fn set_gain(&mut self, index: usize, gain: f32, engine: Option<&Engine>) {
@@ -217,8 +250,7 @@ mod tests {
 
     #[test]
     fn keyboard_nudges_stay_in_range() {
-        let mut mixer = Mixer::default();
-        mixer.sync(&Program::parse("hat: x x"));
+        let mut mixer = Mixer::default();        mixer.sync(&Program::parse("hat: x x"));
         for _ in 0..30 {
             mixer.nudge(0, Param::Gain, 1.0, None);
             mixer.nudge(0, Param::Pan, -1.0, None);
@@ -227,6 +259,23 @@ mod tests {
         assert_eq!((mixer.strips[0].gain_text(), mixer.strips[0].pan_text()), ("200 %".to_string(), "G 100".to_string()));
         mixer.nudge(0, Param::Pan, 13.0, None);
         assert_eq!(mixer.strips[0].pan_text(), "D 30");
+    }
+
+    #[test]
+    fn send_returns_follow_the_code_and_keep_their_fader() {
+        let mut mixer = Mixer::default();
+        mixer.sync(&Program::parse("send: tails echo 2 0.5\nsend: airy reverb hall 0.8 4000\nkick: x"));
+        assert_eq!(mixer.sends.iter().map(|s| (s.name.as_str(), s.kind.as_str(), s.level)).collect::<Vec<_>>(),
+            [("tails", "echo", 1.0), ("airy", "reverb", 1.0)]);
+        mixer.set_send_level(0, 0.4, None);
+        mixer.sync(&Program::parse("send: airy reverb plate 0.7 6000\nsend: tails echo 4 0.3\nkick: x"));
+        assert_eq!(mixer.sends[0].name, "airy");
+        assert_eq!((mixer.sends[1].name.as_str(), mixer.sends[1].level), ("tails", 0.4));
+        // a return that disappears is dropped; reset puts every fader back to 1
+        mixer.sync(&Program::parse("kick: x"));
+        assert!(mixer.sends.is_empty());
+        mixer.reset(None);
+        assert!(mixer.sends.is_empty());
     }
 
     #[test]

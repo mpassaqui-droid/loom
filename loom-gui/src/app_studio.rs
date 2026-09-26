@@ -62,6 +62,11 @@ impl LoomApp {
                 }
             }
             StudioAction::ToggleSolo(i) => self.studio.mixer.toggle_solo(i, engine),
+            StudioAction::SendLevel(i) => {
+                if let Some(send) = self.studio.mixer.sends.get(i).cloned() {
+                    self.studio.mixer.set_send_level(i, send.level, engine);
+                }
+            }
             StudioAction::ToggleLearn => {
                 self.studio.learn.toggle();
                 self.say(if self.studio.learn.on {

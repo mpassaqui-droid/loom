@@ -34,6 +34,8 @@ enum Cmd {
     Space(f32),
     Echo(f32),
     Eq(f32, f32, f32),
+    /// Wet fader of a `send:` return.
+    SendLevel(String, f32),
     /// Start (Some) or stop (None) copying the output to a recorder thread.
     Record(Option<Sender<Vec<f32>>>),
 }
@@ -152,6 +154,8 @@ impl Engine {
     pub fn set_echo(&self, knob: f32) { let _ = self.tx.send(Cmd::Echo(knob)); }
     /// Master EQ in dB (-18..18): low shelf, mid peak, high shelf (browser defaults 0, 0, 2).
     pub fn set_eq(&self, low: f32, mid: f32, high: f32) { let _ = self.tx.send(Cmd::Eq(low, mid, high)); }
+    /// Wet fader of a `send:` return, 0..1.
+    pub fn set_send_level(&self, name: &str, level: f32) { let _ = self.tx.send(Cmd::SendLevel(name.to_string(), level)); }
 
     /// Tick on every beat.
     pub fn set_metronome(&self, on: bool) { let _ = self.tx.send(Cmd::Metronome(on)); }
@@ -231,6 +235,7 @@ where
                         Cmd::Space(x) => seq.set_space(x),
                         Cmd::Echo(x) => seq.set_echo(x),
                         Cmd::Eq(l, m, h) => seq.set_eq(l, m, h),
+                        Cmd::SendLevel(n, l) => seq.set_send_level(&n, l),
                         Cmd::Record(r) => recorder = r,
                     }
                 }

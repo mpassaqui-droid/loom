@@ -402,6 +402,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <b>automation</b>: <i>A..B</i> sur un param = rampe dans le temps (ex. <i>lp 300..6000</i>) &middot; <i>over N</i> = durée en mesures<br>
     <b>stéréo</b> (après |): <i>pan P</i> (-1 gauche … 1 droite) &middot; bus master compressé/limité (glue studio)<br>
     <b>espace</b> (après |): <i>reverb N</i> (0-1, profondeur) &middot; <i>delay N</i> (0-1, écho) &mdash; send par voix<br>
+    <b>sends</b> (returns globaux, mélange parallèle) : directive <i>send: NOM echo DIV FB</i> | <i>flange RATE DEPTH</i> | <i>reverb SALLE DECAY DAMP</i>, puis <i>| send NOM R</i> (0-1, wet) sur une voix &mdash; le dry reste intact<br>
     <b>MIDI</b> (après |): <i>midi CH</i> (1-16) &mdash; envoie la voix vers ton DAW/synthé matériel (drums → canal 10)<br>
     <b>samples</b> (après |): <i>sample NAME</i> &mdash; drums (bd sd hh cp kick909 clubkick oh rim cow perc tom… tabla) &middot; mélodiques (bass arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo) &middot; breaks (amen break amencut) &middot; voix/texture (vox yeah breath wood metal glass bottle) &middot; <i>root NOTE</i> pour accorder<br>
     <b>pump</b>: <i>duck: 70</i> (ligne) &mdash; sidechain : tout le mix duck à chaque kick (groove techno)<br>
@@ -424,7 +425,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   "use strict";
   const $=id=>document.getElementById(id);
   const editor=$("editor"),grid=$("grid"),con=$("console");
-  let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null,buses={},busCfg={};
+  let ctx=null,master=null,comp=null,bus=null,scGain=null,delay=null,fb=null,echoSend=null,conv=null,spaceSend=null,noiseBuf=null,delayL=null,delayR=null,buses={},busCfg={},JS_SENDS=[],jsSendIn={},jsSendOut={};
   let duckAmt=0,feelAmt=0,midiOut=null,midiAsked=false,midiClock=false,midiFollow=false,clkTimes=[],analyser=null,scopeMode="wave",_pkHold=0;
   let midiLearn=false,learnTarget=null,ccMap={};  // MIDI CC mapping (learn -> control)
   let voices=[],key=null,seed=0,song=[],prog=[],tuning="equal",playing=false,cycleLen=2,baseBpm=120,tempoMap={},meterBeats=4,keyMap={},accel=null,groove=null,nextBarTime=0,transportStart=0,barCount=0,schedTimer=null,stemSolo=null;
@@ -463,7 +464,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   // build the whole audio graph into the current `ctx` (reused for offline render)
   function buildGraph(){
     masterSat=null;masterWLim=null;  // fresh per graph (live vs offline contexts)
-    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();buses={};busCfg=parseBuses(editor.value);
+    master=ctx.createGain();master.gain.value=+$("vol").value/100*0.8;bus=ctx.createGain();buses={};busCfg=parseBuses(editor.value);JS_SENDS=parseSends(editor.value);jsSendIn={};jsSendOut={};
     // ping-pong delay: `delay` is the mono INPUT, then two cross-fed delay lines
     // panned hard L/R so each echo bounces side to side. fb = feedback amount.
     delay=ctx.createGain();
@@ -515,6 +516,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       let revNode=combSum;for(const ap of[[0.005,0.5],[0.0017,0.5]]){const a=allpass(ap[0],ap[1]);revNode.connect(a.input);revNode=a.output;}
       bus.connect(conv);revNode.connect(spaceSend);spaceSend.connect(master);
     }
+    for(const s0 of JS_SENDS)buildSendReturn(s0);
     scGain=ctx.createGain();scGain.gain.value=1;bus.connect(scGain);scGain.connect(master);
     // master glue: a gentle compressor/limiter so the mix sounds cohesive & loud
     comp=ctx.createDynamicsCompressor();
@@ -769,7 +771,54 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   // per-voice FX sends: route a voice's output into the reverb/delay buses too
   function connectFx(outNode,v){if(!v)return;
     if(v.reverb&&conv){const s=ctx.createGain();s.gain.value=Math.min(1,v.reverb);outNode.connect(s);s.connect(conv);}
-    if(v.dly&&delay){const s=ctx.createGain();s.gain.value=Math.min(1,v.dly);outNode.connect(s);s.connect(delay);}}
+    if(v.dly&&delay){const s=ctx.createGain();s.gain.value=Math.min(1,v.dly);outNode.connect(s);s.connect(delay);}
+    if(v.sends)for(const s0 of v.sends){const n=jsSendIn[s0.name];if(n){const s=ctx.createGain();s.gain.value=s0.amt;outNode.connect(s);s.connect(n);}}}
+  // `send: NAME echo|flange|reverb …` — a named global effect return; voices route
+  // to it with `| send NAME R`. Built in parallel with the main bus (wet only):
+  // each return's wet output feeds the master, the dry voice is untouched.
+  function buildSendReturn(s0){
+    if(!ctx||!master)return;const inp=ctx.createGain(),o=ctx.createGain();o.gain.value=1;
+    const num=(v,d)=>(v!=null&&!isNaN(parseFloat(v)))?parseFloat(v):d;
+    const kind=s0.kind||"echo";
+    if(kind==="echo"){
+      const div=Math.max(0.25,Math.min(32,num(s0.a,4))),fb=Math.max(0,Math.min(0.9,num(s0.b,0.4)));
+      const dl=ctx.createDelay(2);dl.delayTime.value=(cycleLen||2)/div;
+      const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=3200;lp.Q.value=0.7;
+      const fbg=ctx.createGain();fbg.gain.value=fb;
+      inp.connect(dl);dl.connect(lp);lp.connect(fbg);fbg.connect(dl);dl.connect(o);o.connect(master);
+    }else if(kind==="flange"){
+      const rate=Math.max(0.02,Math.min(10,num(s0.a,0.4))),depth=Math.max(0,Math.min(1,num(s0.b,0.6)));
+      const d=ctx.createDelay(0.05);d.delayTime.value=0.003;
+      const osc=ctx.createOscillator();osc.frequency.value=rate;
+      const g=ctx.createGain();g.gain.value=depth*0.006;osc.connect(g);g.connect(d.delayTime);osc.start();
+      const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=2600;
+      const fbg=ctx.createGain();fbg.gain.value=0.35;
+      inp.connect(d);d.connect(o);d.connect(lp);lp.connect(fbg);fbg.connect(d);o.connect(master);
+    }else{ // reverb: dedicated compact Schroeder, own decay/damp
+      const dec=Math.max(0.1,Math.min(0.97,num(s0.a,0.8))),damp=num(s0.b,4000);
+      const csum=ctx.createGain(),ct=[0.0249,0.0317,0.0369,0.0413],cfb=dec*0.9;
+      for(const t of ct){const dd0=ctx.createDelay(1);dd0.delayTime.value=t;
+        const lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=damp;
+        const gg=ctx.createGain();gg.gain.value=cfb;inp.connect(dd0);dd0.connect(csum);dd0.connect(lp);lp.connect(gg);gg.connect(dd0);}
+      let rv=csum;const ap=(tm,gg0)=>{const ai=ctx.createGain(),ao=ctx.createGain(),dd0=ctx.createDelay(1);dd0.delayTime.value=tm;const fbk=ctx.createGain();fbk.gain.value=gg0;const ffd=ctx.createGain();ffd.gain.value=-gg0;ai.connect(dd0);ai.connect(ffd);ffd.connect(ao);dd0.connect(ao);dd0.connect(fbk);fbk.connect(dd0);return{input:ai,output:ao};};
+      for(const a0 of[[0.0047,0.5],[0.0019,0.5]]){const apn=ap(a0[0],a0[1]);rv.connect(apn.input);rv=apn.output;}
+      rv.connect(o);o.connect(master);
+    }
+    jsSendIn[s0.name]=inp;jsSendOut[s0.name]=o;
+  }
+  function parseSends(src){const out=[];
+    for(const line of String(src||"").split("\n")){
+      const t=(line||"").split("#")[0].trim();const i=t.indexOf(":");if(i<0)continue;
+      if(t.slice(0,i).trim().toLowerCase()!=="send")continue;
+      const w=t.slice(i+1).trim().split(/\s+/).filter(Boolean);if(w.length<2)continue;
+      const name=w[0].toLowerCase(),kind=(w[1]||"").toLowerCase();
+      if(kind!=="echo"&&kind!=="flange"&&kind!=="reverb")continue;
+      const a=kind==="reverb"?(w[3]!=null&&!isNaN(parseFloat(w[3]))?parseFloat(w[3]):null):(w[2]!=null&&!isNaN(parseFloat(w[2]))?parseFloat(w[2]):null);
+      const b=kind==="reverb"?(w[4]!=null&&!isNaN(parseFloat(w[4]))?parseFloat(w[4]):null):(w[3]!=null&&!isNaN(parseFloat(w[3]))?parseFloat(w[3]):null);
+      out.push({name,kind,a,b});
+    }
+    return out;
+  }
   // granular sample player: spray the buffer as a cloud of short randomized grains (timestretch/texture)
   function grainSample(name,t,gain,rate,v){const b=sbuf[name];if(!b)return false;
     const G=Math.min(40,Math.max(6,Math.round(6+v.grain*40))),glen=Math.min(0.12,0.04+v.grain*0.06),spread=0.45,dur=b.duration||0.4;
@@ -1509,7 +1558,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   let morphBars=0,morphState=null;
   function parseMorph(text){for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="morph"){const n=parseInt(line.slice(i+1),10);return isNaN(n)?0:Math.max(0,Math.min(32,n));}}return 0;}
-  const MORPH_DIRS=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","morph"];
+  const MORPH_DIRS=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph"];
   function srcMapOf(text){const m={};for(const raw of noComments(expandMacros(text)).split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i<0)continue;
     const full=line.slice(0,i).trim().toLowerCase();if(MORPH_DIRS.includes(full.split("@")[0]))continue;m[full]=line;}return m;}
@@ -1554,7 +1603,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
-    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","morph"].includes(name))continue;
+    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph"].includes(name))continue;
     const segs=line.slice(i+1).split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
@@ -1562,7 +1611,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null;const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1586,6 +1635,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="root")root=p[1]||null;
       else if(p[0]==="reverb"||p[0]==="room")reverb=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="delay")dly=Math.max(0,Math.min(1,parseFloat(p[1])||0));
+      else if(p[0]==="send"){const sn=(p[1]||"").toLowerCase();if(sn)sends.push({name:sn,amt:Math.max(0,Math.min(1,isNaN(parseFloat(p[2]))?0.3:parseFloat(p[2])))});}
       else if(p[0]==="ir"){ir=p[1]||"hall";const mx=parseFloat(p[2]);if(!isNaN(mx))irmix=Math.max(0,Math.min(1,mx));}
       else if(p[0]==="voicing"||p[0]==="voice")voicing=p[1]||"open";
       else if(p[0]==="cresc")dyn=1;else if(p[0]==="dim"||p[0]==="decresc")dyn=-1;
@@ -1654,7 +1704,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -2285,7 +2335,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else{if(start<0)start=i;cur+=ch;}}
     push();return out;}
   // snapshot the source into lines; voice lines carry their tokens (with columns) + hue.
-  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth","film","title"];
+  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth","film","title","bus","room","send"];
     const lines=text.split("\n");
     for(let li=0;li<lines.length;li++){const raw=lines[li],t=raw.trim(),ci=raw.indexOf(":");
       let voice=false,name="",pat="",post="";
@@ -6895,7 +6945,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     const cl=cycleLen,out=_cap.map(o=>({voice:o.v,phase:o.t/cl,tok:o.tok,drum:o.drum,pan:o.pan}));
     _cap=prev;return out;
   }
-  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

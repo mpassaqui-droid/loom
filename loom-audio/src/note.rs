@@ -60,7 +60,7 @@ pub struct NoteSpec<'a> {
 }
 
 /// Where a voice's sound goes.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Route {
     /// Index of the mix bus (0 = main), from `Master::bus_index`.
     pub bus: usize,
@@ -68,6 +68,8 @@ pub struct Route {
     pub reverb: f32,
     /// `| delay N` send amount.
     pub delay: f32,
+    /// Pre-resolved `| send NAME R` routes: (index into `Master::sends`, amount 0..1).
+    pub sends: Vec<(u32, f32)>,
 }
 
 /// What a note produces for one sample.

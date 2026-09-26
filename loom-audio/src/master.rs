@@ -41,6 +41,8 @@ pub struct MixInput {
     pub reverb: Stereo,
     /// Sum of the `| delay` sends.
     pub delay: Stereo,
+    /// One stereo sum per `send:` return (parallel to `Master::sends`).
+    pub sends: Vec<Stereo>,
 }
 
 impl MixInput {
@@ -48,6 +50,7 @@ impl MixInput {
         self.buses.iter_mut().for_each(|b| *b = Stereo::ZERO);
         self.reverb = Stereo::ZERO;
         self.delay = Stereo::ZERO;
+        self.sends.iter_mut().for_each(|s| *s = Stereo::ZERO);
     }
 }
 
@@ -89,6 +92,148 @@ impl Bus {
     }
 }
 
+/// A continuous tempo-synced echo (`send: echo DIV FB`): the wet output is the
+/// delayed stream, which rings on through the feedback + lowpass.
+struct EchoRet {
+    buf: Vec<f32>,
+    pos: usize,
+    div: f32,
+    fb: f32,
+    lpf: [Biquad; 2],
+    need: usize,
+}
+
+impl EchoRet {
+    fn new(sr: f32, div: f32, fb: f32) -> EchoRet {
+        let lpf = Biquad::lowpass(sr, 3200.0, 0.7);
+        EchoRet {
+            buf: vec![0.0; 8],
+            pos: 0,
+            div: div.clamp(0.25, 32.0),
+            fb: fb.clamp(0.0, 0.9),
+            lpf: [lpf.clone(), lpf],
+            need: 8,
+        }
+    }
+    /// Re-time the loop when the bar length changes (new tempo / meter).
+    fn set_bar(&mut self, bar_sec: f32, sr: f32) {
+        let n = ((bar_sec / self.div) * sr).max(64.0) as usize * 2;
+        if n == self.need { return; }
+        let keep = self.buf.len().min(n);
+        let mut nb = vec![0.0; n];
+        let fresh = nb.len().saturating_sub(keep);
+        let start = self.pos * 2 % keep;
+        for k in 0..keep { nb[fresh + k] = self.buf[(start + k) % keep]; }
+        self.buf = nb;
+        self.pos = 0;
+        self.need = n;
+    }
+    fn process(&mut self, x: Stereo) -> Stereo {
+        let i = self.pos;
+        let n = self.buf.len();
+        let d = Stereo { l: self.buf[i], r: self.buf[i + 1] };
+        let fb = Stereo { l: self.lpf[0].process(d.l), r: self.lpf[1].process(d.r) };
+        self.buf[i] = x.l + fb.l * self.fb;
+        self.buf[i + 1] = x.r + fb.r * self.fb;
+        self.pos = (i + 2) % n;
+        d
+    }
+}
+
+/// A continuous flanger (`send: flange RATE DEPTH`): a short modulated delay
+/// line with light feedback; the wet output is the modulated tap.
+struct FlangeRet {
+    buf: Vec<f32>,
+    pos: usize,
+    sr: f32,
+    rate: f32,
+    depth: f32,
+    ph: f32,
+}
+
+impl FlangeRet {
+    fn new(sr: f32, rate: f32, depth: f32) -> FlangeRet {
+        let cap = (0.024 * sr).ceil() as usize * 2 + 2;
+        FlangeRet {
+            buf: vec![0.0; cap],
+            pos: 0,
+            sr,
+            rate: rate.clamp(0.02, 10.0),
+            depth: depth.clamp(0.0, 1.0),
+            ph: 0.0,
+        }
+    }
+    fn process(&mut self, x: Stereo) -> Stereo {
+        self.ph = (self.ph + self.rate / self.sr) % 1.0;
+        let wob = 0.5 + 0.5 * (std::f32::consts::TAU * self.ph).sin();
+        let delay_s = (0.0003 + 0.011 * wob * self.depth).min(0.018);
+        let w = (delay_s * self.sr).max(1.0);
+        let n = self.buf.len();
+        self.buf[self.pos] = x.l;
+        self.buf[self.pos + 1] = x.r;
+        let r = |b: &[f32], p: usize, w: f32| -> f32 {
+            let n = b.len();
+            let a = (p + ((w as usize) * 2)) % n;
+            let b0 = b[a];
+            let frac = w.fract();
+            let b1 = b[(a + 2) % n];
+            b0 + (b1 - b0) * frac
+        };
+        let rp = (self.pos + self.buf.len() - w as usize * 2 % n) % n;
+        let wet = Stereo { l: r(&self.buf, rp, w), r: r(&self.buf, rp + 1, w) };
+        self.pos = (self.pos + 2) % n;
+        wet
+    }
+}
+
+/// A live `send:` return in the master: a continuous effect fed by the summed
+/// stream each note routes to it (`| send NAME R`).
+enum SendEff {
+    Rv(Reverb),
+    Ec(EchoRet),
+    Fl(FlangeRet),
+}
+
+impl SendEff {
+    fn process(&mut self, x: Stereo) -> Stereo {
+        match self {
+            SendEff::Rv(r) => r.process(x),
+            SendEff::Ec(e) => e.process(x),
+            SendEff::Fl(f) => f.process(x),
+        }
+    }
+}
+
+pub struct SendReturn {
+    pub name: String,
+    pub kind: String,
+    /// Limiter on how much wet comes back (the return fader), 0..1.
+    pub level: f32,
+    eff: SendEff,
+}
+
+impl SendReturn {
+    fn new(sr: f32, spec: &loom_core::SendSpec) -> SendReturn {
+        let level = 1.0;
+        let eff = match spec.kind.as_str() {
+            "echo" => SendEff::Ec(EchoRet::new(sr, spec.a.unwrap_or(4.0), spec.b.unwrap_or(0.4))),
+            "flange" => SendEff::Fl(FlangeRet::new(sr, spec.a.unwrap_or(0.4), spec.b.unwrap_or(0.6))),
+            _ => {
+                let room = Room {
+                    kind: spec.s.clone().filter(|s| !s.is_empty()),
+                    decay: spec.a,
+                    damp: spec.b,
+                };
+                SendEff::Rv(Reverb::new(sr, &room))
+            }
+        };
+        SendReturn { name: spec.name.clone(), kind: spec.kind.clone(), level, eff }
+    }
+    fn set_bar(&mut self, sec: f32, sr: f32) {
+        if let SendEff::Ec(e) = &mut self.eff { e.set_bar(sec, sr); }
+    }
+}
+
 pub struct Master {
     sr: f32,
     /// App volume 0..1.5 (the JS `vol/100`).
@@ -102,6 +247,10 @@ pub struct Master {
     room: Room,
     reverb: Reverb,
     delay: PingPong,
+    /// The `send:` effect returns, each named and routed by `| send NAME`.
+    sends: Vec<SendReturn>,
+    /// Current bar length in seconds (temp changes re-time the `send: echo`).
+    bar_sec: f32,
     /// SPACE / ECHO knob sends and master EQ gains (dB), live-adjustable.
     space_send: f32,
     echo_send: f32,
@@ -141,6 +290,8 @@ impl Master {
             reverb: Reverb::new(sr, &room),
             room,
             delay: PingPong::new(sr),
+            sends: Vec::new(),
+            bar_sec: 2.0,
             space_send: SPACE_SEND,
             echo_send: ECHO_SEND,
             eq_db: [EQ_LOW_DB, EQ_MID_DB, EQ_HIGH_DB],
@@ -167,6 +318,35 @@ impl Master {
         if !same {
             self.buses = mix.buses.iter().map(|c| Bus::new(self.sr, c)).collect();
         }
+        let ssame = self.sends.len() == mix.sends.len()
+            && self.sends.iter().zip(&mix.sends).all(|(a, b)| a.name.eq_ignore_ascii_case(&b.name) && a.kind == b.kind);
+        if !ssame {
+            self.sends = mix.sends.iter().map(|c| SendReturn::new(self.sr, c)).collect();
+            for s in &mut self.sends { s.set_bar(self.bar_sec, self.sr); }
+        }
+    }
+
+    /// Index of a `send:` return by name, for `| send NAME` routing.
+    pub fn send_index(&self, name: &str) -> Option<usize> {
+        self.sends.iter().position(|s| s.name.eq_ignore_ascii_case(name))
+    }
+    pub fn send_count(&self) -> usize { self.sends.len() }
+
+    /// Resolve a voice's `| send NAME R` list into indices + amounts, dropping
+    /// routes to returns that aren't declared (they fall back on `| reverb`?).
+    pub fn send_routes(&self, list: &[(String, f32)]) -> Vec<(u32, f32)> {
+        list.iter()
+            .filter(|(_, a)| *a > 0.0)
+            .filter_map(|(n, a)| self.send_index(n).map(|i| (i as u32, a.clamp(0.0, 1.0))))
+            .collect()
+    }
+
+    /// A bar boundary passed: re-time the tempo-synced echo returns.
+    pub fn set_bar(&mut self, sec: f32) {
+        if sec > 0.0 && (sec - self.bar_sec).abs() > 1e-4 {
+            self.bar_sec = sec;
+            for s in &mut self.sends { s.set_bar(sec, self.sr); }
+        }
     }
 
     /// Bus for a voice's `| bus NAME` (0 = main). A name without a `bus:` line
@@ -191,6 +371,16 @@ impl Master {
     pub fn set_space(&mut self, knob: f32) { self.space_send = knob.clamp(0.0, 100.0) / 100.0 * 0.9; }
     /// The ECHO knob, 0..100 (browser default 15): how much of the mix feeds the ping-pong delay.
     pub fn set_echo(&mut self, knob: f32) { self.echo_send = knob.clamp(0.0, 100.0) / 100.0; }
+
+    /// Wet of a `send:` return, 0..1 (the return fader in the mixeur).
+    pub fn set_send_level(&mut self, name: &str, level: f32) {
+        if let Some(s) = self.sends.iter_mut().find(|s| s.name.eq_ignore_ascii_case(name)) {
+            s.level = level.clamp(0.0, 1.0);
+        }
+    }
+    pub fn send_level(&self, name: &str) -> Option<f32> {
+        self.sends.iter().find(|s| s.name.eq_ignore_ascii_case(name)).map(|s| s.level)
+    }
     /// Master EQ in dB (low shelf 120 Hz, peak 1 kHz, high shelf 8 kHz), -18..18.
     pub fn set_eq(&mut self, low: f32, mid: f32, high: f32) {
         self.eq_db = [low, mid, high].map(|g| g.clamp(-18.0, 18.0));
@@ -222,6 +412,13 @@ impl Master {
         let mut mix = bus.scale(self.duck_gain);
         mix.add(echo.scale(self.echo_send));
         mix.add(space.scale(self.space_send));
+        // each `send:` return processes its accumulated stream and its wet output
+        // comes back in parallel (the dry bus is untouched)
+        for (i, send) in self.sends.iter_mut().enumerate() {
+            if send.level <= 0.0 { continue; }
+            let Some(x) = input.sends.get(i) else { continue };
+            mix.add(send.eff.process(clean(*x)).scale(send.level));
+        }
 
         // mastering chain
         let mut x = mix.scale(self.volume * 0.8);
@@ -287,7 +484,7 @@ mod tests {
             let frames = 480000;
             for _ in 0..frames {
                 let s = Stereo { l: n.sample() * 0.3, r: n.sample() * 0.3 };
-                m.process(&MixInput { buses: vec![s, s], reverb: s.scale(0.2), delay: s.scale(0.1) });
+                m.process(&MixInput { buses: vec![s, s], reverb: s.scale(0.2), delay: s.scale(0.1), sends: vec![] });
             }
             println!("master {room:?}: {:.0} ns/sample", t.elapsed().as_nanos() as f64 / frames as f64);
         }
@@ -365,7 +562,7 @@ mod tests {
         for i in 0..(3.0 * SR) as usize {
             let loud = 4.0; // +12 dB
             let s = Stereo { l: n.sample() * loud, r: n.sample() * loud };
-            let inp = MixInput { buses: vec![s, s, s], reverb: s, delay: s };
+            let inp = MixInput { buses: vec![s, s, s], reverb: s, delay: s, sends: vec![] };
             if i % 24000 == 0 { m.duck(2.0); }
             let y = m.process(&inp);
             assert!(y.l.is_finite() && y.r.is_finite());
@@ -375,5 +572,46 @@ mod tests {
         // garbage in, silence-safe out
         let y = m.process(&MixInput { buses: vec![Stereo { l: f32::NAN, r: f32::INFINITY }], ..Default::default() });
         assert!(y.l.is_finite() && y.r.is_finite());
+    }
+
+    #[test]
+    fn echo_return_delays_and_rings() {
+        let mut e = EchoRet::new(48000.0, 4.0, 0.5);
+        e.set_bar(2.0, 48000.0);
+        let frames = e.buf.len() / 2; // one loop = one bar / div
+        assert!(frames > 0, "bar/div must give a positive loop");
+        let mut peaks = [0.0f32; 4];
+        for k in 0..frames * 4 {
+            let y = e.process(if k == 0 { Stereo::mono(0.5) } else { Stereo::ZERO });
+            peaks[(k / frames).min(3)] = peaks[(k / frames).min(3)].max(y.l.abs());
+        }
+        assert!((peaks[1] - 0.5).abs() < 1e-3, "first echo tap exactly one loop later: {peaks:?}");
+        // feedback decays (through the darkening LP) but keeps ringing
+        assert!(peaks[2] < peaks[1] && peaks[2] > 0.01, "feedback decays: {peaks:?}");
+        assert!(peaks[3] < peaks[2] && peaks[3] > 0.001, "ringing keeps going: {peaks:?}");
+    }
+
+    #[test]
+    fn send_returns_configure_and_route() {
+        let src = "send: tails echo 8 0.6\nsend: airy reverb hall 0.8 4000\nsend: zoo flange 0.3 0.5\n";
+        let mut m = Master::new(SR);
+        m.configure(&loom_core::MixSettings::parse(src));
+        assert_eq!(m.send_count(), 3);
+        assert_eq!(m.send_index("TAILS"), Some(0), "case-insensitive");
+        assert_eq!(m.send_index("airy"), Some(1));
+        assert_eq!(m.send_index("zoo"), Some(2));
+        assert_eq!(m.send_index("ghost"), None);
+        let r = m.send_routes(&[("tails".into(), 0.4), ("airy".into(), 0.0), ("ghost".into(), 0.9)]);
+        assert_eq!(r, vec![(0, 0.4)], "zero & unknown sends dropped");
+        // the wet output really reaches the mix: impulse into the echo return,
+        // then read a later frame while the return is silent
+        let mut inp = MixInput { buses: vec![Stereo::ZERO], sends: vec![Stereo::ZERO; 3], ..Default::default() };
+        m.set_bar(2.0);
+        inp.sends[0] = Stereo::mono(0.5);
+        let _ = m.process(&inp);
+        inp.sends[0] = Stereo::ZERO;
+        let mut tail_peak = 0.0f32;
+        for _ in 0..(SR * 1.5) as usize { let y = m.process(&inp); tail_peak = tail_peak.max(y.l.abs()).max(y.r.abs()); }
+        assert!(tail_peak > 1e-3, "the return keeps ringing after the send stops: {tail_peak}");
     }
 }

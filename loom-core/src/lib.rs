@@ -5,7 +5,7 @@
 //! so the language behaves identically everywhere. No external dependencies.
 
 mod synth;
-pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flange, Fm, Harm, Lfo, MixSettings, Param, Reson, Room, SigShape, Synth};
+pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flange, Fm, Harm, Lfo, MixSettings, Param, Reson, Room, SendSpec, SigShape, Synth};
 
 pub mod prof;
 
@@ -176,9 +176,9 @@ pub struct Event {
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 22] = [
+const DIRECTIVES: [&str; 23] = [
     "key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune",
-    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "morph",
+    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "send", "morph",
 ];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
@@ -2605,6 +2605,18 @@ mod tests {
         let v = parse("duck: 60\nkick: x x x x");
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].name, "kick");
+    }
+
+    #[test]
+    fn send_directive_is_not_a_voice() {
+        // a `send:` return (mix directive) must not be scheduleable as a voice
+        let v = parse("send: tails echo 4 0.5\nsend: airy reverb hall 0.85 4500\nkick: x . x . | send tails 0.6\npad: 1 5 3 | send airy 0.2");
+        assert_eq!(v.len(), 2);
+        assert!(v.iter().all(|x| x.name != "send" && x.name != "airy" && x.name != "tails"));
+        // the `| send` verb is a sound verb, not a pattern verb: onsets are untouched
+        let with = schedule_bar(&parse("k: 1 3 5 1 | send tails 0.5"), 0);
+        let without = schedule_bar(&parse("k: 1 3 5 1"), 0);
+        assert_eq!(with.iter().map(|e| e.phase).collect::<Vec<_>>(), without.iter().map(|e| e.phase).collect::<Vec<_>>());
     }
 
     #[test]

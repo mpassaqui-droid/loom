@@ -12,15 +12,24 @@
 > diff --check. Rust touchant la sortie analysée → rebuild WASM. P6 (moteur
 > unifié synthèse/FX WASM) reste un chantier séparé, pas dans cette vague.
 
-- [ ] **P1 · Plus de scènes GPU (web)** — suite de T5 : raymarching 3D (SDF
+- [x] **P1 · Plus de scènes GPU (web)** — suite de T5 : raymarching 3D (SDF
       sphères/tore), néons (tubes le long du beat), hyperspace (warp stellaire) ;
       même mécanisme `uMode` + post déjà en place ; GLSL ES 1.00 validé
-      (`glslangValidator`) + `check_web.js` 4/4 + parse JS.
+      (`glslangValidator`) + `check_web.js` 4/4 + parse JS. commit ceae1ee
 - [ ] **P2 · Accessibilité** (web + GUI) — navigation 100 % clavier, contrastes
       des thèmes (WCAG AA), grandes polices / zoom, focus visible.
-- [ ] **P3 · Bus & sends** — le vrai trou DAW : groupes de voix (`bus:`), N sends
+- [x] **P3 · Bus & sends** — le vrai trou DAW : groupes de voix (`bus:`), N sends
       vers des returns d'effets partagés (réverb/delay/echo globaux), ducking lié ;
       logique `loom-audio` + bouche dans le mixeur GUI.
+      — `send:` accorde N returns nommés {echo, flange, reverb}, `| send NOM R`
+      route une voix vers un retour (wet seule, dry intact, settles > retour silencieux
+      jamais gelé) ; lo-es routés par indice pré-résolu à la création de la note ;
+      écho retour tempo-synchro (re-dimensionné à la barre) avec LP de feedback 3200 Hz,
+      flange LFO, réverb room par return ; fader wet vivant (`set_send_level` master →
+      séquenceur → moteur → mixeur GUI, strips « RETOURS ») ; JS : `buildSendReturn`
+      (graphe par retour dans `buildGraph`, routage dans `connectFx`) + `parseSends`
+      exporté (harness node + parité) ; corpus parité `send returns (no-op onsets)`
+      valide 2 moteurs ; portes 361✅ clippy 0✅ parité 23/23+254/254✅ check_web 4/4✅.
 - [ ] **P4 · Composition algorithmique dans la langue** — la langue qui grandit :
       verbes `l-sys` (L-systèmes), grammaires stochastiques (Xenakis), `evolve`
       (génétique) ; `loom-core` + tests + parité 2 moteurs + doc.

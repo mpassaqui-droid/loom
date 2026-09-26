@@ -246,7 +246,7 @@ impl Sequencer {
         let mut master = Master::new(sample_rate);
         let program = Program::parse("");
         master.configure(&program.mix);
-        let mix = MixInput { buses: vec![Default::default(); master.bus_count()], ..Default::default() };
+        let mix = MixInput { buses: vec![Default::default(); master.bus_count()], sends: vec![Stereo::ZERO; master.send_count()], ..Default::default() };
         Sequencer {
             sr: sample_rate, program, pending: None, playing: false,
             bar: 0, song_bar: 0, pos: 0, bar_start: 0, bar_len: 0,
@@ -319,6 +319,7 @@ impl Sequencer {
     fn install(&mut self, program: Program) {
         self.master.configure(&program.mix);
         self.mix.buses.resize(self.master.bus_count(), Default::default());
+        self.mix.sends.resize(self.master.send_count(), Stereo::ZERO);
         self.program = program;
     }
 
@@ -347,6 +348,8 @@ impl Sequencer {
     pub fn set_space(&mut self, knob: f32) { self.master.set_space(knob); }
     /// ECHO knob 0..100 (ping-pong delay amount for the whole mix).
     pub fn set_echo(&mut self, knob: f32) { self.master.set_echo(knob); }
+    /// Wet fader of a `send:` return, 0..1 (mixeur).
+    pub fn set_send_level(&mut self, name: &str, level: f32) { self.master.set_send_level(name, level); }
     /// Master EQ in dB: low, mid, high.
     pub fn set_eq(&mut self, low: f32, mid: f32, high: f32) { self.master.set_eq(low, mid, high); }
 
@@ -372,6 +375,7 @@ impl Sequencer {
             bus: self.master.bus_index(synth.bus.as_deref()),
             reverb: synth.reverb.unwrap_or(0.0).min(1.0),
             delay: synth.delay.unwrap_or(0.0).min(1.0),
+            sends: self.master.send_routes(&synth.sends),
         };
         self.live.push((note, LiveVoice::new(self.sr, wave, &synth, note, velocity, route)));
     }
@@ -411,6 +415,7 @@ impl Sequencer {
         };
         self.bar_start = self.pos;
         self.bar_len = ((bar_sec * self.sr) as u64).max(1);
+        self.master.set_bar(bar_sec);
 
         // where the current section sits in the song (for `A..B` sweeps)
         self.clock.bar_sec = bar_sec;
@@ -532,6 +537,7 @@ impl Sequencer {
             bus: self.master.bus_index(s.bus.as_deref()),
             reverb: s.reverb.unwrap_or(0.0).min(1.0),
             delay: s.delay.unwrap_or(0.0).min(1.0),
+            sends: self.master.send_routes(&s.sends),
         };
         let step_sec = ev.dur * bar_sec;
         // flam: a soft grace note just before the hit (drums and notes alike)
@@ -552,14 +558,14 @@ impl Sequencer {
                     let gain = (ev.gain * 4.0 * vm).min(1.0);
                     let chop = self.next_chop(&ev.voice);
                     if let Some(v) = SampleVoice::new(&self.bank, &spec, gain, 1.0, chop) {
-                        self.queue.push(Queued { start, note: Note::sample(v, &spec, route) });
+                        self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
                         continue;
                     }
                 }
                 // The browser's synth drums ignore `| gain` (meant for samples);
                 // natively it may only turn a drum DOWN from the 0.22 default.
                 if let Some(d) = Drum::new(&ev.voice, self.sr, vm * (ev.gain / 0.22).min(1.0), self.seed) {
-                    self.queue.push(Queued { start, note: Note::drum(d, &ev.voice, ev.pan, Route { reverb: 0.0, delay: 0.0, ..route }) });
+                    self.queue.push(Queued { start, note: Note::drum(d, &ev.voice, ev.pan, Route { reverb: 0.0, delay: 0.0, ..route.clone() }) });
                 }
             }
             return;
@@ -597,7 +603,7 @@ impl Sequencer {
                 let spec = self.spec(ev, freqs[0], dur, ev.gain * vm, bar_sec);
                 if let Some(v) = SampleVoice::new(&self.bank, &spec, ev.gain * vm, 1.0, 0) {
                     let start = at(self, dt);
-                    self.queue.push(Queued { start, note: Note::sample(v, &spec, route) });
+                    self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
                 }
                 continue;
             }
@@ -609,7 +615,7 @@ impl Sequencer {
                     let chop = self.next_chop(&ev.voice);
                     if let Some(v) = SampleVoice::new(&self.bank, &spec, gain, f / root, chop) {
                         let start = at(self, dt);
-                        self.queue.push(Queued { start, note: Note::sample(v, &spec, route) });
+                        self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
                     }
                 }
                 continue;
@@ -618,7 +624,7 @@ impl Sequencer {
             for (k, f) in freqs.iter().enumerate() {
                 let strum = s.strum.map_or(0.0, |st| k as f32 * st);
                 let spec = self.spec(ev, *f, dur, peak, bar_sec);
-                let note = Note::tone(&spec, &self.bank, route);
+                let note = Note::tone(&spec, &self.bank, route.clone());
                 // JS: `| pluck` voices don't feed the slide memory
                 if s.pluck.is_none() { self.last_freq.insert(ev.voice.clone(), *f); }
                 let start = at(self, dt + strum);
@@ -715,6 +721,9 @@ impl Sequencer {
                 self.mix.buses[bus].add(o.bus_only);
                 if n.route.reverb > 0.0 { self.mix.reverb.add(o.main.scale(n.route.reverb)); }
                 if n.route.delay > 0.0 { self.mix.delay.add(o.main.scale(n.route.delay)); }
+                for (si, amt) in &n.route.sends {
+                    if let Some(s) = self.mix.sends.get_mut(*si as usize) { s.add(o.main.scale(*amt)); }
+                }
             }
             self.notes.retain(|n| !n.done());
             for (_, v) in &mut self.live {
@@ -723,6 +732,9 @@ impl Sequencer {
                 self.mix.buses[bus].add(o);
                 if v.route.reverb > 0.0 { self.mix.reverb.add(o.scale(v.route.reverb)); }
                 if v.route.delay > 0.0 { self.mix.delay.add(o.scale(v.route.delay)); }
+                for (si, amt) in &v.route.sends {
+                    if let Some(s) = self.mix.sends.get_mut(*si as usize) { s.add(o.scale(*amt)); }
+                }
             }
             self.live.retain(|(_, v)| !v.done());
             let s = self.master.process(&self.mix);
@@ -1038,5 +1050,27 @@ mod tests {
         assert_eq!(voice_chord(vec![60.0, 64.0, 67.0, 71.0], "shell"), vec![60.0, 64.0, 71.0]);
         let j = adaptive_just(&[261.63, 329.63, 392.0]);
         assert!((j[1] / j[0] - 1.25).abs() < 1e-4 && (j[2] / j[0] - 1.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn sends_enrich_the_mix_and_ring_after() {
+        let mut damp = seq();
+        damp.set_program(Program::parse("bpm: 120\nlead: c4 | saw"));
+        damp.play();
+        let dry = bars(&mut damp, 1.0);
+        let mut wet = seq();
+        wet.set_program(Program::parse("bpm: 120\nsend: tails echo 4 0.5\nlead: c4 | saw | send tails 0.6"));
+        wet.play();
+        let buf = bars(&mut wet, 1.0);
+        assert!(buf.iter().all(|v| v.is_finite()));
+        // the `| send` return is parallel: the dry voice is unchanged in the body…
+        let body = |x: &[f32]| x[..(0.25 * SR) as usize * 2].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        assert!(body(&buf) > 0.0, "the voice still sounds");
+        // …but in the tail the dry is silent while the echo return rings on
+        let mp = |x: &[f32], sec: f32| x[(sec * SR) as usize * 2..(sec * SR + 0.4 * SR) as usize * 2].iter().fold(0.0f32, |m, v| m.max(v.abs()));
+        assert!(mp(&dry, 1.2) < 1e-5, "dry tail is silent");
+        assert!(mp(&buf, 1.2) > 1e-4, "echo return rings in the tail: {}", mp(&buf, 1.2));
+        // and it is strictly quieter without the send at the same moment
+        assert!(mp(&buf, 1.2) > mp(&dry, 1.2) * 10.0);
     }
 }

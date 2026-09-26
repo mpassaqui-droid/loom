@@ -190,6 +190,8 @@ pub struct Synth {
     pub reverb: Option<f32>,
     /// `| delay N` — send to the master ping-pong delay 0..1.
     pub delay: Option<f32>,
+    /// `| send NAME R` — route a copy of the voice through the named `send:` return.
+    pub sends: Vec<(String, f32)>,
     /// `| bus NAME` — submix bus.
     pub bus: Option<String>,
     /// `| midi CHANNEL` 1..16 — send notes to MIDI instead of the synth.
@@ -321,6 +323,12 @@ impl Synth {
             "root" => self.root = p.get(1).map(|s| s.to_string()),
             "reverb" | "room" => self.reverb = Some(num(&p, 1).unwrap_or(0.0).clamp(0.0, 1.0)),
             "delay" => self.delay = Some(num(&p, 1).unwrap_or(0.0).clamp(0.0, 1.0)),
+            "send" => {
+                if let Some(name) = p.get(1) {
+                    let amt = num(&p, 2).unwrap_or(0.3).clamp(0.0, 1.0);
+                    self.sends.push((name.to_lowercase(), amt));
+                }
+            }
             "ir" => {
                 self.ir = Some(p.get(1).unwrap_or(&"hall").to_string());
                 if let Some(m) = num(&p, 2) { self.irmix = Some(m.clamp(0.0, 1.0)) }
@@ -452,6 +460,22 @@ pub struct BusConfig {
     pub reverb: Option<f32>,
 }
 
+/// A global effect return (`send: NAME kind p1 p2`). Any voice can route a copy
+/// of its signal to it with `| send NAME AMOUNT`; the return's wet output is
+/// added back to the mix (sends are parallel — the dry signal is untouched).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SendSpec {
+    pub name: String,
+    /// `reverb` | `echo` | `flange`.
+    pub kind: String,
+    /// reverb: the room kind (`hall|cathedral|plate|room|spring`).
+    pub s: Option<String>,
+    /// reverb: decay | echo: division | flange: LFO rate.
+    pub a: Option<f32>,
+    /// reverb: damp | echo: feedback | flange: depth.
+    pub b: Option<f32>,
+}
+
 /// The mix-wide directives the browser applies to the whole song.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MixSettings {
@@ -463,6 +487,7 @@ pub struct MixSettings {
     pub warmth: f32,
     pub room: Room,
     pub buses: Vec<BusConfig>,
+    pub sends: Vec<SendSpec>,
     /// `morph: N` — crossfade changed voices over N bars on re-evaluation (0 = instant).
     pub morph: u32,
     /// `loop: SECTION` — repeat one section of the song.
@@ -524,6 +549,23 @@ impl MixSettings {
                 k += 2;
             }
         }
+        let mut sends: Vec<SendSpec> = Vec::new();
+        for raw in src.lines() {
+            let line = crate::decomment(raw).trim();
+            let Some(i) = line.find(':') else { continue };
+            if !line[..i].trim().eq_ignore_ascii_case("send") { continue; }
+            let w: Vec<&str> = line[i + 1..].split_whitespace().collect();
+            let Some(name) = w.first().map(|s| s.to_lowercase()) else { continue };
+            let kind = w.get(1).map(|s| s.to_lowercase()).unwrap_or_default();
+            if !matches!(kind.as_str(), "reverb" | "echo" | "flange") { continue; }
+            sends.push(SendSpec {
+                name,
+                kind: kind.clone(),
+                s: if kind == "reverb" { w.get(2).map(|s| s.to_lowercase()) } else { None },
+                a: num(&w, if kind == "reverb" { 3 } else { 2 }).filter(|x| x.is_finite()),
+                b: num(&w, if kind == "reverb" { 4 } else { 3 }).filter(|x| x.is_finite()),
+            });
+        }
         let tune = directive(src, "tune").map(|w| {
             let w = w.to_lowercase();
             let digits: String = w.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -543,6 +585,7 @@ impl MixSettings {
             warmth: directive_pct(src, "warmth", 0.3, 1.0),
             room,
             buses,
+            sends,
             morph: directive(src, "morph").and_then(|v| v.parse::<u32>().ok()).unwrap_or(0).min(32),
             loop_section: directive(src, "loop").map(|s| s.to_lowercase()).filter(|s| !s.is_empty()),
             tune,

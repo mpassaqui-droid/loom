@@ -99,6 +99,28 @@ fn master_strip(ui: &mut egui::Ui, studio: &mut Studio, peak: f32, theme: &Theme
                 }
             });
             ui.label(RichText::new(studio.knobs.text(Knob::Volume)).small().monospace());
+            let sends = studio.mixer.sends.clone();
+            if !sends.is_empty() {
+                ui.add_space(4.0);
+                ui.label(RichText::new("RETOURS").small().monospace().color(color(theme.dim)));
+                ui.horizontal(|ui| {
+                    for (i, snd) in sends.iter().enumerate() {
+                        ui.vertical_centered(|ui| {
+                            let mut level = snd.level;
+                            let grip = color(theme.note);
+                            let slider = egui::Slider::new(&mut level, 0.0..=1.0).vertical().show_value(false);
+                            let slider = colored_grip(ui, grip, |ui| ui.add_sized(egui::vec2(12.0, METER_HEIGHT * 0.6), slider));
+                            if slider.changed() {
+                                studio.mixer.sends[i].level = level;
+                                actions.push(Action::Studio(StudioAction::SendLevel(i)));
+                            }
+                            slider.on_hover_text(format!("Retour {} (wet)", snd.name));
+                            ui.label(RichText::new(format!("{:.0}%", level * 100.0)).small().monospace().color(color(theme.dim)));
+                            ui.label(RichText::new(&snd.name).small().monospace().color(color(theme.foreground)));
+                        });
+                    }
+                });
+            }
         });
     });
 }

@@ -122,6 +122,7 @@ const pieces = {
   'tonnetz (neo-Riemann)': 'h: tonnetz(8,C,PLR) | saw\nh2: tonnetz(6,Am,LR) | sine',
   'hocket (tiling canon)': 'a: x . . x . . x . | hocket\nb: e(5,16) | hocket\nc: tresillo | hocket',
   'bus routing (no-op onsets)': 'room: fdn 0.85 4200\nbus: drums gain 0.8 lp 1500 reverb 0.3\nkick: x . x . | bus drums\nsnare: . . x . | bus drums\nlead: 1 3 5 1\' | saw | bus synths',
+  'send returns (no-op onsets)': 'send: tails echo 4 0.5\nsend: airy reverb hall 0.85 4500\nsend: wash flange 0.4 0.6\nkick: x . x . | send tails 0.6\nsnare: . . x . | send tails 0.4\nlead: 1 3 5 1\' | send airy 0.7\npad: 1 5 3 7 | send wash 0.3 | send airy 0.2',
 };
 
 // ── ANALYSER PARITY (offline teacher analysis) ─────────────────────────────

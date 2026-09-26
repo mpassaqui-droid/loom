@@ -64,6 +64,8 @@ pub enum StudioAction {
     KnobChanged(Knob),
     /// Mixer strip `n` changed its fader or pan.
     StripChanged(usize),
+    /// A `send:` return fader moved.
+    SendLevel(usize),
     ToggleSolo(usize),
     ToggleLearn,
     /// While LEARN is on: this knob waits for a controller move.
