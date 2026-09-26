@@ -43,8 +43,16 @@
       couleur de la voix (`colored_grip`, scoped `Visuals` restaurés), grip MASTER en accent ;
       mètres déjà live (`update_meters` ← `engine.voice_levels()`). Vérifié en fenêtre par
       analyse de pixels (blocs de teinte saturée sur le fader de chaque piste, ≥5 teintes).
-- [ ] **T5 · Post-traitement GPU (web)** — bloom/feedback/glitch + 2-3 shaders neufs ;
-      `check_web.js` vert.
+- [x] **T5 · Post-traitement GPU (web)** — pipeline WebGL multi-passes ajoutée au
+      visualiseur fragment `uMode` : 3 nouvelles scènes `gbloom`/`gglitch`/`gfeedback`
+      (nouveaux shaders 10/11/12) avec post FX : bloom (extraction des brillances + flou
+      gaussien quart-résolution réinjecté), glitch (tranches décalées + séparation RGB +)
+      parasite scan), feedback (traînées ≪ précédente trame, ping-pong 2 textures pour
+      éviter la lecture/écriture simultanée). Les 3 shaders compilent en GLSL ES 1.00
+      (glslangValidator) ; `check_web.js` 4/4 ; parse JS OK ; parité intacte ;
+      retombée sans post si WebGL limité.
+- [ ] (Review open) vérification visuelle finale GL sur la machine de CI (Mac) :
+      plein écran + N jusqu'aux scènes GPU — bloom halo, glitch, feedback trails.
 - [ ] Toutes les portes finales (tests workspace, clippy -D, check_web, parité, diff --check),
       commits poussés, Review.
 

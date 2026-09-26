@@ -2268,7 +2268,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const r=[v,q,p,p,t,v][i],g=[t,v,v,q,p,p][i],b=[p,p,t,v,v,q][i];return[r*255|0,g*255|0,b*255|0];}
   // Registre curé (cartographie 01/07) : ~50 scènes distinctives exposées au cycle N / à la doc.
   // Les ~54 autres (attracteurs clones, variantes 3D…) restent dessinables via scene: <nom> (rétrocompat presets).
-  const SCENES=["codemap","radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fire","matrix","orbits","wave","cymatic","chladni","lorenz","reaction","truchet","warp","phyllo","voronoi","sierpinski","lightning","tracker","string","spectro","scope","dna","mandala","fireworks","fern","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora","gcells","gwater","gmandel"];
+  const SCENES=["codemap","radial","tunnel","bars","starfield","kaleido","terrain","spiral","aurora","metaballs","flow","julia","plasma","mandelbrot","network","lissajous","waterfall","torus","fire","matrix","orbits","wave","cymatic","chladni","lorenz","reaction","truchet","warp","phyllo","voronoi","sierpinski","lightning","tracker","string","spectro","scope","dna","mandala","fireworks","fern","shader","gtunnel","gfractal","gwarp","gtorus","gkaleid","gaurora","gcells","gwater","gmandel","gbloom","gglitch","gfeedback"];
   let bloomCv=null,shapes=[];  // bloom offscreen canvas + viz "shape" polygons
   let spectroCv=null;  // persistent offscreen for the scrolling spectrogram scene
   let masterShelf=null,masterLimiter=null,masterSat=null,masterWLim=null,masterOut=null,warmth=0.3,mEqLow=null,mEqMid=null,mEqHigh=null,multibandOn=false;
@@ -2315,12 +2315,13 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       try{(wrap.requestFullscreen||wrap.webkitRequestFullscreen||function(){}).call(wrap);}catch(_){}}
     else{wrap.style.display="none";try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}}
   // ===== GPU shader visualizer (WebGL) — full-screen fragment shaders reactive to the audio =====
-  const GLMODES={shader:0,gtunnel:1,gfractal:2,gwarp:3,gtorus:4,gkaleid:5,gaurora:6,gcells:7,gwater:8,gmandel:9};
+  const GLMODES={shader:0,gtunnel:1,gfractal:2,gwarp:3,gtorus:4,gkaleid:5,gaurora:6,gcells:7,gwater:8,gmandel:9,gbloom:10,gglitch:11,gfeedback:12};
   const GLSCENES=new Set(Object.keys(GLMODES));
   let gl=null,glProg=null,glU={},glOK=null;
   const GL_FRAG=`precision highp float;
 uniform vec2 uRes;uniform float uTime,uBass,uMid,uTreble,uHue;uniform int uMode;
 vec3 hsv(float h,float s,float v){vec3 k=vec3(1.,2./3.,1./3.);vec3 p=abs(fract(vec3(h)+k)*6.-3.);return v*mix(vec3(1.),clamp(p-1.,0.,1.),s);}
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
 void main(){
   vec2 uv=(gl_FragCoord.xy*2.-uRes)/uRes.y; float t=uTime; vec3 col=vec3(0.);
   if(uMode==1){ float a=atan(uv.y,uv.x), r=length(uv);
@@ -2347,6 +2348,22 @@ void main(){
   } else if(uMode==9){ float zoom=0.5+0.45*sin(t*0.1); vec2 cc=vec2(-0.745,0.186)+uv*(0.6*zoom); vec2 z=vec2(0.); float it=0.;
     for(int i=0;i<60;i++){ z=vec2(z.x*z.x-z.y*z.y,2.0*z.x*z.y)+cc; if(dot(z,z)>4.0)break; it+=1.0; }
     float f=it/60.0; col= it>=60.0? vec3(0.) : hsv(fract(uHue+f*2.0+t*0.05+uBass*0.2),0.8,sqrt(f)*(0.7+uMid));
+  } else if(uMode==10){ // gbloom — orbes néon lumineux (le post bloom fait briller leurs cœurs)
+    vec2 p=uv*2.0; vec3 acc=vec3(0.);
+    for(int i=0;i<4;i++){ float fi=float(i); vec2 o=vec2(sin(fi*2.4+t*0.5+uBass*2.4),cos(fi*1.9-t*0.4))*0.75;
+      float d=length(p-o); acc+=hsv(fract(uHue+fi*0.13+t*0.02),0.7,exp(-d*d*7.0))*(0.9-uMid*0.5);}
+    col=acc*1.3+vec3(0.06+uTreble*0.15);
+  } else if(uMode==11){ // gglitch — barres numériques qui tombent (le post glitch les déchire)
+    float lines=14.0+uBass*8.0; float row=floor(uv.y*lines);
+    float off=hash(vec2(row,1.0))*6.2831; float glitchx=(hash(vec2(row,floor(t*6.)))-0.5)*0.5;
+    float x=1.0-abs(sin(uv.x*7.0+off+t*2.0+glitchx+uBass*6.0));
+    float bar=smoothstep(0.35,0.0,x);
+    col=hsv(fract(uHue+row/lines+t*0.04),0.8,bar*(0.5+uMid));
+    if(hash(vec2(floor(t*8.),row))>0.8)col=vec3((hash(vec2(row,floor(t*4.)))>0.5?1.0:0.25),0.08,(hash(vec2(row,t))>0.45?0.35:1.0));
+  } else if(uMode==12){ // gfeedback — vortex en rotation (le post feedback y laisse des traînées)
+    float a=atan(uv.y,uv.x)-t*0.7*(0.5+uBass*1.2); float r=length(uv);
+    vec2 q=vec2(cos(a),sin(a))*r; float v=sin(q.x*9.0-q.y*3.5+t*0.6)+0.5*sin(q.y*5.0+t*0.4);
+    col=hsv(fract(uHue+a/6.2831+t*0.02),0.75,(0.35+0.65*smoothstep(-1.,1.,v))*(0.5+uTreble)+0.05);
   } else { vec2 p=uv*2.; p+=0.5*vec2(sin(p.y*2.+t),cos(p.x*2.+t*0.8));
     float v=sin(p.x*3.+t)+sin(p.y*3.-t)+sin((p.x+p.y)*2.+t*1.3);
     col=hsv(fract(v*0.2+uHue+t*0.02),0.85,0.55+0.35*sin(v+t)+uBass*0.4);
@@ -2367,6 +2384,75 @@ void main(){
     const loc=gl.getAttribLocation(glProg,"p");gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
     for(const u of ["uRes","uTime","uBass","uMid","uTreble","uMode","uHue"])glU[u]=gl.getUniformLocation(glProg,u);
     glOK=true;return true;}
+  // ===== Post-traitement GPU : bloom (halo néon), feedback (traînées), glitch (déchirure) =====
+  let postOK=null,bloomProg=null,postProg=null,pU={},sU={},postW=0,postH=0,blurW=0,blurH=0,
+      fbScene=null,texScene=null,fbBlur=null,texBlur=null,texPrev0=null,texPrev1=null,fPrev0=null,fPrev1=null,prevUse=0,quadBuf=null;
+  const glSh=(ty,src)=>{const o=gl.createShader(ty);gl.shaderSource(o,src);gl.compileShader(o);
+    if(!gl.getShaderParameter(o,gl.COMPILE_STATUS)){console.warn("POST",gl.getShaderInfoLog(o));return null;}return o;};
+  const glLink=(v,f)=>{const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.warn("POSTLINK",gl.getProgramInfoLog(p));return null;}return p;};
+  const GL_BLOOM=`precision highp float;uniform sampler2D uTex;uniform vec2 uRes;uniform float uTreble,uBass;
+void main(){vec2 uv=gl_FragCoord.xy/uRes;vec2 px=1.0/uRes;vec3 bloom=vec3(0.);float ws=0.0;
+  for(int y=-2;y<=2;y++)for(int x=-2;x<=2;x++){float w=exp(-(float(x)*float(x)+float(y)*float(y))*0.5);vec3 s=texture2D(uTex,uv+vec2(float(x),float(y))*px*4.0).rgb;
+    bloom+=max(s-0.3,0.0)*w;ws+=w;}
+  gl_FragColor=vec4(bloom/ws*(1.1+uTreble*1.6)+uBass*0.02,1.);}`;
+  const GL_POST=`precision highp float;
+uniform sampler2D uTex,uBlur,uPrev;uniform vec2 uRes;uniform float uTime,uBass,uMid,uTreble,uFx;uniform int uPost;
+float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+void main(){
+  vec2 uv=gl_FragCoord.xy/uRes;vec2 px=1.0/uRes;
+  vec3 c=texture2D(uTex,uv).rgb;
+  if(uPost==1){ // bloom : ajoute le flou des zones brillantes + repli ^2 pour saturer les cœurs
+    vec3 g=texture2D(uBlur,uv).rgb;c+=g*(0.6+uMid*1.4)+g*g*0.6;}
+  else if(uPost==2){ // feedback : mélange la trame précédente, incurvée selon la basse
+    vec2 warp=vec2(sin(uv.y*5.+uTime*0.5),cos(uv.x*4.-uTime*0.4))*0.015*(0.4+uBass*2.2);
+    vec3 p=texture2D(uPrev,uv+warp).rgb;c=mix(c,p,0.34+uFx*0.22)+vec3(uBass*0.05);}
+  else if(uPost==3){ // glitch : tranches décalées + séparation RGB + parasite scan
+    float row=floor(uv.y*16.);float t8=floor(uTime*8.);
+    float g=hash(vec2(t8,row));vec2 o=vec2(0.);
+    if(g>0.6)o.x=sin(uTime*40.+row*17.)*0.02*(uBass*4.+0.6);
+    else if(g>0.4)o.x=(hash(vec2(row,uTime))-0.5)*0.07;
+    vec3 gc=texture2D(uTex,uv+o).rgb;
+    float sp=0.004+uBass*0.03;
+    vec3 sp2=vec3(texture2D(uTex,uv+vec2(sp,0.)).r,texture2D(uTex,uv).g,texture2D(uTex,uv-vec2(sp,0.)).b);
+    float scan=0.8+0.2*sin(uv.y*uRes.y*1.6);
+    float band=step(0.9+0.06*sin(uTime*22.+row*7.),g);
+    gc+=vec3(hash(vec2(floor(uTime*60.),row))*0.2*band);
+    c=sp2*scan+(gc-c)*0.5;}
+  c*=0.7+0.3*smoothstep(1.6,0.45,length((uv-0.5)*vec2(uRes.x/uRes.y,1.0)));
+  gl_FragColor=vec4(c,1.);}`;
+  function bindTex(loc,t,unit){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(loc,unit);}
+  function initPost(W,H){
+    if(postOK!==null&&postW===W&&postH===H)return postOK;
+    try{
+      if(bloomProg===null||postProg===null){
+        const vb=glSh(gl.VERTEX_SHADER,"attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}");
+        const fb=glSh(gl.FRAGMENT_SHADER,GL_BLOOM),fp=glSh(gl.FRAGMENT_SHADER,GL_POST);
+        if(!vb||!fb||!fp)throw 0;
+        bloomProg=glLink(vb,fb);postProg=glLink(vb,fp);
+        if(!bloomProg||!postProg)throw 0;
+        sU.uRes=gl.getUniformLocation(bloomProg,"uRes");sU.uTex=gl.getUniformLocation(bloomProg,"uTex");
+        sU.uTreble=gl.getUniformLocation(bloomProg,"uTreble");sU.uBass=gl.getUniformLocation(bloomProg,"uBass");
+        for(const u of ["uTex","uBlur","uPrev","uRes","uTime","uBass","uMid","uTreble","uFx","uPost"])pU[u]=gl.getUniformLocation(postProg,u);
+        quadBuf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);
+        gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+      }
+      const mkT=(w,h)=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;};
+      const mkF=t=>{const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+        if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw 0;
+        gl.bindFramebuffer(gl.FRAMEBUFFER,null);return f;};
+      texScene=mkT(W,H);fbScene=mkF(texScene);
+      blurW=Math.max(16,W>>2);blurH=Math.max(16,H>>2);texBlur=mkT(blurW,blurH);fbBlur=mkF(texBlur);
+      texPrev0=mkT(W,H);texPrev1=mkT(W,H);fPrev0=mkF(texPrev0);fPrev1=mkF(texPrev1);
+      gl.clearColor(0,0,0,1);for(const f of [fPrev0,fPrev1]){gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.clear(gl.COLOR_BUFFER_BIT);}
+      gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+      postW=W;postH=H;postOK=true;
+    }catch(_){postOK=false;}
+    return postOK;}
   function drawGL(mode){if(!initGL())return false;const cv=$("glstage");
     const DPR=Math.min(window.innerWidth<760?1.5:2,window.devicePixelRatio||1);
     const W=Math.round(window.innerWidth*DPR),H=Math.round(window.innerHeight*DPR);cv.width=W;cv.height=H;
@@ -2375,11 +2461,38 @@ void main(){
     let b=0,m=0,tr=0;for(let i=0;i<8;i++)b+=fb[i];for(let i=8;i<40;i++)m+=fb[i];for(let i=40;i<110;i++)tr+=fb[i];
     b=Math.min(1,b/2040*1.5);m=Math.min(1,m/8160*1.6);tr=Math.min(1,tr/17850*2.0);
     sceneTime+=0.016+b*0.05;
-    gl.viewport(0,0,W,H);gl.useProgram(glProg);
-    gl.uniform2f(glU.uRes,W,H);gl.uniform1f(glU.uTime,sceneTime);
-    gl.uniform1f(glU.uBass,b);gl.uniform1f(glU.uMid,m);gl.uniform1f(glU.uTreble,tr);
-    gl.uniform1f(glU.uHue,(sceneTime*0.02)%1.0);gl.uniform1i(glU.uMode,GLMODES[mode]||0);
-    gl.drawArrays(gl.TRIANGLES,0,3);return true;}
+    const POST={gbloom:1,gglitch:3,gfeedback:2};const post=POST[mode]||0;
+    gl.viewport(0,0,W,H);
+    const setRaw=()=>{gl.useProgram(glProg);
+      gl.uniform2f(glU.uRes,W,H);gl.uniform1f(glU.uTime,sceneTime);
+      gl.uniform1f(glU.uBass,b);gl.uniform1f(glU.uMid,m);gl.uniform1f(glU.uTreble,tr);
+      gl.uniform1f(glU.uHue,(sceneTime*0.02)%1.0);gl.uniform1i(glU.uMode,GLMODES[mode]||0);};
+    const bindQuad=prg=>{const loc=gl.getAttribLocation(prg,"p");gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);
+      gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);};
+    if(!post||!initPost(W,H)){setRaw();gl.drawArrays(gl.TRIANGLES,0,3);return true;}
+    // passe 1 : la scène -> texScene (FBO)
+    gl.bindFramebuffer(gl.FRAMEBUFFER,fbScene);gl.viewport(0,0,W,H);setRaw();
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    // passe 2 (bloom) : texScene -> texBlur (flou des zones brillantes, quart de résolution)
+    if(post===1){gl.bindFramebuffer(gl.FRAMEBUFFER,fbBlur);gl.viewport(0,0,blurW,blurH);
+      gl.useProgram(bloomProg);bindTex(sU.uTex,texScene,0);
+      gl.uniform2f(sU.uRes,blurW,blurH);gl.uniform1f(sU.uTreble,tr);gl.uniform1f(sU.uBass,b);
+      gl.drawArrays(gl.TRIANGLES,0,3);}
+    // passe 3 : post -> écran ; le feedback bascule entre deux textures ping-pong (jamais
+    // de lecture/écriture simultanée du même objet) et se mémorise pour la trame suivante
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);
+    const curPrev=prevUse?texPrev1:texPrev0;
+    const drawPost=fbo=>{if(fbo)gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+      gl.useProgram(postProg);bindQuad(postProg);
+      bindTex(pU.uTex,texScene,0);if(post===1)bindTex(pU.uBlur,texBlur,1);if(post===2)bindTex(pU.uPrev,curPrev,2);
+      gl.uniform2f(pU.uRes,W,H);gl.uniform1f(pU.uTime,sceneTime);
+      gl.uniform1f(pU.uBass,b);gl.uniform1f(pU.uMid,m);gl.uniform1f(pU.uTreble,tr);
+      gl.uniform1f(pU.uFx,0.4+m*0.8);gl.uniform1i(pU.uPost,post);
+      gl.drawArrays(gl.TRIANGLES,0,3)};
+    drawPost(null);
+    if(post===2){const nxtF=prevUse?fPrev0:fPrev1;drawPost(nxtF);prevUse^=1;}
+    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+    return true;}
   let lastScene="";
   function drawStage(){const cv=$("stage");if(!cv||!cv.getContext||!analyser)return;
     if(sceneMode!==lastScene){lastScene=sceneMode;  // smooth crossfade on scene change (2D + GPU)
@@ -5711,7 +5824,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Son","| orbit RATE","spatialisation : la voix tourne autour de l'auditeur (Hz) — mouvement stéréo + distance"],
     ["Groove","| humanize N","humanisation par voix (0-100) : micro-décalages timing/vélocité, indépendant du feel global"],
     ["Live","| mute  /  | solo","coupe une voix / isole une voix (mixage en direct)"],
-    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp|gtorus|gkaleid|gaurora|gcells|gwater|gmandel|nebula|scan|rings|checker","choisit le visualiseur plein écran (touche N pour changer)"],
+    ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp|gtorus|gkaleid|gaurora|gcells|gwater|gmandel|gbloom|gglitch|gfeedback|nebula|scan|rings|checker","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
