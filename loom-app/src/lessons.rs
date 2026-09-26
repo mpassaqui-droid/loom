@@ -361,6 +361,9 @@ pub const REFERENCE: &[RefRow] = &[
     r("Génératif (maths)", "| markov", "régénère la mélodie d'après ses propres transitions note→note (chaîne de Markov, seedée)"),
     r("Génératif (maths)", "walk(n)", "mélodie en MARCHE ALÉATOIRE sur les degrés (n notes, seedée) — évolue à chaque mesure"),
     r("Génératif (maths)", "lsys(n)  drunk(n)", "L-système (mélodie auto-similaire) · marche d'ivrogne (densité rythmique qui dérive)"),
+    r("Génératif (maths)", "lsys(n)  l-sys(n,…)", "L-système auto-similaire · forme personnalisée : l-sys(n,axiome,1>1.2,5>3.1) (règles `sym>prod`, points entre degrés, sans règle = terminal)"),
+    r("Génératif (maths)", "xys(n,racine,…)", "MARCHE DE MARKOV à la Xenakis : xys(16,1,1>2:2|3:1,2>1:1) — chaque note tire sa transition 1>a:p|b:q par son poids :p (seedée, évolue chaque mesure)"),
+    r("Génératif (maths)", "evolve(n[,gen][,pop])", "MÉLODIE GÉNÉTIQUE : une population concourt (contour lisse + tonique/quinte + variété), élite + crossover + mutation 20% — seedée, évolue chaque mesure"),
     r("Génératif (maths)", "prime(n)  bin(n)", "frappes sur les positions premières · les chiffres binaires de n comme rythme (musique des nombres)"),
     r("Génératif (maths)", "pi(n)  golden(n)", "les décimales de π comme mélodie · rythme du nombre d'or (Beatty, quasi-périodique)"),
     r("Génératif (maths)", "collatz(n)  recaman(n)", "suite de Collatz (rythme) · suite de Recamán (mélodie aux sauts surprenants)"),
@@ -448,7 +451,7 @@ mod tests {
     #[test]
     fn tables_are_complete() {
         assert_eq!(LESSONS.len(), 57);
-        assert_eq!(REFERENCE.len(), 163);
+        assert_eq!(REFERENCE.len(), 166);
         for (i, l) in LESSONS.iter().enumerate() {
             assert!(l.title.starts_with(&format!("{} · ", i + 1)), "{}", l.title);
             assert!(!l.description.is_empty() && !l.code.is_empty());

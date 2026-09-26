@@ -20,7 +20,7 @@ const DRUMS: [&str; 13] = ["kick", "bd", "snare", "sd", "hat", "hh", "clap", "cp
 /// Verbs that already make a line evolve: such a line is left as it is.
 const VARYING_VERBS: [&str; 7] = ["develop", "mutate", "shuffle", "every", "iter", "markov", "stutter"];
 /// Generators that already make a line evolve.
-const VARYING_GENERATORS: [&str; 8] = ["walk", "drunk", "ca", "logistic", "perlin", "lsys", "recaman", "cantor"];
+const VARYING_GENERATORS: [&str; 11] = ["walk", "drunk", "ca", "logistic", "perlin", "lsys", "l-sys", "xys", "evolve", "recaman", "cantor"];
 
 /// Added to melodic voices.
 pub const MELODY_VERB: &str = "develop";

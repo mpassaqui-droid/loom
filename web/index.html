@@ -1847,11 +1847,80 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
         out[i]=feasible[idx];}
       else out[i]=feasible[Math.floor(u*feasible.length)%feasible.length];}
     return out.map(String);}
-  // lsys(n): a Lindenmayer system -> self-similar melodic sequence (algorithmic composition)
-  function expandLsys(tok){const m=/^lsys\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];
-    const rules={"1":["1","2"],"2":["3","1"],"3":["5","2"],"5":["6","3"],"6":["1'","5"],"1'":["3'","1"]};
-    let s=["1"];for(let g=0;g<8&&s.length<n;g++){let nx=[];for(const c of s)nx.push(...(rules[c]||[c]));if(nx.length===s.length)break;s=nx;}
+  // lsys(n)/l-sys(n): a deterministic Lindenmayer system. Bare lsys(N) = classic rule
+  // table (backwards compatible). l-sys(n,axiom,sym>prod,…): custom axiom + production
+  // rules (prod = .-joined degrees). Symbols without a rule are terminals.
+  function expandLsys(tok){const m=/^(?:l-sys|lsys)\(([^)]*)\)$/.exec(tok);if(!m)return null;
+    const fields=m[1].split(",").map(s=>s.trim()).filter(Boolean);
+    if(fields.length===0)return null;const n=+fields[0];
+    if(!Number.isFinite(n)||n<0)return null;
+    const DEFAULT=[["1",["1","2"]],["2",["3","1"]],["3",["5","2"]],["5",["6","3"]],["6",["1'","5"]],["1'",["3'","1"]]];
+    let axiom=["1"],custom=[];
+    for(let i=1;i<fields.length;i++){const f=fields[i],at=f.indexOf(">");
+      if(at>=0){const sym=f.slice(0,at).trim(),prod=f.slice(at+1).trim().split(".").filter(Boolean);
+        if(sym&&prod.length)custom.push([sym,prod]);}
+      else axiom=f.split(".").filter(Boolean);}
+    const rule=c=>{for(const[s,p]of custom)if(s===c)return p;
+      if(!custom.length)for(const[s,p]of DEFAULT)if(s===c)return p;return null;};
+    let s=axiom.slice();
+    for(let g=0;g<8&&s.length<n;g++){let nx=[];for(const c of s){const r=rule(c);nx.push(...(r||[c]));}
+      if(nx.length===s.length)break;s=nx;}
     return s.slice(0,n);}
+  // xys(n,root,sym>a:p|b:q,…): a XENAKIS Markov walk — each note emits the current
+  // symbol then draws a transition by weight :p (seeded -> bit-identical Rust). Exactly
+  // n notes; a symbol with no exit stays (absorbing drone).
+  function expandXys(tok,bar){const m=/^xys\(([^)]*)\)$/.exec(tok);if(!m)return null;
+    const fields=m[1].split(",").map(s=>s.trim()).filter(Boolean);
+    if(fields.length<2)return null;const n=+fields[0];
+    if(!Number.isFinite(n)||n<0)return null;if(n===0)return[];
+    let root=(fields[1].split(".")[0]||"1").trim()||"1";
+    const table=[];
+    for(let i=2;i<fields.length;i++){const f=fields[i],at=f.indexOf(">");
+      if(at<0)continue;const sym=f.slice(0,at).trim();if(!sym)continue;const alts=[];
+      for(const alt of f.slice(at+1).split("|")){let w=1,p=alt,ci=alt.lastIndexOf(":");
+        if(ci>=0){p=alt.slice(0,ci);const ww=parseInt(alt.slice(ci+1),10);if(Number.isFinite(ww))w=Math.max(1,ww);}
+        p=p.trim();if(p)alts.push([p,w]);}
+      if(alts.length)table.push([sym,alts]);}
+    let cur=root,out=[],tick=0;
+    for(let i=0;i<n;i++){out.push(cur);
+      let a=null;for(const[s,al]of table)if(s===cur){a=al;break;}
+      if(a){let total=0;for(const e of a)total+=e[1];
+        const u=rng(seed,bar,"xys",tick);tick++;
+        let acc=0,picked=a[a.length-1][0];for(const[s,w]of a){acc+=w/total;if(u<acc){picked=s;break;}}
+        cur=picked;}}
+    return out;}
+  // evolve(n[,gen][,pop]): a GENETIC melody — a random population competes on an
+  // integer fitness (smooth contour + pull to tonic/fifth + variety), the fittest
+  // breed via single-point crossover + 20% mutation. Seeded (bit-identical Rust).
+  function expandEvolve(tok,bar){const m=/^evolve\(([^)]*)\)$/.exec(tok);if(!m)return null;
+    const fields=m[1].split(",").map(s=>s.trim()).filter(Boolean);
+    if(fields.length<1)return null;const n=+fields[0];
+    if(!Number.isFinite(n)||n<0)return null;if(n===0)return[];
+    let gen=fields.length>1?+fields[1]:6;if(!Number.isFinite(gen)||gen<1)gen=6;gen=Math.min(gen,32);
+    let pop=fields.length>2?+fields[2]:8;if(!Number.isFinite(pop)||pop<4)pop=8;pop=Math.min(pop,24);
+    const maxd=7;let tick=0;const u=()=>rng(seed,bar,"evolve",tick++);
+    let team=[];for(let p=0;p<pop;p++){const v=[];for(let i=0;i<n;i++)v.push(Math.floor(u()*maxd)+1);team.push(v);}
+    const fitness=v=>{let f=0,prev=v[0];
+      for(let i=1;i<v.length;i++){const d=Math.abs(v[i]-prev);f+=(d===0?2:d===1?3:d===2?2:0)-d;prev=v[i];}
+      for(const x of v)f+=2-Math.min(Math.abs(x-1),Math.abs(x-5));
+      const seen=[0,0,0,0,0,0,0];for(let i=1;i<v.length;i++)seen[Math.abs(v[i]-v[i-1])%7]=1;
+      f+=seen.reduce((a,b)=>a+b,0)*2;return f;};
+    for(let g=0;g<gen;g++){
+      const scored=team.map(v=>[fitness(v),v]);scored.sort((a,b)=>b[0]-a[0]);
+      const keep=Math.max(Math.floor(pop/4),pop-4);
+      const nextp=scored.slice(0,keep).map(e=>e[1].slice());
+      let total=0;for(const e of scored)total+=Math.max(1,e[0]);
+      let guard=0;
+      while(nextp.length<pop&&guard<pop*16){guard++;
+        let acc=0,pa=scored[0][1].slice();{const acc0=u();for(const[f,v]of scored){acc+=Math.max(1,f)/total;if(acc0<acc){pa=v.slice();break;}}}
+        let accb=0,pb=scored[0][1].slice();{const acc1=u();for(const[f,v]of scored){accb+=Math.max(1,f)/total;if(acc1<accb){pb=v.slice();break;}}}
+        const cut=Math.floor(u()*n)%n;
+        let child=pa.slice(0,cut).concat(pb.slice(cut));if(child.length!==n)child=pa.slice(0,n);
+        for(let i=0;i<n;i++){if(u()<0.2)child[i]=Math.floor(u()*maxd)+1;}
+        nextp.push(child);}
+      if(nextp.length===pop)team.splice(0,pop,...nextp.slice(0,pop));}
+    let best=team[0],bf=fitness(best);for(const v of team){const f2=fitness(v);if(f2>=bf){bf=f2;best=v;}}
+    return best.map(x=>String(x));}
   // drunk(n): a "drunk walk" rhythm — hit probability drifts, making natural clusters/gaps
   function expandDrunk(tok,bar){const m=/^drunk\((\d+)\)$/.exec(tok);if(!m)return null;const n=+m[1];let p=0.5,out=[];
     for(let i=0;i<n;i++){const r=rng(seed,bar,"drunk",i);out.push(r<p?"x":".");p=Math.max(0.15,Math.min(0.85,p+(r-0.5)*0.45));}return out;}
@@ -1890,7 +1959,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       o.push(String(Math.min(7,Math.max(1,Math.floor(val*7)+1))));}return o;}
   function effectiveOf(toks,v,bar){let t=toks.slice();for(const vb of v.verbs)t=applyOne(t,vb,bar);
     if(v._clipVerb)t=applyOne(t,v._clipVerb,bar);  // live Session clip-slot variation (quantised, not written to code)
-    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok)||expandPi(tok)||expandGolden(tok)||expandCollatz(tok)||expandRecaman(tok)||expandLogistic(tok)||expandCantor(tok)||expandTrib(tok)||expandPerlin(tok)||expand1f(tok,bar)||expandGendy(tok,bar)||expandSolve(tok,bar);if(c)out.push(...c);else out.push(tok);}
+    let out=[];for(const tok of t){const c=expandCa(tok,bar)||expandWalk(tok,bar)||expandLsys(tok)||expandDrunk(tok,bar)||expandPrime(tok)||expandBin(tok)||expandPi(tok)||expandGolden(tok)||expandCollatz(tok)||expandRecaman(tok)||expandLogistic(tok)||expandCantor(tok)||expandTrib(tok)||expandPerlin(tok)||expand1f(tok,bar)||expandGendy(tok,bar)||expandSolve(tok,bar)||expandXys(tok,bar)||expandEvolve(tok,bar);if(c)out.push(...c);else out.push(tok);}
     if(prog.length)out=out.map(tok=>resolveProg(tok,v,bar));return out;}
   function effective(v,bar){return effectiveOf(v.tokens,v,bar);}
 
@@ -5231,6 +5300,7 @@ ph2@break: 1 2 3 5 6 | poly 17 | tri | lp 1300 | reverb 0.6 | gate 0.6 | gain 0.
 #      que ton oreille ne connaît pas. Et elles MODULENT à chaque section
 #      (key@section) : le sol harmonique se déplace sous tes pieds.
 #   2. TOUT EST GÉNÉRÉ — walk · drunk · logistic · perlin · ca · lsys ·
+#      xys (Markov à la Xenakis) · evolve (génétique) 💡
 #      {choix} · <alternance> — et ces suites CHANGENT À CHAQUE MESURE
 #      (elles sont seedées sur le numéro de mesure). Donc ça ne boucle pas.
 #   3. LE TEMPS RESPIRE — meter impair (5/4), accel lent, groove humain.
@@ -5830,6 +5900,9 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Génératif (maths)","solve(n,…)","RÉSOLUTION SOUS CONTRAINTES : une mélodie qui respecte les règles — target (cible finale) · ladder (marche max) · range (ambitus) · arc (monte puis redescend sur la cible)"],
     ["Génératif (maths)","walk(n)","mélodie en MARCHE ALÉATOIRE sur les degrés (n notes, seedée) — évolue à chaque mesure"],
     ["Génératif (maths)","lsys(n)  drunk(n)","L-système (mélodie auto-similaire) · marche d'ivrogne (densité rythmique qui dérive)"],
+    ["Génératif (maths)","lsys(n)  l-sys(n,…)","L-système auto-similaire · Forme personnalisée : l-sys(n,axiome,1>1.2,5>3.1) (règles `sym>prod`, points entre degrés, terminaux = sans règle)"],
+    ["Génératif (maths)","xys(n,racine,…)","MARCHE DE MARKOV à la Xenakis : xys(16,1,1>2:2|3:1,2>1:1) — chaque note tire sa transition 1>a:p|b:q par son poids :p (seedée, évolue chaque mesure)"],
+    ["Génératif (maths)","evolve(n[,gen][,pop])","MÉLODIE GÉNÉTIQUE : une population concourt (contour lisse + tonique/quinte + variété), élite + crossover + mutation 20% — seedée, évolue chaque mesure"],
     ["Génératif (maths)","prime(n)  bin(n)","frappes sur les positions premières · les chiffres binaires de n comme rythme (musique des nombres)"],
     ["Génératif (maths)","pi(n)  golden(n)","les décimales de π comme mélodie · rythme du nombre d'or (Beatty, quasi-périodique)"],
     ["Génératif (maths)","collatz(n)  recaman(n)","suite de Collatz (rythme) · suite de Recamán (mélodie aux sauts surprenants)"],
@@ -6945,7 +7018,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     const cl=cycleLen,out=_cap.map(o=>({voice:o.v,phase:o.t/cl,tok:o.tok,drum:o.drum,pan:o.pan}));
     _cap=prev;return out;
   }
-  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+  try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

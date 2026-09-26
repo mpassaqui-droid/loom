@@ -30,9 +30,22 @@
       (graphe par retour dans `buildGraph`, routage dans `connectFx`) + `parseSends`
       exporté (harness node + parité) ; corpus parité `send returns (no-op onsets)`
       valide 2 moteurs ; portes 361✅ clippy 0✅ parité 23/23+254/254✅ check_web 4/4✅.
-- [ ] **P4 · Composition algorithmique dans la langue** — la langue qui grandit :
-      verbes `l-sys` (L-systèmes), grammaires stochastiques (Xenakis), `evolve`
-      (génétique) ; `loom-core` + tests + parité 2 moteurs + doc.
+- [x] **P4 · Composition algorithmique dans la langue** — la langue qui grandit :
+      verbes `l-sys` (L-systèmes personnalisables), `xys` (marche de Markov à la
+      Xenakis), `evolve` (génétique) ; `loom-core` + tests + parité 2 moteurs + doc.
+  - [x] Rust : `expand_lsys_token` (custom `l-sys(n,axiome,sym>prod.…)` + `lsys(n)`
+        rétrocompatible), `expand_xys_token` (états absorbants, transitions à poids
+        `sym>a:p|b:q`), `expand_evolve_token` (GA : fitness entière contour+tonique/quinte+
+        variété, élite, crossover 1-pt, mutation 20 %, tie = dernier max) ; `rng_seq`
+        compteur strictement croissant (parité par construction) ; câblés dans `effective_of`.
+  - [x] Tests : `lsys_is_backwards_compatible_and_custom`, `xys_is_seeded_and_weighted`,
+        `evolve_is_seeded_and_improves` (123 tests loom-core, verts).
+  - [x] JS miroir : `expandLsys`/`expandXys`/`expandEvolve` + chaîne d'expansion +
+        exports `window.__loom` ; `expandSolve` restauré verbatim depuis git HEAD.
+  - [x] Parité : 3 pièces ajoutées (`l-sys custom`, `xys xenakis`, `evolve`) → 278/278 ✅
+        (+ analyse 23/23), check_web 4/4, clippy 0, WASM rebuildé.
+  - [x] Doc : tables web/lessons (Génératif maths), aide #2, VIBE (RHYTHM/AVOID REPS),
+        develop.rs `VARYING_GENERATORS` élargi (11).
 - [ ] **P5 · Base de connaissance & explicatriceur** — étendre `LORE`/`MOOD` :
       ethos des modes grecs, wuxing↔notes, talas, histoire par tradition ;
       explicatriceur « pourquoi ça sonne » + prof interactif ; miroir JS + parité.

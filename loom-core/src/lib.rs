@@ -257,21 +257,49 @@ fn expand_cantor_token(tok: &str) -> Option<Vec<String>> {
     Some((0..n).map(|i| if in_c(i) { "x".into() } else { ".".into() }).collect())
 }
 
-/// `lsys(n)` — a Lindenmayer system -> self-similar melodic sequence (matches JS).
+/// `lsys(n)` / `l-sys(n)` — a Lindenmayer system building a self-similar
+/// melodic phrase. Bare `lsys(N)` (or `l-sys(N)`) uses the classic Loom rule
+/// table (bit-identical to the JS engine). The custom form
+/// `l-sys(n, axiom, sym>prod, …)` defines its own starting symbols and
+/// production rules (`>`, productions joined by `.`, one per symbol —
+/// deterministic). Symbols are scale-degree tokens. e.g.
+/// `l-sys(16, 1, 1>1.5.2, 5>3.1, 3>1)` rewrites until ≥16 then truncates.
 fn expand_lsys_token(tok: &str) -> Option<Vec<String>> {
-    let n: usize = tok.strip_prefix("lsys(")?.strip_suffix(')')?.trim().parse().ok()?;
-    let rule = |c: &str| -> Option<Vec<&'static str>> { match c {
-        "1" => Some(vec!["1","2"]), "2" => Some(vec!["3","1"]), "3" => Some(vec!["5","2"]),
-        "5" => Some(vec!["6","3"]), "6" => Some(vec!["1'","5"]), "1'" => Some(vec!["3'","1"]), _ => None } };
-    let mut s: Vec<String> = vec!["1".into()];
+    let inner = tok.strip_prefix("l-sys(").or_else(|| tok.strip_prefix("lsys("))?.strip_suffix(')')?;
+    let fields: Vec<&str> = inner.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let n: usize = fields.first()?.parse().ok()?;
+    let mut axiom: Vec<String> = vec!["1".into()];
+    let mut custom: Vec<(String, Vec<String>)> = Vec::new();
+    for f in &fields[1..] {
+        if let Some(at) = f.find('>') {
+            let sym = f[..at].trim();
+            let prod: Vec<String> = f[at + 1..].trim().split('.').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
+            if !sym.is_empty() && !prod.is_empty() { custom.push((sym.to_string(), prod)); }
+        } else {
+            axiom = f.split('.').map(|s| s.to_string()).collect();
+        }
+    }
+    const DEFAULT: [(&str, &[&str]); 6] = [
+        ("1", &["1", "2"]), ("2", &["3", "1"]), ("3", &["5", "2"]),
+        ("5", &["6", "3"]), ("6", &["1'", "5"]), ("1'", &["3'", "1"]),
+    ];
+    let rule = |c: &str| -> Option<Vec<String>> {
+        for (sym, prod) in &custom { if sym == c { return Some(prod.clone()); } }
+        if custom.is_empty() {
+            for (sym, prod) in DEFAULT { if sym == c { return Some(prod.iter().map(|s| s.to_string()).collect()); } }
+        }
+        None
+    };
+    let mut s = axiom;
     for _ in 0..8 {
         if s.len() >= n { break; }
         let mut nx: Vec<String> = Vec::new();
-        for c in &s { match rule(c) { Some(r) => nx.extend(r.iter().map(|x| x.to_string())), None => nx.push(c.clone()) } }
+        for c in &s { match rule(c) { Some(r) => nx.extend(r), None => nx.push(c.clone()) } }
         if nx.len() == s.len() { break; }
         s = nx;
     }
-    s.truncate(n); Some(s)
+    s.truncate(n);
+    Some(s)
 }
 /// `pi(n)` — digits of π as scale degrees (matches JS).
 fn expand_pi_token(tok: &str) -> Option<Vec<String>> {
@@ -920,6 +948,122 @@ fn expand_gendy_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
     Some(out)
 }
 
+/// Random in strict sequence (`tick` croît à chaque tirage) — le même dans les
+/// 2 moteurs, pour que xys/evolve soient bit-identiques JS↔Rust.
+fn rng_seq(seed: u32, bar: i64, name: &str, tick: &mut i64) -> f64 {
+    let v = js_rng(seed, bar, name, *tick);
+    *tick += 1;
+    v
+}
+
+/// `xys(n, root, sym>a:p|b:q, …)` — MARCHE DE MARKOV (Xenakis, les
+/// « probabilités de transition » d'Achorripsis) : depuis `root`, chaque note
+/// émet le symbole courant puis tire une transition `a:p|b:q` (poids `:p`) par
+/// `rng` seedé — exactement `n` notes, bit-identique JS. Un symbole sans sortie
+/// reste sur place (état absorbant / drone). e.g.
+/// `xys(16, 1, 1>2:2|3:1, 2>1:1, 5>1.5:2, 3>2:1)`.
+fn expand_xys_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("xys(")?.strip_suffix(')')?;
+    let fields: Vec<&str> = inner.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let n: usize = fields.first()?.parse().ok()?;
+    if n == 0 { return Some(Vec::new()); }
+    let root = fields.get(1).and_then(|s| s.split('.').next()).filter(|s| !s.is_empty()).unwrap_or("1").to_string();
+    let mut table: Vec<(String, Vec<(String, i64)>)> = Vec::new();
+    for f in &fields[2..] {
+        let Some(at) = f.find('>') else { continue };
+        let sym = f[..at].trim();
+        if sym.is_empty() { continue; }
+        let mut alts: Vec<(String, i64)> = Vec::new();
+        for alt in f[at + 1..].split('|') {
+            let (sym2, weight) = match alt.rsplit_once(':') {
+                Some((p, w)) => (p, w.trim().parse::<i64>().ok().unwrap_or(1).max(1)),
+                None => (alt, 1),
+            };
+            let sym2 = sym2.trim();
+            if sym2.is_empty() { continue; }
+            alts.push((sym2.to_string(), weight));
+        }
+        if !alts.is_empty() { table.push((sym.to_string(), alts)); }
+    }
+    let mut cur = root;
+    let mut out = Vec::with_capacity(n);
+    let mut tick: i64 = 0;
+    for _ in 0..n {
+        out.push(cur.clone());
+        let alts = table.iter().find(|(s2, _)| *s2 == cur);
+        if let Some((_, alts)) = alts {
+            let total: i64 = alts.iter().map(|a| a.1).sum::<i64>().max(1);
+            let mut acc = 0.0f64;
+            let u2 = rng_seq(seed as u32, bar, "xys", &mut tick);
+            let mut picked = &alts[alts.len() - 1].0;
+            for (sym2, w) in alts {
+                acc += *w as f64 / total as f64;
+                if u2 < acc { picked = sym2; break; }
+            }
+            cur = picked.clone();
+        }
+    }
+    Some(out)
+}
+
+/// `evolve(n[,gen][,pop])` — MÉLODIE GÉNÉTIQUE (seedée, bit-identique JS) : une
+/// petite population aléatoire de séquences de degrés concourt sur une FITNESS
+/// entière (contour lisse + attraction vers la tonique/quinte + variété) ; les
+/// meilleurs se reproduisent par crossover point-simple + mutation 20 %, et le
+/// plus apte de longueur `n` survit. Chaque tirage utilise `rng(seed,bar,"evolve",k)`
+/// avec un compteur strictement croissant — les 2 moteurs tirent dans le même ordre.
+fn expand_evolve_token(tok: &str, bar: i64, seed: u64) -> Option<Vec<String>> {
+    let inner = tok.strip_prefix("evolve(")?.strip_suffix(')')?;
+    let fields: Vec<&str> = inner.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let n: usize = fields.first()?.parse().ok()?;
+    if n == 0 { return Some(Vec::new()); }
+    let gen: usize = fields.get(1).and_then(|s| s.parse().ok()).unwrap_or(6).clamp(1, 32);
+    let pop: usize = fields.get(2).and_then(|s| s.parse().ok()).unwrap_or(8).clamp(4, 24);
+    let maxd: i64 = 7;
+    let mut tick: i64 = 0;
+    let mut u = || -> f64 { rng_seq(seed as u32, bar, "evolve", &mut tick) };
+    let mut team: Vec<Vec<u8>> = (0..pop).map(|_| (0..n).map(|_| ((u() * maxd as f64) as u8) + 1).collect()).collect();
+    let fitness = |v: &[u8]| -> i64 {
+        let mut f = 0i64; let mut prev = v[0] as i64;
+        for &x in &v[1..] {
+            let d = (x as i64 - prev).abs();
+            f += match d { 0 => 2, 1 => 3, 2 => 2, _ => 0 } - d;
+            prev = x as i64;
+        }
+        for &x in v { let c = (x as i64 - 1).abs().min((x as i64 - 5).abs()); f += 2 - c; }
+        let mut seen = [false; 7];
+        for w in v.windows(2) { let d = ((w[1] as i64 - w[0] as i64).abs() % 7) as usize; seen[d] = true; }
+        f += seen.iter().filter(|b| **b).count() as i64 * 2;
+        f
+    };
+    for _g in 0..gen {
+        let mut scored: Vec<(i64, Vec<u8>)> = team.iter().map(|v| (fitness(v), v.clone())).collect();
+        scored.sort_by_key(|e| std::cmp::Reverse(e.0));
+        let keep = (pop / 4).max(pop.saturating_sub(4));
+        let mut nextp: Vec<Vec<u8>> = scored.iter().take(keep).map(|(_, v)| v.clone()).collect();
+        let total: i64 = scored.iter().map(|(f, _)| (*f).max(1)).sum();
+        let mut guard = 0;
+        while nextp.len() < pop && guard < pop * 16 {
+            guard += 1;
+            let acc0 = u();
+            let mut acc = 0.0f64; let mut pa = scored[0].1.clone();
+            for (f, v) in &scored { acc += (*f).max(1) as f64 / total as f64; if acc0 < acc { pa = v.clone(); break; } }
+            let acc1 = u();
+            let mut acc2 = 0.0f64; let mut pb = scored[0].1.clone();
+            for (f, v) in &scored { acc2 += (*f).max(1) as f64 / total as f64; if acc1 < acc2 { pb = v.clone(); break; } }
+            let cut = ((u() * n as f64).floor() as usize) % n;
+            let mut child: Vec<u8> = pa[..cut].iter().chain(pb[cut..].iter()).cloned().collect();
+            if child.len() != n { child = pa[..n].to_vec(); }
+            for cell in child.iter_mut() { if u() < 0.2 { *cell = ((u() * maxd as f64) as u8) + 1; } }
+            nextp.push(child);
+        }
+        nextp.truncate(pop);
+        if nextp.len() == team.len() { team = nextp; }
+    }
+    let best = team.iter().max_by_key(|v| fitness(v)).unwrap();
+    Some(best.iter().map(|&d| d.to_string()).collect())
+}
+
 /// `solve(n[, target:T][, ladder:L][, range:lo-hi][, arc])` — RÉSOLUTION SOUS
 /// CONTRAINTES : une MÉLODIE qui respecte les règles données. Le dernier pas est
 /// FIXÉ sur `target` (la tonique par défaut), tout enchaînement reste à `ladder`
@@ -998,6 +1142,8 @@ fn effective_of(toks: &[String], voice: &Voice, bar: i64, seed: u64) -> Vec<Stri
         else if let Some(seq) = expand_1f_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_gendy_token(&tok, bar, seed) { out.extend(seq); }
         else if let Some(seq) = expand_solve_token(&tok, bar, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_xys_token(&tok, bar, seed) { out.extend(seq); }
+        else if let Some(seq) = expand_evolve_token(&tok, bar, seed) { out.extend(seq); }
         else { out.push(tok); }
     }
     out
@@ -2915,6 +3061,64 @@ mod tests {
         assert_eq!(g("cantor(9)"), "x.x...x.x");     // Cantor set (no base-3 digit '1')
         assert_eq!(g("collatz(1)"), "x");
         assert_eq!(g("golden(8)").len(), 8);
+    }
+
+    #[test]
+    fn lsys_is_backwards_compatible_and_custom() {
+        let g = |s: &str| expand_euclid(vec![s.to_string()]).join(" ");
+        // bare form unchanged: bit-identical sequence to the fixed table
+        assert_eq!(g("lsys(8)"), "1 2 3 1 5 2 1 2");
+        assert_eq!(g("l-sys(8)"), g("lsys(8)"));
+        // custom deterministic grammar: 1>1.2.5
+        assert_eq!(g("l-sys(6,1>1.2.5)"), "1 2 5 2 5 2");
+        assert_eq!(g("l-sys(6,1>1.2,2>1.3)"), "1 2 1 3 1 2");
+        // custom axiom: 5 grows from its own seed
+        assert_eq!(g("l-sys(5,5,5>1.5,1>5)"), "1 5 5 1 5");
+    }
+
+    #[test]
+    fn xys_is_seeded_and_weighted() {
+        let a = expand_xys_token("xys(12,1,1>2:2|3:1,2>1:1,3>2:1)", 3, 99).unwrap();
+        let b = expand_xys_token("xys(12,1,1>2:2|3:1,2>1:1,3>2:1)", 3, 99).unwrap();
+        let c = expand_xys_token("xys(12,1,1>2:2|3:1,2>1:1,3>2:1)", 3, 7).unwrap();
+        assert_eq!(a, b);                       // deterministic per seed
+        assert_eq!(a.len(), 12);
+        assert_ne!(a, c);                       // seed changes the walk
+        assert!(a.iter().all(|s| ["1", "2", "3"].contains(&s.as_str())));
+        // a symbol with no exit falls back to the terminal: stays
+        let d = expand_xys_token("xys(6,9,9>1:1)", 0, 1).unwrap();
+        assert_eq!(d, vec!["9", "1", "1", "1", "1", "1"]);
+    }
+
+    #[test]
+    fn evolve_is_seeded_and_improves() {
+        let a = expand_evolve_token("evolve(16)", 2, 42).unwrap();
+        let b = expand_evolve_token("evolve(16)", 2, 42).unwrap();
+        let c = expand_evolve_token("evolve(16)", 2, 9).unwrap();
+        assert_eq!(a, b);                       // deterministic per seed
+        assert_eq!(a.len(), 16);
+        assert_ne!(a, c);                       // seed changes the lineage
+        // earlier evaluation of `evolve` without generations is smoother than raw
+        // random: assert all degrees stay in octave-range (1..=7)
+        assert!(a.iter().all(|s| (1..=7).contains(&s.parse::<i64>().unwrap())));
+        // fitness of the evolved champion >= fitness of a plain random sequence
+        let n = 16; let maxd = 7i64;
+        let fit = |v: &Vec<String>| -> i64 {
+            let deg: Vec<i64> = v.iter().map(|s| s.parse().unwrap()).collect();
+            let mut f = 0i64; let mut prev = deg[0];
+            for &x in &deg[1..] { let d = (x - prev).abs(); f += match d { 0 => 2, 1 => 3, 2 => 2, _ => 0 } - d; prev = x; }
+            let mut seen = [false; 7];
+            for w in deg.windows(2) { let d = ((w[1] - w[0]).abs() % 7) as usize; seen[d] = true; }
+            f + seen.iter().filter(|b| **b).count() as i64 * 2
+        };
+        let champ = fit(&a);
+        let mut rand_fit = 0i64;
+        for s in 0..10u64 {
+            let mut v = Vec::new();
+            for i in 0..n { v.push(((js_rng(s as u32, 2, "evolve", i as i64) * maxd as f64) as u8) + 1); }
+            rand_fit = rand_fit.max(fit(&v.iter().map(|d| d.to_string()).collect()));
+        }
+        assert!(champ >= rand_fit);
     }
 
     #[test]
