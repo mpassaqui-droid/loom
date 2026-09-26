@@ -16,8 +16,30 @@
       sphères/tore), néons (tubes le long du beat), hyperspace (warp stellaire) ;
       même mécanisme `uMode` + post déjà en place ; GLSL ES 1.00 validé
       (`glslangValidator`) + `check_web.js` 4/4 + parse JS. commit ceae1ee
-- [ ] **P2 · Accessibilité** (web + GUI) — navigation 100 % clavier, contrastes
+- [x] **P2 · Accessibilité** (web + GUI) — navigation 100 % clavier, contrastes
       des thèmes (WCAG AA), grandes polices / zoom, focus visible.
+  - [x] Audit WCAG Python des 62 thèmes (luminance relative) : `dim` était le grand
+        fautif ; AG = carte statique `THEME_AA` (62 entrées [fg,dim,glow,amber,cyan],
+        même teinte, pas 0.005 en HLS) → **fails: 0/62**, min = 4.5 (vt100/dim).
+  - [x] Web : `THEME_AA` inséré, `_aaMode` **défaut ON**, sélecteur « Contraste AA /
+        d'origine » persistant (`loom-aa`) ; `paintTheme` AA-aware (k[1..5] sous AA, bg
+        intact, `_themeFlat` du thème de base).
+  - [x] Web : sélecteur « Taille normale / Grande (accessibilité) » persistant
+        (`loom-size`) ; `body.size-lg` (fonts ×1.2 posé après font-*) + zoom navigateur.
+  - [x] Web : focus visible — `:focus-visible` (lèvre `--bg` + anneau `--glow` AA
+        partout), cellules grille + `select` ; `@media (prefers-reduced-motion:reduce)`
+        tue le clignotement UI (`.blink`, `#fpBtn`, transitions playhead).
+  - [x] Web : clavier grille — cellules `tabindex=0` `role=button` `aria-label`,
+        ←/→ focus rangée, ↑/↓ cycle hauteur (ou toggle drums), Entrée/Espace toggle ;
+        `aria-label` sur themePrev/Next/randTheme et Mute/Solo (grille + mixeur).
+  - [x] Web portes : moteur parse (`node --check`), check_web 4/4, parité 278/278 +
+        23/23 inchangées (couleurs ≠ timing), audit AA fails 0/62.
+  - [x] GUI (egui) : toggle « grande police » — bouton A/A+ (top-bar) + Ctrl+Shift+A,
+        persistant (`Theme::ui_large`/`set_ui_large` dans `$STATE/omarchy/current`),
+        scale ×1.25 sur tous les styles egui + éditeur (`style::palette(theme, large)`) ;
+        Tab/Entrée natifs egui, hover/focus soulignés accent (déjà en place).
+  - [x] Portes Rust : `cargo test --workspace` verts (114/77/123/26/24), clippy -D 0,
+        diff --check ; pas de changement `loom-core` → pas de rebuild WASM.
 - [x] **P3 · Bus & sends** — le vrai trou DAW : groupes de voix (`bus:`), N sends
       vers des returns d'effets partagés (réverb/delay/echo globaux), ducking lié ;
       logique `loom-audio` + bouche dans le mixeur GUI.

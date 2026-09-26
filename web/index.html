@@ -49,6 +49,30 @@
   body.dense .head{margin-bottom:5px;} body.dense .transport{gap:6px;margin-bottom:10px;} body.dense .sub{margin-bottom:10px;}
   body.cozy{line-height:1.6;} body.cozy textarea{line-height:1.85;} body.cozy .card{padding:20px;margin-bottom:22px;}
   body.cozy .transport{gap:14px;margin-bottom:24px;} body.cozy .sub{margin-bottom:28px;}
+  /* Taille du texte (accessibilité) : Grande — pose AVANT les règles flat/CRT, après font-* pour gagner en spécificité d'ordre */
+  body.size-lg{font-size:30px;}
+  body.size-lg textarea{font-size:29px;line-height:1.45;}
+  body.size-lg #console{font-size:24px;}
+  body.size-lg .sub{font-size:25px;}
+  body.size-lg .head{font-size:23px;}
+  body.size-lg h1{font-size:33px;}
+  body.size-lg button{font-size:15px;}
+  body.size-lg #stageEditor{font-size:27px;}
+  body.size-lg .opt,body.size-lg details{font-size:21px;}
+  body.font-clean.size-lg{font-size:23px;}
+  body.font-clean.size-lg textarea{font-size:20px;}
+  body.font-clean.size-lg h1{font-size:30px;}
+  body.font-clean.size-lg .sub,body.font-clean.size-lg #console{font-size:18px;}
+  body.font-clean.size-lg button{font-size:14px;}
+  body.font-full.size-lg{font-size:26px;}
+  /* Focus visible (accessibilité) : anneau = --glow (≥ AA sur tous les thèmes) avec lèvre de --bg */
+  :focus-visible{outline:none;box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--glow);border-radius:3px;}
+  .cell:focus-visible{outline:none;box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--glow);z-index:3;position:relative;}
+  /* Mouvement réduit : stoppe le clignotement UI (les scènes pleins écran restent, c'est le contenu) */
+  @media (prefers-reduced-motion:reduce){
+    .blink,.tpulse,#fpBtn{animation:none;opacity:1;}
+    #timeline .ph,#tw,#playheadBar{transition:none;}
+  }
   /* Effet : force plat / CRT (scanlines+glow) / grain — par-dessus le flag du thème. */
   body.fx-flat::after{display:none;} body.fx-flat,body.fx-flat h1{text-shadow:none;}
   /* App installée (PWA standalone) : la barre d'adresse a disparu → moins de vide en haut. */
@@ -210,10 +234,10 @@
 
   <div class="presets" id="topbar" style="margin-bottom:14px;align-items:center;gap:6px">
     <span style="color:var(--dim);font-size:16px;margin-right:2px">look &#9656;</span>
-    <button class="tiny" id="themePrev" title="thème précédent">&#9664;</button>
+    <button class="tiny" id="themePrev" title="thème précédent" aria-label="thème précédent">&#9664;</button>
     <select id="themeSel" class="menu" title="choisir un thème (ou ◀ ▶ pour feuilleter — tout l'écran est l'aperçu)" style="min-width:158px"></select>
-    <button class="tiny" id="themeNext" title="thème suivant">&#9654;</button>
-    <button class="tiny" id="randTheme" title="thème au hasard">&#9860;</button>
+    <button class="tiny" id="themeNext" title="thème suivant" aria-label="thème suivant">&#9654;</button>
+    <button class="tiny" id="randTheme" title="thème au hasard" aria-label="thème au hasard">&#9860;</button>
     <span style="display:inline-flex;gap:6px;align-items:center;margin-left:6px;flex-wrap:wrap">
       <select id="fontSel" class="menu" title="police (indépendante du thème)" style="font-size:13px;padding:4px 6px">
         <option value="retro">Aa Rétro</option><option value="clean">Aa Nette</option><option value="machine">Aa Machine</option></select>
@@ -221,6 +245,10 @@
         <option value="normal">&#9636; Normale</option><option value="dense">&#9636; Compacte</option><option value="cozy">&#9636; Aérée</option></select>
       <select id="fxSel" class="menu" title="effet visuel (par-dessus le thème)" style="font-size:13px;padding:4px 6px">
         <option value="auto">&#10022; Auto</option><option value="flat">&#10022; Plat</option><option value="crt">&#10022; CRT</option><option value="grain">&#10022; Grain</option></select>
+      <select id="sizeSel" class="menu" title="taille du texte (accessibilité)" style="font-size:13px;padding:4px 6px">
+        <option value="normal">Aa Taille normale</option><option value="lg">Aa Grande (accessibilité)</option></select>
+      <select id="aaSel" class="menu" title="contraste renforcé (WCAG AA) : tous les textes ≥ 4,5:1 sur le fond" style="font-size:13px;padding:4px 6px">
+        <option value="aa">&#9632; Contraste AA</option><option value="off">&#9632; Contraste d'origine</option></select>
     </span>
     <label id="rustToggleWrap" title="LE MOTEUR Rust (WASM) pilote maintenant les notes et le timing — la synthèse/FX restent en JS. Décoché = moteur JS habituel, instantané. Parité bit-à-bit 238/238 sur les onsets." style="margin-left:14px;color:var(--dim);font-size:15px;display:none;align-items:center;gap:6px;cursor:pointer">
       <input type="checkbox" id="rustToggle" style="cursor:pointer"> 🦀 moteur <b id="rustBadge" style="color:#7f7">Rust actif</b>
@@ -1966,7 +1994,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   function buildGrid(){grid.innerHTML="";for(const v of voices){if(v.section)continue;const row=document.createElement("div");row.className="row";
     const nm=document.createElement("div");nm.className="vname notranslate";
     // live mixer: per-voice Mute / Solo toggle buttons (appendChild only — stub-safe)
-    const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.title=key==="mute"?"couper":"isoler";
+    const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.title=key==="mute"?"couper":"isoler";b.setAttribute("aria-label",(key==="mute"?"couper (mute)":"isoler (solo)")+" "+v.name);
       b.style.cssText="font:11px monospace;padding:1px 5px;margin-right:3px;border:1px solid var(--dim);border-radius:3px;background:transparent;color:var(--dim);cursor:pointer";
       const refresh=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};refresh();
       b.addEventListener("click",e=>{e.stopPropagation();v[key]=!v[key];refresh();setVoiceParam(v,key,v[key]);});return b;};
@@ -1979,11 +2007,19 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const lbl=document.createElement("span");lbl.textContent=v.name;lbl.style.marginLeft="4px";nm.appendChild(lbl);
     const cells=document.createElement("div");cells.className="cells";v.cells=[];
     v.tokens.forEach((tok,i)=>{const c=document.createElement("span");c.className="cell";
+      c.tabIndex=0;c.setAttribute("role","button");c.setAttribute("aria-label",v.name+" — pas "+(i+1)+" ("+((tok==="."||tok==="~")?"silence":tok)+")");
       if(tok!=="."&&tok!=="~")c.classList.add("on");
+      const onStep=()=>{if(v.type==="drum")toggleStep(v,i,c);else toggleMelStep(v,i,c,1);};
       if(v.type==="drum"){c.style.cursor="pointer";c.addEventListener("click",()=>toggleStep(v,i,c));}
       else{c.style.cursor="pointer";if(tok!=="."&&tok!=="~"&&tok.length<=3){c.textContent=tok;c.style.fontSize="9px";}
         c.addEventListener("click",e=>toggleMelStep(v,i,c,e.shiftKey?-1:1));  // clic = monte · shift-clic = descend
         c.addEventListener("wheel",e=>{e.preventDefault();toggleMelStep(v,i,c,e.deltaY<0?1:-1);},{passive:false});}  // molette = change la hauteur
+      c.addEventListener("keydown",e=>{const cells=v.cells,idx=cells.indexOf(c);
+        if(e.key==="ArrowRight"){e.preventDefault();(cells[idx+1]||cells[0]).focus();}
+        else if(e.key==="ArrowLeft"){e.preventDefault();(cells[idx-1]||cells[cells.length-1]).focus();}
+        else if(e.key==="ArrowUp"){e.preventDefault();if(v.type!=="drum")toggleMelStep(v,i,c,1);else toggleStep(v,i,c);}
+        else if(e.key==="ArrowDown"){e.preventDefault();if(v.type!=="drum")toggleMelStep(v,i,c,-1);}
+        else if(e.key==="Enter"||e.key===" "){e.preventDefault();onStep();}});
       cells.appendChild(c);v.cells.push(c);});
     row.appendChild(nm);row.appendChild(cells);grid.appendChild(row);v.row=row;}buildMixer();}
   // MIXEUR : une tranche par voix (fader/pan/M/S + mètre d'activité) + master
@@ -1998,7 +2034,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       const sl=(min,max,stp,val,title,oninput)=>{const s=document.createElement("input");s.type="range";s.min=min;s.max=max;s.step=stp;s.value=val;s.title=title;s.style.cssText="width:56px;cursor:pointer;margin:1px 0";s.addEventListener("input",()=>oninput(parseFloat(s.value)));return s;};
       if(isMaster){mx._masterBar=bar;col.appendChild(sl(0,100,1,$("vol").value,"volume master",x=>{$("vol").value=x;$("vol").dispatchEvent(new Event("input"));}));}
       else{v._mxBar=bar;
-        const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.style.cssText="font:10px monospace;padding:1px 4px;margin:1px;border:1px solid var(--dim);border-radius:2px;background:transparent;color:var(--dim);cursor:pointer";const rf=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};rf();b.addEventListener("click",()=>{v[key]=!v[key];rf();setVoiceParam(v,key,v[key]);});return b;};
+        const mk=(lbl,key,onCol)=>{const b=document.createElement("button");b.textContent=lbl;b.setAttribute("aria-label",(key==="mute"?"couper (mute)":"isoler (solo)")+" "+v.name);b.style.cssText="font:10px monospace;padding:1px 4px;margin:1px;border:1px solid var(--dim);border-radius:2px;background:transparent;color:var(--dim);cursor:pointer";const rf=()=>{b.style.background=v[key]?onCol:"transparent";b.style.color=v[key]?"#06120a":"var(--dim)";};rf();b.addEventListener("click",()=>{v[key]=!v[key];rf();setVoiceParam(v,key,v[key]);});return b;};
         const bt=document.createElement("div");bt.appendChild(mk("M","mute","#ff6a6a"));bt.appendChild(mk("S","solo","#ffd24a"));col.appendChild(bt);
         const gs=sl(0,1,0.01,(v.gain!=null?v.gain:0.25),"volume",x=>v.gain=x);gs.addEventListener("change",()=>setVoiceParam(v,"gain",parseFloat(gs.value)));col.appendChild(gs);
         const ps=sl(-1,1,0.05,(v.pan!=null?v.pan:0),"pan (gauche↔droite)",x=>v.pan=x);ps.addEventListener("change",()=>setVoiceParam(v,"pan",parseFloat(ps.value)));col.appendChild(ps);
@@ -6076,6 +6112,74 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     terracotta:["#f2e9e1","#3a2a24","#b0998e","#1a0e08","#c26a44","#6a7a6a",1],
     olive:["#1e2019","#d0d3c3","#61654f","#f0f2e8","#c0a850","#8aa878",1]
   };
+const THEME_AA={
+  crt:["#5cff4a", "#388c2c", "#9dff8a", "#ffc04a", "#5fe6ff"],
+  green2:["#33ff33", "#0c8f0c", "#aaffaa", "#ffd24a", "#4affff"],
+  amber:["#ffb000", "#aa6e00", "#ffd27a", "#ff8a00", "#ffcf6b"],
+  amber2:["#ffaa33", "#b16f00", "#ffd699", "#ff7700", "#ffcc77"],
+  whitephos:["#e8e8e8", "#797979", "#ffffff", "#ffd24a", "#9fe6ff"],
+  bluephos:["#6fb8ff", "#397abb", "#b8dcff", "#ffcf6b", "#7fe0ff"],
+  matrix:["#00ff41", "#0b882f", "#aaffbb", "#00ff41", "#00ff99"],
+  c64:["#b1a7ff", "#b1a9ec", "#dcd7ff", "#f7f779", "#a9e6ff"],
+  pet:["#33ff66", "#1d8740", "#b6ffc4", "#33ff66", "#56ffa0"],
+  apple2:["#39ff66", "#1d8740", "#b6ffc4", "#39ff8c", "#56ffa0"],
+  spectrum:["#ffffff", "#777777", "#ffffff", "#ffd800", "#00d8ff"],
+  bbc:["#ffffff", "#888888", "#ffffff", "#ffcc00", "#00ffff"],
+  atari:["#9fd0ff", "#6f9cc9", "#d0e8ff", "#ffd24a", "#aaf0ff"],
+  gameboy:["#9bbc0f", "#53aa53", "#cfe89a", "#8bac0f", "#8bac0f"],
+  dos:["#c0c0c0", "#757575", "#ffffff", "#ffff55", "#55ffff"],
+  vt100:["#33ff33", "#138713", "#aaffaa", "#ffcf6b", "#66ffff"],
+  ibm3270:["#33ff33", "#0f880f", "#aaffaa", "#ffaa00", "#33ffff"],
+  hercules:["#ffb000", "#a36900", "#ffd699", "#ff8a00", "#ffcf6b"],
+  tektronix:["#4ad991", "#24915d", "#a6f0c8", "#d9c84a", "#6fe6c0"],
+  wyse:["#dfe6df", "#737b73", "#ffffff", "#ffd24a", "#9fe6c0"],
+  next:["#dddddd", "#929292", "#ffffff", "#ffcf6b", "#9fd0ff"],
+  plan9:["#222222", "#767666", "#000000", "#aa5500", "#006688"],
+  modern:["#a6e3a1", "#83869b", "#cdd6f4", "#f9e2af", "#89dceb"],
+  dracula:["#50fa7b", "#8490b8", "#f8f8f2", "#f1fa8c", "#8be9fd"],
+  nord:["#a3be8c", "#929cb1", "#eceff4", "#ebcb8b", "#88c0d0"],
+  gruvbox:["#b8bb26", "#9a8e84", "#ebdbb2", "#fabd2f", "#8ec07c"],
+  solarized:["#859900", "#78929a", "#93a1a1", "#b58900", "#2aa198"],
+  monokai:["#a6e22e", "#938e78", "#f8f8f2", "#e6db74", "#66d9ef"],
+  ocean:["#6fd0ff", "#5286ba", "#cfeaff", "#ffcf6b", "#7fe0ff"],
+  paper:["#2a2a2a", "#736d5f", "#000000", "#9f5e1a", "#1f6f8b"],
+  apollo:["#33ff88", "#13894b", "#aaffcc", "#ffb000", "#66ffcc"],
+  mission:["#bfe6ff", "#3c81af", "#e8f6ff", "#ffcc66", "#7fe0ff"],
+  radar:["#33ff33", "#108f10", "#aaffaa", "#9dff4a", "#33ffcc"],
+  minitel:["#e6e6e6", "#737387", "#ffffff", "#ffcc44", "#55ddff"],
+  nokia:["#16240e", "#2b3423", "#0a1604", "#233610", "#1f362b"],
+  pager:["#1a2a1a", "#506956", "#0a1a0a", "#3a6a3a", "#2a6a5a"],
+  pipboy:["#28ff7a", "#169547", "#a6ffc4", "#28ff7a", "#28ffb0"],
+  nixie:["#ff7a18", "#bf5b0d", "#ffb060", "#ff9030", "#ff7a18"],
+  vfd:["#4fd0e0", "#258193", "#a0f0ff", "#ffcf6b", "#7fe6ff"],
+  led_red:["#ff3030", "#e02e2e", "#ff9090", "#ff6030", "#ff5050"],
+  led_blue:["#40a8ff", "#2e7abc", "#a8d8ff", "#ffcf6b", "#60c0ff"],
+  bsod:["#ffffff", "#8f8fdc", "#ffffff", "#ffff55", "#aaddff"],
+  telegraph:["#d8b878", "#8e794e", "#f0dca8", "#e0a040", "#b89060"],
+  eink:["#1a1a1a", "#6a695f", "#000000", "#7a5a2a", "#2a5a6a"],
+  oled:["#ffffff", "#757575", "#ffffff", "#ffd24a", "#5fe6ff"],
+  vaporwave:["#ff71ce", "#8f7eb1", "#ffd6f5", "#fffb96", "#01cdfe"],
+  cyberpunk:["#00fff5", "#7e67c3", "#b6fffb", "#ff206e", "#fee801"],
+  thermal:["#222222", "#746e64", "#000000", "#9a5a2a", "#3a6a8a"],
+  ink:["#1a1a1a", "#777365", "#000000", "#8a6a2a", "#3a6a8a"],
+  mono:["#222222", "#757575", "#000000", "#666666", "#444444"],
+  noir:["#eaeaea", "#757575", "#ffffff", "#c9a24a", "#8ab4c8"],
+  graphite:["#d6d6d8", "#848488", "#ffffff", "#c8a25a", "#7aa8c0"],
+  slate:["#c6cfd8", "#798795", "#eef2f6", "#cfa860", "#7ab0c8"],
+  bone:["#2b2926", "#736c60", "#000000", "#946325", "#467483"],
+  sepia:["#463726", "#726649", "#1a1206", "#8a5a1a", "#5a6a4a"],
+  fog:["#3a3a3e", "#67676e", "#111111", "#74674c", "#506c7b"],
+  midnight:["#c9d1d9", "#727d8b", "#f0f6fc", "#cfa860", "#589cd8"],
+  sand:["#3a3226", "#6f644e", "#1a1206", "#865c25", "#556a5d"],
+  carbon:["#dedede", "#7e7e7e", "#ffffff", "#c2a15a", "#7fb0b8"],
+  porcelain:["#2a2e33", "#6e767f", "#000000", "#9a6a3a", "#3a7a9a"],
+  terracotta:["#3a2a24", "#7e6458", "#1a0e08", "#a15535", "#5f6e5f"],
+  olive:["#d0d3c3", "#83896b", "#f0f2e8", "#c0a850", "#8aa878"],};
+  // overrides "contraste AA" (WCAG): même teinte, contraste ≥4.5 sur le fond.
+  let _aaMode=true; // accessibilité par défaut : true = textes lisibles (WCAG AA)
+  function applyAa(m){_aaMode=!!m;if(curTheme)paintTheme(curTheme);
+    const s=$("aaSel");if(s)s.value=_aaMode?"aa":"off";
+    try{localStorage.setItem("loom-aa",_aaMode?"1":"0");}catch(_){}}
   // Menu complet : famille minimaliste en tête + tous les looks historiques (62 au total)
   const THEME_GROUPS=[
     ["✦ Minimalistes",["ink","mono","noir","graphite","slate","bone","sepia","fog","midnight","sand","carbon","porcelain","terracotta","olive"]],
@@ -6114,10 +6218,13 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   function applyDensity(m){document.body.classList.remove("dense","cozy");
     if(m==="dense")document.body.classList.add("dense");else if(m==="cozy")document.body.classList.add("cozy");
     const s=$("densSel");if(s)s.value=m;try{localStorage.setItem("loom-density",m);}catch(_){}}
+  function applySize(m){document.body.classList.toggle("size-lg",m==="lg");
+    const s=$("sizeSel");if(s)s.value=m;try{localStorage.setItem("loom-size",m);}catch(_){}}
   // paint only (used for hover-preview, no save) vs applyTheme (commits + saves + marks active)
-  function paintTheme(name){const t=THEMES[name]||THEMES.crt;const r=document.documentElement.style;
-    const k=["--bg","--green","--dim","--glow","--amber","--cyan"];for(let i=0;i<6;i++)r.setProperty(k[i],t[i]);
-    _themeFlat=!!t[6];applyFx();}
+  function paintTheme(name){const b=THEMES[name]||THEMES.crt;const a=_aaMode&&THEME_AA[name]?THEME_AA[name]:null;
+    const r=document.documentElement.style;const k=["--bg","--green","--dim","--glow","--amber","--cyan"];
+    r.setProperty(k[0],b[0]);for(let i=1;i<6;i++)r.setProperty(k[i],a?a[i-1]:b[i]);
+    _themeFlat=!!b[6];applyFx();}
   function applyTheme(name){paintTheme(name);curTheme=name;if($("themeSel"))$("themeSel").value=name;
     try{localStorage.setItem("loom-theme",name);}catch(_){}}
   function buildThemeMenu(){const el=$("themeSel");if(!el)return;
@@ -6133,10 +6240,14 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   $("fontSel").addEventListener("change",e=>applyFont(e.target.value));
   $("densSel").addEventListener("change",e=>applyDensity(e.target.value));
   $("fxSel").addEventListener("change",e=>applyEffect(e.target.value));
+  $("aaSel").addEventListener("change",e=>applyAa(e.target.value==="aa"));
+  $("sizeSel").addEventListener("change",e=>applySize(e.target.value));
   // restaure les préférences d'apparence (effet AVANT le thème pour que paintTheme le respecte)
   try{const f=localStorage.getItem("loom-font");if(f)applyFont(f);}catch(_){}
   try{const d=localStorage.getItem("loom-density");if(d)applyDensity(d);}catch(_){}
   try{const x=localStorage.getItem("loom-fx");if(x)curEffect=x;const s=$("fxSel");if(s)s.value=curEffect;}catch(_){}
+  try{const sz=localStorage.getItem("loom-size");if(sz)applySize(sz);}catch(_){}
+  try{const a=localStorage.getItem("loom-aa");applyAa(a==null?true:a!=="0");}catch(_){applyAa(true);}
   try{const saved=localStorage.getItem("loom-theme");applyTheme(saved&&THEMES[saved]?saved:"crt");}catch(_){applyTheme("crt");}
 
   function captureState(){return {c:editor.value,bpm:$("bpm").value,sw:$("swing").value,ec:$("echo").value,sp:$("space").value,vo:$("vol").value,

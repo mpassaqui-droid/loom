@@ -11,6 +11,10 @@ use crate::editor::Palette;
 /// Size of the code in the editor, in points.
 pub const CODE_SIZE: f32 = 15.0;
 
+/// When the large-text accessibility mode is on, text grows by this factor
+/// (everything is scaled from the normal sizes, so the layout stays coherent).
+const LARGE_SCALE: f32 = 1.25;
+
 /// An Omarchy colour as an egui colour.
 pub fn color(c: Rgb) -> Color32 {
     Color32::from_rgb(c.0, c.1, c.2)
@@ -82,30 +86,33 @@ pub fn apply(ctx: &egui::Context, theme: &Theme) {
 }
 
 /// Slightly larger text than egui's defaults: easier to read while playing.
-pub fn apply_text_sizes(ctx: &egui::Context) {
+/// `large` turns on the accessibility mode (bigger fonts everywhere).
+pub fn apply_text_sizes(ctx: &egui::Context, large: bool) {
+    let s = if large { LARGE_SCALE } else { 1.0 };
     ctx.all_styles_mut(|style| {
         style.text_styles = [
-            (TextStyle::Small, FontId::new(11.0, FontFamily::Proportional)),
-            (TextStyle::Body, FontId::new(14.0, FontFamily::Proportional)),
-            (TextStyle::Button, FontId::new(14.0, FontFamily::Proportional)),
-            (TextStyle::Heading, FontId::new(20.0, FontFamily::Proportional)),
-            (TextStyle::Monospace, FontId::new(CODE_SIZE, FontFamily::Monospace)),
+            (TextStyle::Small, FontId::new(11.0 * s, FontFamily::Proportional)),
+            (TextStyle::Body, FontId::new(14.0 * s, FontFamily::Proportional)),
+            (TextStyle::Button, FontId::new(14.0 * s, FontFamily::Proportional)),
+            (TextStyle::Heading, FontId::new(20.0 * s, FontFamily::Proportional)),
+            (TextStyle::Monospace, FontId::new(CODE_SIZE * s, FontFamily::Monospace)),
         ]
         .into();
-        style.spacing.item_spacing = egui::vec2(8.0, 5.0);
-        style.spacing.button_padding = egui::vec2(8.0, 4.0);
+        style.spacing.item_spacing = egui::vec2(8.0 * s, 5.0 * s);
+        style.spacing.button_padding = egui::vec2(8.0 * s, 4.0 * s);
     });
 }
 
-/// Editor colours for a theme.
-pub fn palette(theme: &Theme) -> Palette {
+/// Editor colours for a theme. `large` also grows the code font.
+pub fn palette(theme: &Theme, large: bool) -> Palette {
+    let font_size = if large { CODE_SIZE * LARGE_SCALE } else { CODE_SIZE };
     Palette {
         plain: color(theme.foreground),
         comment: color(theme.dim),
         name: color(theme.accent),
         verb: color(theme.note),
         hit: color(theme.drum),
-        font_size: CODE_SIZE,
+        font_size,
     }
 }
 

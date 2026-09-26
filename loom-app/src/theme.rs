@@ -96,6 +96,24 @@ impl Theme {
         Some(base.join("omarchy/current"))
     }
 
+    /// Whether the GUI should draw larger text (accessibility). Persisted next
+    /// to the theme so it survives restarts; default is `false` (normal size).
+    pub fn ui_large() -> bool {
+        Self::state_dir()
+            .map(|d| d.join("loom-ui-large"))
+            .is_some_and(|p| std::fs::read_to_string(&p).is_ok_and(|s| s.trim() == "1"))
+    }
+
+    /// Persist the GUI large-text accessibility flag (mirror of `ui_large`).
+    pub fn set_ui_large(large: bool) {
+        let Some(dir) = Self::state_dir() else { return };
+        if large {
+            let _ = std::fs::write(dir.join("loom-ui-large"), "1\n");
+        } else {
+            let _ = std::fs::remove_file(dir.join("loom-ui-large"));
+        }
+    }
+
     /// Path of the active Omarchy `colors.toml`, if this is an Omarchy system.
     pub fn omarchy_colors_path() -> Option<PathBuf> {
         Self::state_dir().map(|d| d.join("theme/colors.toml")).filter(|p| p.exists())

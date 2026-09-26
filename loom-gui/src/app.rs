@@ -64,6 +64,8 @@ pub enum Action {
     ToggleVj,
     /// Close the window.
     Quit,
+    /// Toggle the large-text accessibility mode (Ctrl+Shift+A).
+    ToggleUiSize,
     /// A STUDIO button or key: knobs, mixer, TAP, STEMS, share, timeline… (see `studio_ui`).
     Studio(StudioAction),
     /// A PROF button or key: GÉNÉRER, DÉVELOPPE, undo, EXPLIQUE, OREILLE, HUM, LEÇONS (see `teacher_ui`).
@@ -130,6 +132,8 @@ pub struct LoomApp {
     stage: Stage,
     /// True while the stage fills the window instead of the editor.
     stage_full: bool,
+    /// Large-text accessibility mode (persisted, toggled with Ctrl+Shift+A).
+    ui_large: bool,
 
     // STUDIO: master knobs (VOL included), mixer, meters, MIDI LEARN, demo…
     studio: Studio,
@@ -143,7 +147,8 @@ impl LoomApp {
     /// `file` is the command-line argument; without it, the last song reopens.
     pub fn new(cc: &eframe::CreationContext<'_>, file: Option<PathBuf>) -> LoomApp {
         let theme = Theme::load();
-        style::apply_text_sizes(&cc.egui_ctx);
+        let ui_large = Theme::ui_large();
+        style::apply_text_sizes(&cc.egui_ctx, ui_large);
         style::apply(&cc.egui_ctx, &theme);
 
         let (engine, audio_error) = match Engine::start() {
@@ -180,6 +185,7 @@ impl LoomApp {
             metronome: false,
             stage: Stage::default(),
             stage_full: false,
+            ui_large,
             studio,
             teacher: Teacher::default(),
         };
@@ -298,6 +304,17 @@ impl LoomApp {
             Action::Quit => {
                 self.closing = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Action::ToggleUiSize => {
+                self.ui_large = !self.ui_large;
+                Theme::set_ui_large(self.ui_large);
+                style::apply_text_sizes(ctx, self.ui_large);
+                self.say(if self.ui_large {
+                    "Grande police activée (accessibilité)."
+                } else {
+                    "Taille normale rétablie."
+                });
+                ctx.request_repaint();
             }
             Action::Studio(action) => self.studio_action(action, ctx),
             Action::Teacher(action) => self.teacher_action(action),
@@ -625,6 +642,9 @@ impl LoomApp {
             if i.consume_key(Modifiers::COMMAND, Key::T) {
                 actions.push(Action::Metronome);
             }
+            if i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::A) {
+                actions.push(Action::ToggleUiSize);
+            }
             if i.consume_key(Modifiers::COMMAND, Key::S) {
                 actions.push(Action::Save);
             }
@@ -689,6 +709,15 @@ impl LoomApp {
                         .clicked()
                     {
                         actions.push(Action::Export);
+                    }
+                    ui.separator();
+                    let size_lbl = if self.ui_large { "A+" } else { "A" };
+                    let size_btn = Button::new(RichText::new(size_lbl).size(14.0).strong()
+                        .color(if self.ui_large { color(theme.background) } else { color(theme.foreground) }))
+                        .fill(if self.ui_large { color(theme.accent) } else { color(theme.panel) })
+                        .min_size(egui::vec2(40.0, 34.0));
+                    if ui.add(size_btn).on_hover_text("Grande police (accessibilité) — Ctrl+Shift+A").clicked() {
+                        actions.push(Action::ToggleUiSize);
                     }
                     if let Some(engine) = &self.engine {
                         let recording = engine.is_recording();
@@ -966,7 +995,7 @@ impl LoomApp {
 
     /// The code editor, filling the rest of the window.
     fn editor(&mut self, ui: &mut egui::Ui) {
-        let palette = style::palette(&self.theme);
+        let palette = style::palette(&self.theme, self.ui_large);
         let editor_id = Id::new(EDITOR_ID);
         let playing = self.is_playing();
         let background = color(self.theme.background);
