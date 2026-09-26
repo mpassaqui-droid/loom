@@ -103,6 +103,9 @@ Légende : ✅ fait · 🔨 prochaine étape réaliste · 🌠 grand chantier / 
 - 🔨 **Base de connaissance intégrée** : chaque gamme/tradition avec son **histoire,
   son contexte et son sens** (rasa indien, ethos des modes grecs, humeurs des
   maqâmat, wuxing chinois ↔ notes).
+- ✅ **Base élargie (P5)** : `?tala` (cycles indiens, sam/khali), `?ethos`/`?rasa`,
+  ethos des 7 modes grecs affiché comme `humeur`, clause « c'est un mode » dans le
+  pourquoi — parité offline web/WASM 24/24.
 - 🔨 **L'explicateur « pourquoi ça sonne »** : consonance, tension/détente, attente
   (Huron/Meyer), psychoacoustique — l'IA + la théorie.
 - 🌠 **Musique & nombre / cosmos** (Pythagore, harmonie des sphères, ratios justes).

@@ -554,6 +554,11 @@ pub fn analyze(text: &str) -> Vec<String> {
     if has_euclid(&src) {
         why.push("des rythmes euclidiens répartissent les coups régulièrement-irrégulièrement (groove du monde)".into());
     }
+    if let Some(sn) = scale_name.as_deref() {
+        if matches!(sn, "dorian" | "phrygian" | "lydian" | "mixolydian" | "locrian") {
+            why.push("c'est un mode : l'ambiance vient de la couleur des degrés (ethos grec), pas d'une cadence V→I".into());
+        }
+    }
     let prog = parse_prog(&src);
     let roman = key.as_ref().and_then(|k| prog_roman(k, &prog)).filter(|r| !r.is_empty());
     if let Some(r) = &roman {
@@ -657,8 +662,7 @@ mod tests {
     #[test]
     fn detects_microtonal_and_tune_words() {
         assert!(has_custom_key_scale("key: d 0 1.5 3 5"));
-        assert!(!has_custom_key_scale("key: c major"));
-        assert!(!has_custom_key_scale("lead: 1 3 5"));
+        assert!(!has_custom_key_scale("key: c major"));assert!(!has_custom_key_scale("lead: 1 3 5"));
     }
 
     #[test]
@@ -776,8 +780,8 @@ mod tests {
         let i_mood = out.iter().position(|l| l.starts_with("   humeur")).unwrap();
         assert_eq!(i_mood, i_trad + 1, "{out:?}");
         assert!(out[i_mood].contains("fièvre et théâtre"));
-        // scales without a culture → no humeur line (the gloss already covers them)
-        let plain = analyze("key: c major\nlead: 1 3 5");
+        // scales without an ethos entry → no humeur line (the gloss already covers them)
+        let plain = analyze("key: a whole_tone\nlead: 1 3 5 1");
         assert!(!plain.iter().any(|l| l.starts_with("   humeur")), "{plain:?}");
     }
 
@@ -817,5 +821,19 @@ mod tests {
             keep.contains(&head).then_some(head)
         }).collect();
         assert_eq!(order, keep, "{out:?}");
+    }
+
+    #[test]
+    fn modal_scale_speaks_of_ethos_and_mood() {
+        // P5 : un mode (dorian) affiche sa « humeur » (MOOD) ET la clause ethos
+        // dans le « pourquoi ça sonne » — c'est l'explicatriceur des modes grecs.
+        let out = analyze("key: d dorian\nlead: 1 2 3 4");
+        let s = out.join("\n");
+        assert!(s.contains("humeur : doux-amer qui espère"), "{out:?}");
+        assert!(s.contains("c'est un mode : l'ambiance vient de la couleur des degrés (ethos grec), pas d'une cadence V→I"), "{out:?}");
+        // une gamme non modale (minor) reçoit une humeur mais PAS la clause ethos.
+        let maj = analyze("key: c major\nlead: 1 3 5");
+        assert!(maj.iter().any(|l| l.contains("humeur : la joie franche")), "{maj:?}");
+        assert!(!maj.iter().any(|l| l.contains("c'est un mode")), "{maj:?}");
     }
 }

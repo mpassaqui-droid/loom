@@ -156,6 +156,7 @@ const an_pieces = {
   'attente résolue 7→1 (prog V→I)': 'key: c major\nprog: G7 C\nlead: 7 1',
   'attente suspendue sur la note de tête (7)': 'key: c major\nlead: 1 2 3 5 7',
   'mélodie étroite dans une 3ce + conseils': 'key: d minor\nlead: 1 2 3 1 2 3',
+  'mode lydien (ethos — ambience par couleur)': 'key: f lydian\nlead: 1 2 3 4 5 6',
 };
 // force: the acoustic consonance % is a float measurement (Plomp–Levelt) —
 // done with the piece's own tuniness now (the global `tuning` leak was fixed)

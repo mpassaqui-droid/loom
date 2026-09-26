@@ -68,9 +68,35 @@
         (+ analyse 23/23), check_web 4/4, clippy 0, WASM rebuildé.
   - [x] Doc : tables web/lessons (Génératif maths), aide #2, VIBE (RHYTHM/AVOID REPS),
         develop.rs `VARYING_GENERATORS` élargi (11).
-- [ ] **P5 · Base de connaissance & explicatriceur** — étendre `LORE`/`MOOD` :
+- [x] **P5 · Base de connaissance & explicatriceur** — étendre `LORE`/`MOOD` :  commit `22c8bef`
       ethos des modes grecs, wuxing↔notes, talas, histoire par tradition ;
       explicatriceur « pourquoi ça sonne » + prof interactif ; miroir JS + parité.
+  - [x] Connaissance (source = `web/index.html`, miroir Rust `lore.rs` maintenu à la main) :
+        `LORE` + 6 concepts — `ethos` (le caractère moral des modes grecs), `tala` (cycles
+        indiens : tintal 16 / ektaal 12 / jhaptal 10 / rupak 7 / keherwa 8 / dadra 6 ; sam &
+        khali), `rasa` (les 9 saveurs du raga), `sam`, `khali`, `pakad` ;
+        `TRADITION_LORE` + `tala` (4 lignes : origine Natyashastra/tabla · mécanique sam/khali
+        · pourquoi ça sonne (points d'appui réguliers-irréguliers) · En LOOM sur 16 pas) ;
+        enrichir `modes` (ethos des 7 modes d'après les Grecs) et `wuxing` (notes ↔ éléments :
+        gong=Terre, shang=Métal, jue=Bois, zhi=Feu, yu=Eau) ;
+        `MOOD` + ethos des 7 modes (major=ionien, minor=éolien, dorian, phrygian, lydian,
+        mixolydian, locrian) → l'analyse affiche `humeur : …` aussi sur les pièces modales.
+  - [x] Explicatriceur : clause `[ pourquoi ça sonne ]` « c'est un MODE : l'ambiance vient de
+        sa couleur (ethos), pas d'une cadence V→I » pour dorian/phrygian/lydian/mixolydian/
+        locrian — MÊME libellé JS (web) et Rust (analyze.rs) ; parité en ligne comme garantie.
+  - [x] Prof interactif (web) : 4 talas ajoutés à `RHYTHMS`/`EAR_RH` (tintal16, jhaptal10,
+        keherwa8, rupak7) → l'EAR-TRAINING sait désormais « devine le rythme » indien ;
+        `?tala` répond via TRADITION_LORE (aucun code d'acheminement à changer).
+  - [x] Miroir : `loom-core/src/prof/lore.rs` (std-only) + tests `lookup` offline dans
+        `loom-app/src/prof.rs` (?tala, ?ethos, ?rasa, ?pakad, ?sam) + test analyse « humeur »
+        d'une pièce modale (dorian) dans analyze.rs.
+  - [x] Parité : + pièce corpus « mode lydien (ethos) » → ANALYSE 24/24 ; vérifier 278/278
+        timing + conséquence : REBUILD WASM (`./build-wasm.sh`) obligatoire (lore.rs → analyse).
+  - [x] Docs : invite `?tala`/`?wuxing` dans le message du prof (web + miroir `HELP`),
+        leçon 10 (tala), ROADMAP §« Base élargie (P5) » ; develop.rs inchangé (pas de verbe neuf).
+  - [x] Portes : cargo test --workspace (114/77/124/26/24) · clippy -D 0 · check_web 4/4 ·
+        parité **analyse 24/24** + timing **278/278** · diff --check · WASM rebuildé (`_bg.wasm`
+        web + node) · COMMIT + PUSH FR.
 - [ ] (P6 hors vague) moteur unifié synthèse/FX WASM — chantier séparé à cadrer.
 - [ ] Relecture GL live de T5 (gbloom/gglitch/gfeedback) sur le Mac de CI.
 

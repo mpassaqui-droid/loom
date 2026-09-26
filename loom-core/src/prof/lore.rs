@@ -33,6 +33,12 @@ pub const LORE: &[(&str, &str)] = &[
     ("substitution-tritonique", "remplacer une dominante par celle située un triton plus loin (G7→Db7) — même tension, basse qui descend chromatiquement, très jazz"),
     ("modal", "composer sur un mode (dorien, lydien…) plutôt qu'une cadence tonale — l'ambiance vient de la couleur du mode, pas de la tension V→I (Miles, Coltrane)"),
     ("voicing", "la façon de disposer les notes d'un accord (renversements, notes larges/serrées) — change la couleur sans changer l'accord"),
+    ("ethos", "le « caractère moral » que les Grecs prêtaient aux modes (dorien viril et stable, phrygien exalté, lydien plaintif…) — une gamme parle d'abord par sa couleur"),
+    ("tala", "le cycle rythmique de l'Inde (tintal 16, ektaal 12, jhaptal 10, rupak 7, keherwa 8, dadra 6) — le sam (le 1) et le khali (la case vide) ancrent l'improvisation"),
+    ("sam", "le temps 1 du cycle de tala — l'ancre où tout retombe (le downbeat indien)"),
+    ("khali", "la case « vide » du tala — elle structure la demi-période et fait respirer la phrase"),
+    ("rasa", "la saveur émotionnelle d'un raga (9 rasas : amour, peine, héroïsme, merveille, paix…) — ce que la gamme doit évoquer, pas seulement jouer"),
+    ("pakad", "la phrase-signature d'un raga (montée/descente type) — l'ADN mélodique"),
 ];
 
 /// The character of each scale: `(gamme, explication)`.
@@ -135,6 +141,13 @@ pub const MOOD: &[(&str, &str)] = &[
     ("egyptian", "le voyage suspendu des caravanes"),
     ("pentatonic", "l'universalité sans friction — toute la terre"),
     ("minpent", "l'expression populaire du blues de la rue"),
+    ("major", "la joie franche et stable — ionien, le sourire de l'Occident"),
+    ("minor", "la mélancolie noble — éolien, le cœur qui pèse"),
+    ("dorian", "doux-amer qui espère — le mineur éclairé par la 6e (celtique, jazz)"),
+    ("phrygian", "l'ardeur sombre — ferveur, flamenco, tension du 2e bémol"),
+    ("lydian", "le rêve qui lévite — la 4e augmentée, cinéma et cosmos"),
+    ("mixolydian", "la chaleur qui roule — majeur à 7e bémol, rock, funk, folk"),
+    ("locrian", "l'inquiétude — le mode le plus instable, en tension permanente"),
 ];
 
 /// Traditions in depth (origine · sens · pourquoi ça sonne · en LOOM): `(nom, lignes)`.
@@ -160,7 +173,7 @@ pub const TRADITION_LORE: &[(&str, &[&str])] = &[
     ]),
     ("modes", &[
         "[ modes ] 🏛️ Grèce antique puis Église médiévale : 7 modes (ionien=majeur, dorien, phrygien, lydien, mixolydien, éolien=mineur, locrien).",
-        "🎭 ETHOS : les Grecs prêtaient un caractère moral à chaque mode — dorien stable/viril, phrygien exalté, lydien tendre.",
+        "🎭 ETHOS (Grèce antique) : un caractère moral par mode — dorien viril et stable, phrygien exalté (la flûte de Marsyas), lydien doux et plaintif, mixolydien déchiré, éolien simple et grave, ionien « doux comme le miel » ; le locrien, trop instable, resta hors d'usage.",
         "🔬 Pourquoi ça sonne : un seul demi-ton déplacé change tout — la 6e du dorien éclaire le mineur, la #4 du lydien fait flotter.",
         "🎹 En LOOM : key: d dorian · scale: lydian · joue en degrés 1-7, le mode les colore.",
     ]),
@@ -190,8 +203,15 @@ pub const TRADITION_LORE: &[(&str, &[&str])] = &[
     ]),
     ("wuxing", &[
         "[ wuxing 五行 ] 🇨🇳 Chine : les 5 notes (gong, shang, jue, zhi, yu) liées aux 5 éléments (Terre, Métal, Bois, Feu, Eau) et aux saisons.",
-        "🎭 Chaque note a une fonction cosmique et émotionnelle ; gong (la tonique) = la Terre, le centre, l'empereur.",
+        "🎭 Chaque note a une fonction cosmique et émotionnelle — gong (Do)=Terre, shang (Ré)=Métal, jue (Mi)=Bois, zhi (Sol)=Feu, yu (La)=Eau ; gong est le centre, l'empereur.",
+        "🀄 Cinq éléments ↔ cinq notes ↔ cinq saisons : chaque degré a sa couleur, son goût et son organe — la musique, pour les Chinois, est une médecine cosmologique.",
         "🔬 Pourquoi ça sonne : c'est une pentatonique (voir ?pentatonique) — pureté consonante, lue à travers une cosmologie.",
         "🎹 En LOOM : key: c pentatonic / chinese · pluck (guzheng) · reed (dizi). (preset GU)",
+    ]),
+    ("tala", &[
+        "[ tala ] 🇮🇳 Inde (théorie dès le Natyashastra). Le rythme est un CYCLE de bols frappés (tabla : dha, tin, na) — tintal 16 temps, ektaal 12, jhaptal 10, rupak 7, keherwa 8, dadra 6.",
+        "🎭 Le SAM (le temps 1) est l'ancre où tout retombe ; le KHALI (case « vide » du milieu) ouvre la respiration. Le soliste improvise DANS le cycle, l'accompagnateur le tient.",
+        "🔬 Pourquoi ça sonne : des points d'appui réguliers-irréguliers (4+4+4+4, 2+3+2+3) créent la gravité puis la surprise — l'oreille compte les cases et attend le 1.",
+        "🎹 En LOOM : écris le cycle sur 16 pas — ex. tintal kick: x ! . . x . . . x . . . x ! . . · accentue le sam (x!) et laisse le khali respirer · drone + sample de tabla si tu en as.",
     ]),
 ];

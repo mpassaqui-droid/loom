@@ -128,7 +128,7 @@ pub const LESSONS: &[Lesson] = &[
       "Après | : rev (inverse), fast N, slow N, every N <verbe>. On les enchaîne.",
       "hat:  x x x x | fast 2\nbass: c2 e2 g2 c3 | every 4 rev | saw"),
     l("10 · Rythmes euclidiens",
-      "e(k,n) répartit k frappes sur n pas. e(k,n,rot) tourne. Magique pour les grooves.",
+      "e(k,n) répartit k frappes sur n pas. e(k,n,rot) tourne. Magique pour les grooves.\nLes TALAS indiens sont des cycles de 16/7/8 (tintal, rupak, keherwa) — tape ?tala dans VIBE pour l'histoire.",
       "kick: e(4,16)\nsnare: e(2,16,4)\nhat:  e(7,16) | gain 0.16"),
     l("11 · Probabilité + seed",
       "? = la note joue parfois (x? ~50%, x?70 = 70%). seed: N rend l'aléatoire reproductible.",

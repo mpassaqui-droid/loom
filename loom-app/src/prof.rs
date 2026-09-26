@@ -42,7 +42,7 @@ pub const NEED_A_SONG: &str = "[ prof ] écris ou génère d'abord un morceau";
 pub const THINKING: &str = "[ prof ] j'approfondis… (le cerveau IA)";
 /// Said for an empty `?`.
 pub const HELP: &str =
-    "[ ? ] pose une question : ?raga, ?maqam, ?gamelan, ?modes, ?pythagore, ?dorian, ?quinte, ou ?comment rendre ça plus triste";
+    "[ ? ] pose une question : ?raga, ?maqam, ?gamelan, ?modes, ?wuxing, ?tala, ?pythagore, ?dorian, ?quinte, ou ?comment rendre ça plus triste";
 
 const PRIMER: &str = "Le langage LOOM : une voix par ligne « nom: motif | verbe | verbe ». \
 Batterie (kick snare hat clap) : x = frappe, . = silence. Mélodies : notes (c3 eb2) ou, avec « key: », degrés de la gamme 1-7 \
@@ -221,6 +221,24 @@ mod tests {
         assert!(quinte.lines[0].contains("ratio 3:2") && quinte.demo.is_some());
         let tension = lookup("tension").unwrap();
         assert!(tension.demo.is_none() && !tension.lines[0].contains("écoute"));
+        // P5 — la base de connaissance étendue répond hors-ligne aux nouveaux concepts.
+        let tala = lookup("?tala").unwrap();
+        assert_eq!(tala.lines.len(), 4);
+        assert!(tala.lines[0].starts_with("[ tala ]"));
+        assert!(tala.lines[2].contains("Pourquoi ça sonne"), "{:?}", tala.lines);
+        for (term, clue) in [
+            ("ethos", "caractère moral"), ("rasa", "saveur émotionnelle"),
+            ("pakad", "phrase-signature"), ("sam", "l'ancre où tout retombe"),
+            ("khali", "case « vide »"),
+        ] {
+            let l = lookup(term).unwrap();
+            assert!(l.lines[0].starts_with("[ ? ]"));
+            assert!(l.lines[0].contains(clue), "{term} → {:?}", l.lines);
+            assert!(l.demo.is_none(), "{term} → pas de démo jouable");
+        }
+        // l'ethos des modes (MOOD) est visible dans l'analyse d'une pièce modale.
+        let a = loom_core::prof::analyze("key: d dorian\nlead: 1 2 3 4");
+        assert!(a.iter().any(|l| l.contains("humeur : doux-amer")), "{a:?}");
         let r = lookup("mutate").unwrap();
         assert!(r.lines[0].starts_with("[ ? ] ") && r.lines[0].contains("mutate"), "{:?}", r.lines);
         assert_eq!(lookup("").unwrap().lines, [HELP]);
