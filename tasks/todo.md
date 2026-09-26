@@ -679,3 +679,70 @@ diff --check clean. WAV natif rejoué par ffprobe (pcm_s16le mono 44,1 kHz,
   = l'autorité Rust résolue consommée par le miroir (jamais les `|` verbes).
 - **Côté CI/Mac** : relecture audio à l'oreille impossible en local — la parité
   numérique + ffprobe (durée/format valides) sont la preuve.
+
+## Session 2026-09-27 — P6-3 (cadré) : sources riches + LFO + inserts + drums + stéréo
+
+> Le `Synth` (synth.rs) parse DÉJÀ les 70+ verbes de sound-design (héritage du
+> moteur browser) ; le moteur déterministe std-only n'en rend qu'un sous-ensemble
+> (P6-1 sources sine/sq/saw/tri + uni/det/sub/double + SVF ; P6-2 FX master).
+> P6-3 = élargir **le rendu** pierre par pierre, chaque pierre étant un bloc
+> `Synth` + serialization `SynthV1` (loom-wasm) + miroir JS `noteSample` +
+> corpus de parité. Rust = autorité (algorithme exact défini ici), JS = repli.
+> Ordre d'effort croissant, chaque pierre committée/poussée seule.
+
+### Pierre A — sources riches (niveau oscillateur + couches) + inserts note
+Remplacé le noyau `wave(w,p)`+sub/double par un **générateur riche** dans
+`note_sample` (Rust autorité, miroir JS op-pour-op `Math.fround`) :
+- `| fm RATIO INDEX FB` — FM : modulateur `fm_ph` à `ratio·f0`, feedback
+  `m = sin_pi(fm_ph) + fb·prev` (fb 0..8), phase porteuse `car += (f0+INDEX·m)/sr`,
+  mod avancé en dernier (`wrap`).
+- `| partials a1…` / `| organ` — additif `Σ a_k·sin_pi((k+1)·p)` (pas de norm).
+- `| wt organ|warm|rich|soft` — tables déterministes (sommes d'harmoniques à
+  profils fixes, divisor = Σa pour ~1 de crête).
+- `| pwm N` — square à largeur modulée `pw = 0.12+N·(0.5+0.5·sin_pi(pwm_ph))`,
+  `pwm_ph += (f0/4)/sr`.
+- `| sync RATIO` — hard sync : esclave avance à `f0·ratio`, se resynchronise sur
+  le wrap de la porteuse (`slave = mnew` si `mnew < ph`), out = wave(slave).
+- `| bell` — modal : 4 modes `r=[1,1.96,2.92,4.2]`, `a=[1,.6,.3,.15]`,
+  `τ=[1.5,1.2,1,.8]`, `Σ a·exp(−t/τ)·sin_pi(f0·r·t)`.
+- `| noise N` — bruit blanc HP (1-pôle ~6 kHz) via PRNG **xorshift32** par note
+  (seed déterministe), `white = (ns>>16)/32768·2−1` (haute précision → parité
+  binaire exacte).
+- `| am HZ` `unipolaire 0.5·(1+sin_pi(am_ph))` ; `| ring HZ` `sin_pi(ring_ph)`.
+- inserts post-filtre : `| drive N` (tanh·g, g=1+4N, comp 1/(1+0.6N)), `| fold N`
+  (wavefolder `1−|rem_euclid(x+1,4)−2|`, mix), `| crush BITS` (round·2^(b−1)),
+  `| redux N` (sample-hold K=round(1+20N)).
+- Sans `| …`, toutes les nouvelles surfaces = 0 → **rétro-compatible bit-à-bit**
+  (les 144 tests existants doivent rester verts SANS changement).
+- `| pluck` (Karplus-Strong, tampon par note) reporté en Pierre B (taille).
+- Sérialisation `SynthV1` étendue : fm/partials/wt/pwm/sync/bell/noise/am/ring/
+  drive/fold/crush/redux. Parité : corpus RENDER2" (9+ pièces, une par source).
+
+### Pierre B — drums synthétisés (déterministes, mono)
+- `Event.is_drum` + `voice` (kick/bd, snare/sd, hat/hh, clap/cp) → rendu :
+  - kick : sin cp fréquence qui dégringole `f = f0·exp(−12t)` + click, env courte.
+  - snare : bruit HP + corps ~180 Hz, env 0.15 s.
+  - hat : bruit HP (fermé court / ouvert long via `gate`), env 0.05/0.3 s.
+  - clap : 3 bruits groupés + bande 1 kHz.
+- Les drums alimentent `dry` (et donc le duck, qui pompe sur un vRAI signal).
+- `deposit_event` consomme le même rendu (extraire `drum_sample` partagé).
+- Miroir JS `drumSample` + parité sur les lignes `kick:/hat:/snare:/clap:`.
+
+### Pierre C — LFO réel (`| lfo` / `| lfo2`)
+- Couper `Param::Signal` aplati dans `SynthV1.cutoff` : sérialiser `lfo
+  {target,rate,depth,shape}` (rate en cycles par barre → Hz via barSec) ;
+- LFO module cutoff (et gain/pitch à la pierre C-bis) — même forme sine/saw/tri/
+  square/rand (PRNG partagé), phase par note, pas de wrap discontinu.
+- `cutoff_span` rendu en `c0/c1/c_lfo` ; note_sample applique le LFO AVANT le SVF.
+
+### Pierre D — stéréo + pan law (dernière pierre structurelle)
+- Buffers 2 canaux L/R, `| pan N` (−1..1, law −3 dB centre), `| spread` des voix
+  unison, haas/orbit documentés non portés ; rendu WAV stéréo 2 canaux ; exports
+  `render_*` changent de forme → mis à jour miroirs + parity (RENDER2 3D).
+- Reporté si la session plafonne (le mono reste la norme v1).
+
+### Portes (chaque pierre)
+Rust d'abord (tests unitaires par feature + rétro-compat 144 ok) → `SynthV1` +
+`./build-wasm.sh` → miroir JS → parité (RENDER + RENDER2 + RENDER3 + analyse +
+onsets, worst seuil 5e-3) → clippy -D · check_web 4/4 · `git diff --check` ·
+commit + push · todo.md coché.

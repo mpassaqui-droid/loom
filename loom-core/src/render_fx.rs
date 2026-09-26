@@ -103,7 +103,7 @@ fn deposit_event(dry: &mut [f32], fx: &mut [f32], rev: &mut [f32], ech: &mut [f3
     let rel = env.r.max(0.0);
     let n = ((gate + rel) * sr).ceil() as usize;
     let p = NoteParam::of(s);
-    let mut c = NoteCtx::new(&p);
+    let mut c = NoteCtx::seeded(&p, start);
     // per-note FX
     let mut echo = s.echo.map(|ec| NoteEcho::new(ec, sec, sr));
     let mut flange = s.flange.map(|fl| Flange::new(fl.rate, fl.depth, sr));

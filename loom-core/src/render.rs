@@ -19,7 +19,7 @@
 //! `renderPCM` in `web/index.html` — `tools/parity_test.js` proves numeric DSP
 //! parity between the two on a dedicated corpus.
 
-use crate::{Env, Event, FilterType, Param, Program, Synth, Wave};
+use crate::{Env, Event, FilterType, Fm, Param, Program, Synth, Wave};
 use std::f32::consts::PI;
 
 /// Default envelope used when a voice has no `| env` (short attack/decay, no
@@ -192,10 +192,29 @@ pub(crate) struct NoteParam {
     pub(crate) q: f32,
     pub(crate) c0: f32,
     pub(crate) c1: f32,
+    // --- P6-3A rich sources & note inserts (all defaulted to "off") ---
+    pub(crate) fm: Option<Fm>,
+    pub(crate) partials: Option<Vec<f32>>,
+    pub(crate) wt: Option<WtKind>,
+    pub(crate) pwm: f32,
+    pub(crate) sync: f32,
+    pub(crate) bell: bool,
+    pub(crate) noise: f32,
+    pub(crate) am: f32,
+    pub(crate) ring: f32,
+    pub(crate) drive: f32,
+    pub(crate) fold: f32,
+    /// `| crush BITS` -> the quantization scale `2^(bits-1)`.
+    pub(crate) crush: Option<f32>,
+    /// `| redux N` -> the sample-hold period `round(1+20N)` (0 = off).
+    pub(crate) redux: usize,
 }
 
 impl NoteParam {
     pub(crate) fn of(s: &Synth) -> NoteParam {
+        let c = s.cutoff;
+        let c0 = cutoff_span(c).0;
+        let c1 = cutoff_span(c).1;
         NoteParam {
             n_uni: s.unison.unwrap_or(0).max(1) as usize,
             detune: s.detune.unwrap_or(0.0).max(0.0),
@@ -203,20 +222,74 @@ impl NoteParam {
             dub: s.double.unwrap_or(0.0).clamp(0.0, 1.0),
             ft: s.filter_type,
             q: s.q.unwrap_or(1.0).clamp(0.1, 20.0),
-            c0: cutoff_span(s.cutoff).0,
-            c1: cutoff_span(s.cutoff).1,
+            c0,
+            c1,
+            fm: s.fm,
+            partials: s.partials.clone(),
+            wt: s.wt.as_deref().and_then(WtKind::from_str),
+            pwm: s.pwm.map(|x| x.clamp(0.05, 1.0)).unwrap_or(0.0),
+            sync: s.sync.map_or(0.0, |r| r.max(1.2)),
+            bell: s.bell,
+            noise: s.noise.unwrap_or(0.0).clamp(0.0, 1.0),
+            am: s.am.unwrap_or(0.0),
+            ring: s.ring.unwrap_or(0.0),
+            drive: s.drive.map_or(0.0, |d| d.base().clamp(0.0, 1.0)),
+            fold: s.fold.unwrap_or(0.0).clamp(0.0, 1.0),
+            crush: s.crush.map(|b| 2.0f32.powi(b.max(1) as i32 - 1)),
+            redux: s.redux.map_or(0, |r| (1.0 + 20.0 * r.clamp(0.0, 1.0)).round() as usize),
         }
     }
 }
 
-/// The note's per-sample state: oscillator phases + filter integrators, reset at
-/// the note start and advanced by [`note_sample`] each sample.
+/// Wavetables (`| wt NAME`) — fixed deterministic harmonic stacks, normalised to
+/// ~1 peak (the sum of the amplitude profile). Mirrored identically in JS.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WtKind {
+    Organ,
+    Warm,
+    Rich,
+    Soft,
+}
+
+impl WtKind {
+    pub(crate) fn from_str(s: &str) -> Option<WtKind> {
+        match s.to_ascii_lowercase().as_str() {
+            "organ" => Some(WtKind::Organ),
+            "warm" => Some(WtKind::Warm),
+            "rich" => Some(WtKind::Rich),
+            "soft" => Some(WtKind::Soft),
+            _ => None,
+        }
+    }
+    pub(crate) fn amps(self) -> [f32; 9] {
+        match self {
+            WtKind::Organ => [1.0, 1.0, 1.0, 1.0, 1.0, 0.9, 0.7, 0.5, 0.3],
+            WtKind::Warm => [1.0, 0.5, 0.25, 0.15, 0.1, 0.06, 0.03, 0.02, 0.01],
+            WtKind::Rich => [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2],
+            WtKind::Soft => [1.0, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.08, 0.05],
+        }
+    }
+}
+
+/// The note's per-sample state: oscillator phases + filter integrators + the
+/// P6-3A rich-source accumulators (FM modulator/feedback, PWM LFO, hard-sync
+/// slave, noise PRNG+HP, AM/Ring mod, sample-hold), reset at the note start and
+/// advanced by [`note_sample`] each sample.
 pub(crate) struct NoteCtx {
     pub(crate) uni_ph: Vec<f32>,
     pub(crate) sub_ph: f32,
     pub(crate) dub_ph: f32,
     pub(crate) ic1: f32,
     pub(crate) ic2: f32,
+    pub(crate) fm_ph: f32,
+    pub(crate) fm_prev: f32,
+    pub(crate) pwm_ph: f32,
+    pub(crate) slave_ph: Vec<f32>,
+    pub(crate) ns: u32,
+    pub(crate) lp: f32,
+    pub(crate) am_ph: f32,
+    pub(crate) ring_ph: f32,
+    pub(crate) held: f32,
 }
 
 impl NoteCtx {
@@ -227,27 +300,158 @@ impl NoteCtx {
             dub_ph: 0.0,
             ic1: 0.0,
             ic2: 0.0,
+            fm_ph: 0.0,
+            fm_prev: 0.0,
+            pwm_ph: 0.0,
+            slave_ph: vec![0.0; p.n_uni],
+            ns: crate::render::noise_seed(0),
+            lp: 0.0,
+            am_ph: 0.0,
+            ring_ph: 0.0,
+            held: 0.0,
         }
+    }
+
+    /// Like [`NoteCtx::new`] but seeds the noise PRNG from the note's start
+    /// sample (deterministic per note; mirrored identically in JS).
+    pub(crate) fn seeded(p: &NoteParam, start: usize) -> NoteCtx {
+        let mut c = NoteCtx::new(p);
+        c.ns = noise_seed(start);
+        c
     }
 }
 
-/// One sample of the note: oscillators (unison/detune + sub/double layers) into
-/// the SVF (static or swept), advancing the note's phase/filter state.
+/// Deterministic per-note PRNG seed: the note's start sample offset.
+pub(crate) fn noise_seed(start: usize) -> u32 {
+    (start as u32).wrapping_add(0x9E37_79B9)
+}
+
+/// xorshift32 white noise -> one-pole high-pass (~6 kHz "air"), full-scale in
+/// 16-bit resolution (the `>>16` slice keeps the JS mirror bit-exact).
+fn noise_value(c: &mut NoteCtx, sr: f32) -> f32 {
+    let mut s = c.ns;
+    s ^= s << 13;
+    s ^= s >> 17;
+    s ^= s << 5;
+    c.ns = s;
+    let white = (s >> 16) as f32 * (1.0 / 32768.0) - 1.0;
+    let alpha = 1.0 - (-2.0 * PI * 6000.0 / sr).exp();
+    c.lp += alpha * (white - c.lp);
+    white - c.lp
+}
+
+/// Modal `| bell`: 4 inharmonic damped sines (struck-metal timbre).
+fn bell_value(t: f32, freq: f32) -> f32 {
+    const R: [f32; 4] = [1.0, 1.96, 2.92, 4.2];
+    const A: [f32; 4] = [1.0, 0.6, 0.3, 0.15];
+    const TAU: [f32; 4] = [1.5, 1.2, 1.0, 0.8];
+    let mut v = 0.0;
+    for k in 0..4 {
+        v += A[k] * (-t / TAU[k]).exp() * sin_pi(R[k] * freq * t);
+    }
+    v
+}
+
+/// Additive `| partials`/`| organ` over the main phase.
+fn partials_value(p: &NoteParam, ph: f32) -> f32 {
+    let mut v = 0.0;
+    if let Some(a) = &p.partials {
+        for (i, ai) in a.iter().enumerate() {
+            v += ai * sin_pi((i as f32 + 1.0) * ph);
+        }
+    }
+    v
+}
+
+/// Wavetable `| wt` evaluation (normalised harmonic stack).
+fn wt_value(kind: WtKind, p: f32) -> f32 {
+    let a = kind.amps();
+    let sum: f32 = a.iter().sum();
+    let mut v = 0.0;
+    for (i, ai) in a.iter().enumerate() {
+        v += ai * sin_pi((i as f32 + 1.0) * p);
+    }
+    v / sum.max(1e-6)
+}
+
+/// Detuned frequency of unison voice `k`.
+fn unison_fk(p: &NoteParam, k: usize, freq: f32) -> f32 {
+    let ratio = if p.n_uni > 1 {
+        let pos = k as f32 * 2.0 / (p.n_uni as f32 - 1.0) - 1.0;
+        2.0f32.powf(pos * (p.detune / 1200.0))
+    } else {
+        1.0
+    };
+    freq * ratio
+}
+
+/// One sample of ONE unison voice's oscillator (rich source): advances the
+/// phase and returns the raw (pre-sub/double) wave sample. FM modulates the
+/// carrier phase increment; hard-sync snaps the slave to the master wrap; wt /
+/// partials / pwm / square replace the base `wave`.
+#[allow(clippy::too_many_arguments)]
+fn osc_value(p: &NoteParam, w: Wave, c: &mut NoteCtx, k: usize, ph: &mut f32, _t: f32, sr: f32, fk: f32) -> f32 {
+    if let Some(fm) = &p.fm {
+        let m = sin_pi(c.fm_ph) + fm.fb * c.fm_prev;
+        c.fm_prev = m;
+        *ph = wrap(*ph + (fk + fm.index * m) / sr);
+        c.fm_ph = wrap(c.fm_ph + (fm.ratio * fk) / sr);
+        return wave(w, *ph);
+    }
+    let mnew = wrap(*ph + fk / sr);
+    let wrapped = mnew < *ph;
+    let v = if p.sync > 0.0 {
+        let s = if wrapped {
+            mnew
+        } else {
+            wrap(c.slave_ph[k] + (fk * p.sync) / sr)
+        };
+        c.slave_ph[k] = s;
+        wave(w, s)
+    } else if let Some(kind) = p.wt {
+        wt_value(kind, *ph)
+    } else if p.partials.is_some() {
+        partials_value(p, *ph)
+    } else if p.pwm > 0.0 {
+        let pw = 0.12 + p.pwm * (0.5 + 0.5 * sin_pi(c.pwm_ph));
+        if *ph < pw { 1.0 } else { -1.0 }
+    } else {
+        wave(w, *ph)
+    };
+    *ph = mnew;
+    v
+}
+
+/// One sample of the note: rich oscillators (unison/detune + sub/double layers)
+/// into the SVF (static or swept) then the note inserts (drive/fold/crush/
+/// redux), advancing the note's phase/filter state. With no `| …` feature set
+/// every new surface is a no-op — bit-identical to the P6-1 core.
 pub(crate) fn note_sample(c: &mut NoteCtx, p: &NoteParam, i: usize, sr: f32, freq: f32, dur: f32, w: Wave) -> f32 {
     let t = i as f32 / sr;
     let mut out = 0.0f32;
-    for (k, ph) in c.uni_ph.iter_mut().enumerate() {
-        let ratio = if p.n_uni > 1 {
-            let pos = k as f32 * 2.0 / (p.n_uni as f32 - 1.0) - 1.0;
-            2.0f32.powf(pos * (p.detune / 1200.0))
-        } else {
-            1.0
-        };
-        let fk = freq * ratio;
-        out += wave(w, *ph);
-        *ph = wrap(*ph + fk / sr);
+    if p.bell {
+        out = bell_value(t, freq);
+        for (k, ph) in c.uni_ph.iter_mut().enumerate() {
+            let fk = unison_fk(p, k, freq);
+            *ph = wrap(*ph + fk / sr);
+        }
+    } else {
+        // detach the unison phases so `osc_value` can also touch the shared
+        // note-level accumulators (fm/pwm/slave/noise/…) without a double borrow
+        let mut uni = std::mem::take(&mut c.uni_ph);
+        for (k, ph) in uni.iter_mut().enumerate() {
+            let fk = unison_fk(p, k, freq);
+            out += osc_value(p, w, c, k, ph, t, sr, fk);
+        }
+        c.uni_ph = uni;
+        out /= p.n_uni as f32;
     }
-    out /= p.n_uni as f32;
+    if p.pwm > 0.0 {
+        c.pwm_ph = wrap(c.pwm_ph + (freq / 4.0) / sr);
+    }
+    if p.noise > 0.0 {
+        out += p.noise * noise_value(c, sr);
+    }
     if p.sub > 0.0 {
         out += p.sub * sin_pi(c.sub_ph);
         c.sub_ph = wrap(c.sub_ph + (freq / 2.0) / sr);
@@ -256,10 +460,45 @@ pub(crate) fn note_sample(c: &mut NoteCtx, p: &NoteParam, i: usize, sr: f32, fre
         out += p.dub * wave(w, c.dub_ph);
         c.dub_ph = wrap(c.dub_ph + (freq * 2.0) / sr);
     }
-    match p.ft {
+    if p.am > 0.0 {
+        out *= 0.5 + 0.5 * sin_pi(c.am_ph);
+        c.am_ph = wrap(c.am_ph + p.am / sr);
+    }
+    if p.ring > 0.0 {
+        out *= sin_pi(c.ring_ph);
+        c.ring_ph = wrap(c.ring_ph + p.ring / sr);
+    }
+    let out = match p.ft {
         None => out,
         Some(kind) => svf(out, sweep(p.c0, p.c1, t, dur), p.q, kind, sr, &mut c.ic1, &mut c.ic2),
+    };
+    apply_inserts(p, c, i, out)
+}
+
+/// Note inserts applied after the filter (drive/fold/crush/redux). Each is a
+/// no-op at its default level, keeping the P6-1 path sample-identical.
+fn apply_inserts(p: &NoteParam, c: &mut NoteCtx, i: usize, x: f32) -> f32 {
+    let mut x = x;
+    if p.drive > 0.0 {
+        let g = 1.0 + 4.0 * p.drive;
+        let comp = 1.0 / (1.0 + 0.6 * p.drive);
+        x = (x * g).tanh() * comp;
     }
+    if p.fold > 0.0 {
+        let q = (x + 1.0).rem_euclid(4.0);
+        let folded = 1.0 - (q - 2.0).abs();
+        x = (1.0 - p.fold) * x + p.fold * folded;
+    }
+    if let Some(scale) = p.crush {
+        x = (x * scale).round() / scale;
+    }
+    if p.redux > 1 {
+        if i.is_multiple_of(p.redux) {
+            c.held = x;
+        }
+        x = c.held;
+    }
+    x
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -272,7 +511,7 @@ fn render_note(buf: &mut [f32], start: usize, freq: f32, dur: f32, amp: f32, w: 
     let rel = env.r.max(0.0);
     let n = ((gate + rel) * sr).ceil() as usize;
     let p = NoteParam::of(s);
-    let mut c = NoteCtx::new(&p);
+    let mut c = NoteCtx::seeded(&p, start);
     for i in 0..n {
         let ix = start + i;
         if ix >= buf.len() {
@@ -419,5 +658,173 @@ mod tests {
             m(&hi),
             m(&lo)
         );
+    }
+}
+
+#[cfg(test)]
+mod tests_a {
+    use super::*;
+
+    const SR: f32 = 44100.0;
+
+    fn r(src: &str, bars: usize) -> Vec<f32> {
+        render_program(src, bars, SR)
+    }
+    fn energy(v: &[f32]) -> f64 {
+        v.iter().map(|x| (*x as f64) * (*x as f64)).sum()
+    }
+    fn peak(v: &[f32]) -> f32 {
+        v.iter().fold(0.0f32, |m, x| m.max(x.abs()))
+    }
+
+    #[test]
+    fn fm_changes_timbre_and_is_deterministic() {
+        let plain = r("key: c major\nlead: 1 3 5 | saw | env 0 0.001 1 0.001", 1);
+        let fm = r("key: c major\nlead: 1 3 5 | saw | fm 2 3 0 | env 0 0.001 1 0.001", 1);
+        let fm2 = r("key: c major\nlead: 1 3 5 | saw | fm 2 3 0 | env 0 0.001 1 0.001", 1);
+        assert_eq!(fm, fm2, "FM must be deterministic");
+        assert_ne!(fm, plain, "FM index must re-shape the tone");
+        assert!(energy(&fm) > 0.0);
+    }
+
+    #[test]
+    fn fm_feedback_changes_again() {
+        let fb = r("key: c major\nlead: 1 | saw | fm 2 4 2 | env 0.001 0.001 1 0.001", 1);
+        let no = r("key: c major\nlead: 1 | saw | fm 2 4 0 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(fb, no, "FM feedback must affect the spectrum");
+    }
+
+    #[test]
+    fn partials_are_additive_overtones() {
+        let sine = r("key: c major\nlead: 1 | sine | env 0.001 0.001 1 0.001", 1);
+        let organ = r("key: c major\nlead: 1 | organ 888000000 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(organ, sine);
+        // 6 equal harmonics instead of 1: ~6x the time-averaged energy
+        assert!(energy(&organ) > energy(&sine) * 2.5, "9 drawbar slots add energy");
+    }
+
+    #[test]
+    fn wt_tables_are_distinct_and_tonal() {
+        let a = r("key: c major\nlead: 1 | wt organ | env 0.001 0.001 1 0.001", 1);
+        let b = r("key: c major\nlead: 1 | wt warm | env 0.001 0.001 1 0.001", 1);
+        let c = r("key: c major\nlead: 1 | wt rich | env 0.001 0.001 1 0.001", 1);
+        let d = r("key: c major\nlead: 1 | wt soft | env 0.001 0.001 1 0.001", 1);
+        assert!(energy(&a) > 0.0 && energy(&b) > 0.0 && energy(&c) > 0.0 && energy(&d) > 0.0);
+        assert!(a != b && b != c && c != d && a != c, "4 tables must sound different");
+        // normalised: none louder than the plain sine peak (>~1 might alias; bound it)
+        assert!(peak(&b) <= 1.0 + 1e-3 && peak(&d) <= 1.0 + 1e-3);
+    }
+
+    #[test]
+    fn pwm_changes_square_duty() {
+        let sq = r("key: c major\nlead: 1 1 1 1 | square | env 0.001 0.001 1 0.001", 1);
+        let pwm = r("key: c major\nlead: 1 1 1 1 | square | pwm 0.8 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(pwm, sq, "a modulated duty must differ from a 50% square");
+    }
+
+    #[test]
+    fn sync_changes_timbre() {
+        let plain = r("key: c major\nlead: 1 3 | saw | env 0.001 0.001 1 0.001", 1);
+        let sync = r("key: c major\nlead: 1 3 | saw | sync 3 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(sync, plain, "hard sync must re-shape the saw");
+        assert!(energy(&sync) > 0.0);
+    }
+
+    #[test]
+    fn bell_rings_then_decays() {
+        let b = r("key: c major\nlead: 1 | bell | env 0.001 0.001 1 0.5", 1);
+        let head = energy(&b[..2205]);
+        let tail = energy(&b[b.len() - 8820..]);
+        // modal partials die away well before the note ends (longest tau 1.5 s)
+        assert!(energy(&b[..4410]) > energy(&b[b.len() - 4410..]) * 3.0, "modal partials decay over the bar");
+        let _ = (head, tail);
+    }
+
+    #[test]
+    fn noise_layer_adds_energy() {
+        let plain = r("key: c major\nlead: 1 1 | sine | env 0.02 0.05 0.5 0.05", 1);
+        let air = r("key: c major\nlead: 1 1 | sine | noise 0.8 | env 0.02 0.05 0.5 0.05", 1);
+        assert!(energy(&air) > energy(&plain) * 1.05, "the air layer adds high-freq energy");
+    }
+
+    #[test]
+    fn noise_is_deterministic() {
+        let a = r("key: c major\nlead: 1 1 1 | saw | noise 1 | env 0.01 0.01 1 0.01", 1);
+        let b = r("key: c major\nlead: 1 1 1 | saw | noise 1 | env 0.01 0.01 1 0.01", 1);
+        assert_eq!(a, b, "the PRNG must be seeded deterministically per note");
+    }
+
+    #[test]
+    fn am_wobbles_the_amplitude() {
+        let plain = r("key: c major\nlead: 1 1 | sine | env 0.001 0.001 1 0.001", 1);
+        let am = r("key: c major\nlead: 1 1 | sine | am 400 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(am, plain, "amplitude modulation must move the level");
+    }
+
+    #[test]
+    fn ring_adds_sideband_energy() {
+        let plain = r("key: c major\nlead: 1 | sine | env 0.001 0.001 1 0.001", 1);
+        let ring = r("key: c major\nlead: 1 | sine | ring 220 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(ring, plain);
+    }
+
+    #[test]
+    fn drive_saturates_loud_input() {
+        let loud = r("key: c major\nlead: 1 1 | saw | gain 2 | env 0.001 0.001 1 0.001", 1);
+        let driven = r("key: c major\nlead: 1 1 | saw | gain 2 | drive 0.9 | env 0.001 0.001 1 0.001", 1);
+        assert!(peak(&driven) < peak(&loud), "a saturated hot saw must not exceed the drive amount");
+        assert_ne!(driven, loud);
+    }
+
+    #[test]
+    fn fold_stays_bounded() {
+        for src in ["| fold 1", "| fold 0.5"] {
+            let v = r(&format!("key: c major\nlead: 1 1 | saw | gain 3 {src} | env 0.001 0.001 1 0.001"), 1);
+            assert!(peak(&v) <= 1.0 + 1e-3, "wavefolding must stay in [-1,1]: {src}");
+        }
+    }
+
+    #[test]
+    fn crush_quantizes_the_signal() {
+        let plain = r("key: c major\nlead: 1 | saw | env 0.001 0.001 1 0.001", 1);
+        let crushed = r("key: c major\nlead: 1 | saw | crush 3 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(crushed, plain);
+        // a quantized ramp stays on one 0.25-grid level for many samples
+        let max_run = |v: &[f32]| {
+            let (mut best, mut run) = (0, 0);
+            let mut prev = f32::NAN;
+            for &x in v {
+                if x == prev && x.abs() > 1e-9 { run += 1; best = best.max(run); }
+                else { run = 1; prev = x; }
+            }
+            best
+        };
+        let pc = max_run(&crushed);
+        let pp = max_run(&plain);
+        assert!(pc >= 8, "3-bit crush must hold exact plateaus (got {pc})");
+        assert!(pc > pp, "crushed plateaus {pc} must dwarf the un-crushed {pp}");
+    }
+
+    #[test]
+    fn redux_creates_sample_holds() {
+        let plain = r("key: c major\nlead: 1 | saw | env 0.001 0.001 1 0.001", 1);
+        let redux = r("key: c major\nlead: 1 | saw | redux 0.9 | env 0.001 0.001 1 0.001", 1);
+        assert_ne!(redux, plain);
+        // a heavy sample-hold produces long runs of equal nonzero samples
+        let mut max_run = 0; let mut run = 0; let mut prev = f32::NAN;
+        for &x in &redux {
+            if x == prev { run += 1; max_run = max_run.max(run); } else { run = 1; prev = x; }
+        }
+        assert!(max_run >= 8, "heavy redux must hold samples for a run of {max_run}");
+    }
+
+    #[test]
+    fn rich_source_with_filter_and_fx_is_deterministic() {
+        // one end-to-end piece exercising several sources + inserts at once
+        let src = "key: c major\nlead: 1 3 5 1 | fm 2 3 1 | wt warm | drive 0.3 | fold 0.2 | lp 2000 q 2 | env 0.01 0.05 0.9 0.05";
+        let a = r(src, 2);
+        let b = r(src, 2);
+        assert_eq!(a, b);
+        assert!(energy(&a) > 0.0);
     }
 }
