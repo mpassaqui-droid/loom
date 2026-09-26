@@ -4,6 +4,32 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
+## Session 2026-09-25 — vague 6 : GPU de plus · bus&sends · algocompo · accessibilité · connaissance
+
+> Décision du propriétaire : « ok pour tout » — on lance la vague 6 dans l'ordre
+> d'effort croissant : P1 → P3 → P4 → P2 → P5. Chaque piste = incrément testé +
+> committé + poussé ; portes : tests workspace, clippy -D, check_web, parité,
+> diff --check. Rust touchant la sortie analysée → rebuild WASM. P6 (moteur
+> unifié synthèse/FX WASM) reste un chantier séparé, pas dans cette vague.
+
+- [ ] **P1 · Plus de scènes GPU (web)** — suite de T5 : raymarching 3D (SDF
+      sphères/tore), néons (tubes le long du beat), hyperspace (warp stellaire) ;
+      même mécanisme `uMode` + post déjà en place ; GLSL ES 1.00 validé
+      (`glslangValidator`) + `check_web.js` 4/4 + parse JS.
+- [ ] **P2 · Accessibilité** (web + GUI) — navigation 100 % clavier, contrastes
+      des thèmes (WCAG AA), grandes polices / zoom, focus visible.
+- [ ] **P3 · Bus & sends** — le vrai trou DAW : groupes de voix (`bus:`), N sends
+      vers des returns d'effets partagés (réverb/delay/echo globaux), ducking lié ;
+      logique `loom-audio` + bouche dans le mixeur GUI.
+- [ ] **P4 · Composition algorithmique dans la langue** — la langue qui grandit :
+      verbes `l-sys` (L-systèmes), grammaires stochastiques (Xenakis), `evolve`
+      (génétique) ; `loom-core` + tests + parité 2 moteurs + doc.
+- [ ] **P5 · Base de connaissance & explicatriceur** — étendre `LORE`/`MOOD` :
+      ethos des modes grecs, wuxing↔notes, talas, histoire par tradition ;
+      explicatriceur « pourquoi ça sonne » + prof interactif ; miroir JS + parité.
+- [ ] (P6 hors vague) moteur unifié synthèse/FX WASM — chantier séparé à cadrer.
+- [ ] Relecture GL live de T5 (gbloom/gglitch/gfeedback) sur le Mac de CI.
+
 ## Session 2026-09-25 — « tout » : consolidation du moteur, explicateur prof, studio (samples · mixeur · GPU)
 
 > Décision du propriétaire : « je veux tout fini, fait tout » — on exécute le menu
