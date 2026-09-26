@@ -45,6 +45,12 @@
   section nouveauté n'y est pas comparable ligne à ligne par conception : le test compare les verrous
   déterministes (tonalité, accordage, étiquette acoustique, harmonie + cadence, forme, « pourquoi »)
   strictement, et ne garde de la nouveauté que ce qui est stable.
+- **CI : décision du propriétaire (2026-09-25)** — la CI se fait sur son autre Mac via Claude (pas sur
+  GitHub Actions). Le workflow `.github/workflows/ci.yml` a donc été <u>retiré de la branche</u> (2 commits
+  CI ôtés de l'historique, sauvegardés dans `backup-avant-workflow-drop`) pour que la push passe sans le
+  scope `workflow` (GitHub refuse tout push qui crée/modifie `.github/workflows/` sans ce scope). Les
+  gardes restent documentées ici et locales ; la chaîne WASM est reconstruite en local par
+  `./build-wasm.sh`. Ne pas recréer de workflow GitHub sans accord explicite du propriétaire.
 - **Limites notées** : (1) le repli JS de l'analyse reste l'ancien texte « analyseur » pour le cas où le
   WASM n'est pas chargé — aligné sur Rust pour les métriques, mais sa nouveauté garde l'empreinte par
   jetons (différence voulue, cf. ci-dessus) ; (2) `analyzePiece` JS reste *stateful* (fuite de `tuning` via
