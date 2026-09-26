@@ -26,16 +26,19 @@ pub mod input;
 
 #[cfg(feature = "device")]
 pub use device::Engine;
-pub use sample::SampleBank;
+pub use sample::{load_user_sample, merged_bank, reload_bank, session_sample_count, SampleBank};
 pub use seq::{Channel, Hit, MidiEvent, MidiNote, Sequencer, Status, SCOPE_LEN};
 
 use loom_core::Program;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
-/// The default sample bank, loaded once per process (for offline rendering).
+/// The default sample bank for offline rendering: the disk samples plus the
+/// WAVs loaded this session (see [`load_user_sample`]), so anything the user
+/// picks in the SAMPLER panel is heard on the very next play.
 pub fn default_bank() -> Arc<SampleBank> {
-    static BANK: OnceLock<Arc<SampleBank>> = OnceLock::new();
-    BANK.get_or_init(|| Arc::new(SampleBank::load_default())).clone()
+    // every call rebuilds from the session store (disk + user WAVs loaded in the
+    // SAMPLER panel), so a file loaded at runtime is heard on the very next play.
+    Arc::new(sample::merged_bank())
 }
 
 /// Render `bars` bars of LOOM source offline. Returns interleaved stereo f32.

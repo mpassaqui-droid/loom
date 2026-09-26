@@ -54,6 +54,12 @@ pub enum StudioAction {
     ArmSampler(String),
     /// Write the sampler draft onto the armed voice's line.
     SamplerApply,
+    /// Navigate the sampler's file browser to `dir`.
+    SamplerDir(String),
+    /// Load a user WAV (path) into the session bank and arm it on the voice.
+    SamplerLoadWav(std::path::PathBuf),
+    /// Re-scan the sample folders on disk (keeps session files).
+    SamplerReloadBank,
     /// A knob was moved on screen: send it to the engine.
     KnobChanged(Knob),
     /// Mixer strip `n` changed its fader or pan.
@@ -114,6 +120,10 @@ pub struct Studio {
     pub sampler_voice: Option<String>,
     /// The sampler draft; only APPLIQUER writes it into the song.
     pub sampler_spec: SampleSpec,
+    /// Where the SAMPLER panel's browse-to-your-files navigator is.
+    pub sampler_dir: std::path::PathBuf,
+    /// Last message about a loaded / reloaded bank (path wrong, file refused…).
+    pub sampler_msg: Option<String>,
     /// The import box, open with what was pasted so far.
     pub import: Option<String>,
     /// The section selected on the timeline.
@@ -142,9 +152,11 @@ impl Studio {
             show_clips: false,
             show_notation: false,
             show_sampler: false,
+            sampler_dir: default_sampler_dir(),
             notation_voice: None,
             sampler_voice: None,
             sampler_spec: SampleSpec::default(),
+            sampler_msg: None,
             import: None,
             section: None,
             scope: Box::new([0.0; SCOPE_LEN]),
@@ -152,6 +164,19 @@ impl Studio {
             clock: Instant::now(),
         }
     }
+}
+
+/// Where the SAMPLER file navigator starts: the user's sample folder, else the
+/// bundled `web/samples`, else the home directory.
+pub fn default_sampler_dir() -> std::path::PathBuf {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let candidates = [
+        home.as_ref().map(|h| h.join(".local/share/loom/samples")),
+        std::env::var_os("LOOM_SAMPLES").map(std::path::PathBuf::from),
+        std::env::current_dir().ok().map(|c| c.join("web/samples")),
+        home,
+    ];
+    candidates.into_iter().flatten().find(|p| p.is_dir()).unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
 /// `LUFS~ -14 · pk -3dB`, coloured like the browser (amber when loud, red when clipping).

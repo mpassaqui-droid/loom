@@ -121,6 +121,94 @@ impl SampleBank {
     }
 }
 
+// --- the session bank: the disk samples + the WAVs the user loaded at runtime ---
+//
+// `default_bank()` used to be a fixed snapshot; now a user can open their own
+// files in the SAMPLER panel and they must be heard by the very next render.
+// We keep a small store: the last disk load (re-scannable) plus the session's
+// user samples (always on top, surviving a disk reload).
+
+use std::sync::{Mutex, OnceLock};
+
+struct SessionBank {
+    /// The last scan of the default sample folders.
+    fresh: SampleBank,
+    /// WAVs loaded this session, by name (priority over `fresh`).
+    session: HashMap<String, Arc<SampleData>>,
+}
+
+fn session() -> &'static Mutex<SessionBank> {
+    static SESSION: OnceLock<Mutex<SessionBank>> = OnceLock::new();
+    SESSION.get_or_init(|| Mutex::new(SessionBank { fresh: SampleBank::load_default(), session: HashMap::new() }))
+}
+
+/// The bank every native path hears through: the disk samples plus the WAVs
+/// loaded this session.
+pub fn merged_bank() -> SampleBank {
+    let s = session().lock().unwrap();
+    let mut samples = s.fresh.samples.clone();
+    samples.extend(s.session.iter().map(|(k, v)| (k.clone(), v.clone())));
+    SampleBank { samples }
+}
+
+/// Load a user WAV into the session bank. Returns the bank name to write as
+/// `| sample NAME` (the file stem — `chant.wav` → `chant`). If a disk sample
+/// already owns the name, that name is returned as-is and nothing is loaded —
+/// the bank never hides a real sample behind a session one.
+pub fn load_user_sample(path: &Path) -> Result<String, String> {
+    let data = SampleData::from_file(path)?;
+    if data.frames() == 0 {
+        return Err(format!("\u{201c}{}\u{201d} : fichier WAV vide.", path.display()));
+    }
+    let name = path.file_stem().and_then(|s| s.to_str()).map(str::to_string).unwrap_or_default();
+    if name.is_empty() {
+        return Err(format!("\u{201c}{}\u{201d} : nom de fichier invalide.", path.display()));
+    }
+    let mut s = session().lock().unwrap();
+    if s.fresh.samples.contains_key(&name) {
+        return Ok(name); // already available on disk — use it as-is
+    }
+    s.session.insert(name.clone(), Arc::new(data));
+    Ok(name)
+}
+
+/// Re-scan the default sample folders (WAVs dropped on disk since launch are
+/// picked up), keeping the session's user samples.
+pub fn reload_bank() {
+    let mut s = session().lock().unwrap();
+    s.fresh = SampleBank::load_dirs(&SampleBank::default_dirs());
+}
+
+/// How many WAVs the user loaded this session (shown as a hint in the panel).
+pub fn session_sample_count() -> usize {
+    session().lock().unwrap().session.len()
+}
+
+/// A short PCM16 mono WAV (a few frames of a sine), for tests that need a file.
+#[cfg(test)]
+fn pcm16_wav_bytes(frames: usize) -> Vec<u8> {
+    let sr = 8000u32;
+    let mut v = Vec::new();
+    v.extend_from_slice(b"RIFF");
+    v.extend_from_slice(&(36 + frames as u32 * 2).to_le_bytes());
+    v.extend_from_slice(b"WAVE");
+    v.extend_from_slice(b"fmt ");
+    v.extend_from_slice(&16u32.to_le_bytes());
+    v.extend_from_slice(&1u16.to_le_bytes());  // PCM
+    v.extend_from_slice(&1u16.to_le_bytes());  // mono
+    v.extend_from_slice(&sr.to_le_bytes());
+    v.extend_from_slice(&(sr * 2).to_le_bytes()); // byte rate
+    v.extend_from_slice(&2u16.to_le_bytes());  // block align
+    v.extend_from_slice(&16u16.to_le_bytes()); // bits
+    v.extend_from_slice(b"data");
+    v.extend_from_slice(&(frames as u32 * 2).to_le_bytes());
+    for i in 0..frames {
+        let s = ((i as f32 * 2.0 * std::f32::consts::PI * 220.0 / sr as f32).sin() * 8000.0) as i16;
+        v.extend_from_slice(&s.to_le_bytes());
+    }
+    v
+}
+
 /// The gain shape of one grain over its life.
 #[derive(Clone, Copy)]
 enum Shape {
@@ -435,6 +523,28 @@ mod tests {
     /// Four quarters holding 0.1, 0.2, 0.3, 0.4.
     fn steps_bank() -> SampleBank {
         bank_with(vec![(0..48000).map(|i| 0.1 * (1 + i / 12000) as f32).collect()], 48000.0)
+    }
+
+    #[test]
+    fn user_wav_enters_the_merged_bank() {
+        // a real WAV file (PCM16, written by hand) loaded through the session store
+        let dir = std::env::temp_dir().join("loom_sample_test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("mon_son.wav");
+        std::fs::write(&path, pcm16_wav_bytes(800)).unwrap();
+        let name = load_user_sample(&path).unwrap();
+        assert_eq!(name, "mon_son");
+        let bank = merged_bank();
+        let data = bank.get("mon_son").expect("le WAV chargé doit être audible");
+        assert_eq!(data.frames(), 800);
+        // a broken file is refused with a message
+        let bad = dir.join("casse.wav");
+        std::fs::write(&bad, b"pas un wav").unwrap();
+        assert!(load_user_sample(&bad).is_err());
+        // session samples survive a disk reload
+        reload_bank();
+        assert!(merged_bank().get("mon_son").is_some());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn render_all(v: &mut SampleVoice) -> Vec<Stereo> {

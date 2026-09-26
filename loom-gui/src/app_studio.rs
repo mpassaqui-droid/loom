@@ -44,6 +44,12 @@ impl LoomApp {
                 self.say(format!("SAMPLER : « {voice} » armée — choisis un échantillon puis APPLIQUER."));
             }
             StudioAction::SamplerApply => self.sampler_apply(),
+            StudioAction::SamplerDir(dir) => self.studio.sampler_dir = std::path::PathBuf::from(dir),
+            StudioAction::SamplerLoadWav(path) => self.sampler_load_wav(&path),
+            StudioAction::SamplerReloadBank => {
+                loom_audio::reload_bank();
+                self.studio.sampler_msg = Some("Banque re-scannée depuis le disque (tes fichiers de session sont conservés).".into());
+            }
             StudioAction::KnobChanged(knob) => {
                 if let Some(engine) = engine {
                     self.studio.knobs.apply(knob, engine);
@@ -293,6 +299,28 @@ impl LoomApp {
                 });
             }
             Err(e) => self.warn(format!("SAMPLER : {e}")),
+        }
+    }
+
+    /// SAMPLER : load a user WAV into the session bank and arm it on the voice.
+    fn sampler_load_wav(&mut self, path: &std::path::Path) {
+        match loom_audio::load_user_sample(path) {
+            Ok(name) => {
+                self.studio.sampler_spec.sample = Some(name.clone());
+                if let Some(parent) = path.parent() {
+                    self.studio.sampler_dir = parent.to_path_buf();
+                }
+                self.studio.sampler_msg = Some(format!(
+                    "« {name} » chargé ({}) — APPLIQUER pour l'écrire sur la voix armée.",
+                    loom_audio::session_sample_count()
+                ));
+                if let Some(v) = self.studio.sampler_voice.clone() {
+                    self.say(format!("SAMPLER : « {v} » jouera « {name} » — APPLIQUER."));
+                } else {
+                    self.say(format!("SAMPLER : « {name} » chargé — arme une voix puis APPLIQUER."));
+                }
+            }
+            Err(e) => self.studio.sampler_msg = Some(e),
         }
     }
 

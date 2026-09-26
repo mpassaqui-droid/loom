@@ -31,8 +31,13 @@
         → `MOOD` (33 entrées) + ligne `   humeur : …` sous la tradition.
   - Tout ce qui précède est MIRROIR à l'identique dans `web/index.html` (2 moteurs == 1
     professeur) et verrouillé par la parité : ANALYSE 23/23 + onsets 238/238.
-- [ ] **T3 · Sampler instrument** — charger ses propres fichiers (navette de fichiers) dans
-      `sampletool`/GUI, boucle simple ; vérifié en fenêtre (OCR).
+- [x] **T3 · Sampler instrument — ses propres fichiers** — banque mutable en session
+      (`loom-audio` : `load_user_sample`, `reload_bank`, `merged_bank`) + navette de fichiers
+      dans le panneau SAMPLER (« MES FICHIERS WAV (disque) » : chemin éditable, `< up`,
+      dossiers cliquables, `.wav` cliquable = chargé + armé) ; la boucle = fenêtre
+      begin/end + `| chop`/`| grain` déjà en place ; test `user_wav_enters_the_merged_bank`
+      (wav PCM16 écrit à la main, fichier cassé refusé, conservation après `reload_bank`),
+      vérifié en fenêtre (OCR : `ma_boucle`, `mon_chant`, `< up`, `recharger (N session)`).
 - [ ] **T4 · Mixeur** — VU-mètres / niveaux live par piste dans la GUI (logique `loom-audio`),
       grips couleurs ; vérifié en fenêtre (OCR).
 - [ ] **T5 · Post-traitement GPU (web)** — bloom/feedback/glitch + 2-3 shaders neufs ;
@@ -115,6 +120,15 @@
   compactait tout) est déjà la version qu'on a : panneau droit défilable.
 - **Portes toutes vertes** : `cargo test --workspace` 348 ok (app 124 · audio 73 · core 101 · gui 26 · tui 24,
   ni 4 ignorés), `node tools/check_web.js` 4/4 ✓, `node tools/parity_test.js` 238/238 PERFECT.
+- **T3 · navette de fichiers vérifiée en fenêtre** (OCR sur `/tmp/loompick` avec deux WAV
+  « ma_boucle.wav » / « mon_chant.wav » vendus via patch temporaire non committé) : le panneau
+  SAMPLER affiche « MES FICHIERS WAV (disque) », le chemin du dossier, `< up`, les lignes
+  `ma_boucle` / `mon_chant` (⊕ = dossiers en accent), `recharger (N session)` et APPLIQUER ;
+  le panneau est défilable donc tout reste joignable à 800 px. Patchs temporaires (taille de
+  fenêtre, ordre d'affichage) retirés avant commit.
+- **Portes toutes vertes** (après T3) : `cargo test --workspace` 356 ok (audio 74 dont le test
+  session-bank), clippy `-D warnings` sans warning, `check_web` 4/4, parité ANALYSE 23/23 + onsets
+  238/238 (aucun changement analyser → pas de rebuild WASM), `git diff --check` propre.
 - Limites notées : (1) le clic simulé (API hyprland lua, sans souris) ne permettant pas de dérouler jusqu'au
   choix de sample interactif dans la fenêtre, la sélection/APPLIQUER reste validée par les tests
   `sampletool` (réécriture des verbes, undo partagé) ; (2) en fenêtre étroite (« tuilée » à 627 px), le panneau

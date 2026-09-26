@@ -101,8 +101,140 @@ pub fn show(
                     wave(ui, studio, &bank, theme);
                     ui.add_space(4.0);
                     controls(ui, studio, theme, actions);
+                    ui.add_space(4.0);
+                    file_navigator(ui, studio, theme, actions);
                 });
         });
+}
+
+/// A tiny folder navigator to load your OWN WAV files at runtime.
+///
+/// Folders are entered with a click (‹ also goes up), `wav` files load into
+/// the session bank `| sample NAME` and arm the chosen voice. No file-dialog
+/// dependency: this is a fast, keyboard-able path list (the path is editable).
+fn file_navigator(
+    ui: &mut egui::Ui,
+    studio: &mut Studio,
+    theme: &Theme,
+    actions: &mut Vec<StudioAction>,
+) {
+    ui.separator();
+    ui.label(
+        RichText::new("MES FICHIERS WAV (disque)")
+            .small()
+            .strong()
+            .color(color(theme.accent)),
+    );
+    ui.horizontal(|ui| {
+        let mut dir = studio.sampler_dir.display().to_string();
+        let field = ui.add(
+            egui::TextEdit::singleline(&mut dir)
+                .desired_width(170.0)
+                .font(egui::TextStyle::Monospace),
+        );
+        let enter =
+            field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if enter && !dir.trim().is_empty() {
+            actions.push(StudioAction::SamplerDir(dir.trim().to_string()));
+        }
+        if ui
+            .button("< up")
+            .on_hover_text("dossier parent")
+            .clicked()
+        {
+            if let Some(p) = studio.sampler_dir.parent() {
+                actions.push(StudioAction::SamplerDir(p.display().to_string()));
+            }
+        }
+        let session = loom_audio::session_sample_count();
+        let reload_label = if session == 0 {
+            "recharger la banque".to_string()
+        } else {
+            format!("recharger ({session} session)")
+        };
+        if ui
+            .button(reload_label)
+            .on_hover_text(
+                "re-scanner les dossiers d'échantillons (WAV posés sur le disque, \
+                 $LOOM_SAMPLES, ~/.local/share/loom/samples) ; tes fichiers de \
+                 session restent.",
+            )
+            .clicked()
+        {
+            actions.push(StudioAction::SamplerReloadBank);
+        }
+    });
+
+    let mut rows: Vec<(bool, String)> = Vec::new(); // (is_dir, name)
+    if let Ok(rd) = std::fs::read_dir(&studio.sampler_dir) {
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if p.is_dir() {
+                if !name.starts_with('.') {
+                    rows.push((true, name));
+                }
+            } else if p
+                .extension()
+                .is_some_and(|x| x.eq_ignore_ascii_case("wav"))
+            {
+                rows.push((false, name));
+            }
+        }
+    }
+    rows.sort();
+
+    ui.add_space(2.0);
+    if rows.is_empty() {
+        ui.label(
+            RichText::new("(ce dossier n'a aucun sous-dossier ni WAV)")
+                .small()
+                .color(color(theme.dim)),
+        );
+    }
+    for (is_dir, name) in rows {
+        let text = if is_dir {
+            RichText::new(format!("{name}/")).monospace().size(11.0).color(color(theme.accent))
+        } else {
+            RichText::new(name.to_string()).monospace().size(11.0)
+        };
+        let hint = if is_dir {
+            "entrer dans ce dossier".to_string()
+        } else {
+            format!("charger « {name} » dans la banque (| sample {})", stem_of(&name))
+        };
+        if ui.add(egui::Button::new(text).min_size(egui::vec2(ui.available_width(), 16.0))).on_hover_text(hint).clicked() {
+            if is_dir {
+                actions.push(StudioAction::SamplerDir(studio.sampler_dir.join(&name).display().to_string()));
+            } else {
+                actions.push(StudioAction::SamplerLoadWav(studio.sampler_dir.join(&name)));
+            }
+        }
+    }
+
+    if let Some(msg) = &studio.sampler_msg {
+        ui.add_space(2.0);
+        ui.label(RichText::new(msg.as_str()).small().color(color(theme.note)))
+            .on_hover_text("dossier par défaut : ~/.local/share/loom/samples (ou LOOM_SAMPLES)");
+    } else {
+        ui.label(
+            RichText::new(
+                "dossier par défaut : ~/.local/share/loom/samples · \
+                 colle un .wav dedans puis « recharger la banque ».",
+            )
+            .small()
+            .color(color(theme.dim)),
+        );
+    }
+}
+
+/// `drum_beat.wav` → `drum_beat` (the bank name `| sample` uses).
+fn stem_of(file: &str) -> String {
+    file.rsplit_once('.').map_or(file, |(s, _)| s).to_string()
 }
 
 /// One selectable row per sample of the bank, with its length.
