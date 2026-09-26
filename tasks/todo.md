@@ -51,10 +51,38 @@
       éviter la lecture/écriture simultanée). Les 3 shaders compilent en GLSL ES 1.00
       (glslangValidator) ; `check_web.js` 4/4 ; parse JS OK ; parité intacte ;
       retombée sans post si WebGL limité.
-- [ ] (Review open) vérification visuelle finale GL sur la machine de CI (Mac) :
-      plein écran + N jusqu'aux scènes GPU — bloom halo, glitch, feedback trails.
-- [ ] Toutes les portes finales (tests workspace, clippy -D, check_web, parité, diff --check),
-      commits poussés, Review.
+- [x] Toutes les portes finales (tests workspace 356, clippy -D, check_web 4/4, parité
+      23/23 + 238/238, diff --check) — vertes ; commits poussés ; Review ci-dessous.
+  Limite documentée (non vérifiable ici, mono-écran sans carte GL affichable) : le rendu
+  live des 3 scènes GPU post-traitées à relire une fois sur la machine de CI (Mac) —
+  plein écran + N jusqu'à gbloom/gglitch/gfeedback.
+
+## Review — « tout fini » : les 6 pistes (T0→T5) embarquées en une session
+
+**Menu complet : consolidation (T1), prof enrichi (T2), sampler (T3), mixeur (T4),
+post-traitement GPU web (T5), docs (T0) — chaque incrément testé + commité + poussé.**
+
+- **T1 · consolidation** (`8c1eb85`) : note CI Mac (`tasks/ci-mac.md`) avec les 5 commandes
+  de garde ; repli JS `analyzePiece` sans fuite d'état (`tuning` sauvé/restauré) ; corpus de
+  parité +7 pièces → ANALYSE 20/20 + onsets 238/238.
+- **T2 · prof enrichi** (`1d91183`) : `MOOD` (33), `tension_summary`/`last_voice_degree_tokens`/
+  `degree_semitone`, 4 lignes neuves (humeur/tension/attente/conseil) miroitées dans le JS →
+  parité ANALYSE 23/23 (2 moteurs == 1 professeur).
+- **T3 · sampler** (`07aeb26`) : `SessionBank` (frais + session) derrière `OnceLock<Mutex>` dans
+  `loom-audio` (`load_user_sample`, `reload_bank` garde la session, `merged_bank`) ; navette de
+  fichiers dans le panneau SAMPLER (« MES FICHIERS WAV », chemin éditable, `< up`, recharger) ;
+  WAV utilisateur joué dès le prochain coup ; vérifié en fenêtre par OCR.
+- **T4 · mixeur** (`fa5e4f4`) : crête par piste (`Strip.hold`, chute 0.925 vs mètre 0.85, testée) ;
+  grips fader/pan teintés de la couleur de la voix (`colored_grip`, Visuals scoped restaurés) ;
+  vérifié par analyse de pixels (≥5 teintes saturées dans la bande MIX).
+- **T5 · post GPU web** (`d0d3da2`) : pipeline WebGL multi-passes (scène→FBO→post→écran) ; 3
+  scènes neuves `gbloom`/`gglitch`/`gfeedback` (shaders 10/11/12) ; post bloom (brillance +
+  flou gaussien ¼ de résolution), glitch (tranches + RGB split + scan), feedback (ping-pong
+  2 textures, pas de lecture/écriture simultanée) ; FBO toujours sous try/catch avec retombée
+  sur le rendu direct si WebGL limité ; shaders compilés en GLSL ES 1.00 (glslangValidator).
+- **Portes finales** : workspace 356 ok · clippy `-D warnings` 0 · check_web 4/4 · parité
+  23/23 + 238/238 PERFECT · `git diff --check` propre · branches de backup conservées
+  (`backup-avant-workflow-drop`), `.github/workflows/` toujours absent (scope workflow refusé).
 
 ## Session 2026-09-25 — analyseur du prof dans loom-core (clé de voûte du moteur unifié)
 
