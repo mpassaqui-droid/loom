@@ -62,7 +62,27 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Command, String>
     Ok(Command::Open(file))
 }
 
+/// Leave a trace of what happens, on stderr — which is the systemd journal when
+/// Omarchy launches the app, and the terminal otherwise. Without this a window
+/// that disappears leaves NO clue: no core dump for an outside `SIGKILL`, and a
+/// panic in a background thread scrolls past unseen. With it,
+/// `journalctl --user _COMM=loom-gui` tells the whole story: if "arrêt propre"
+/// is missing after a "démarrage", the app was killed from outside rather than
+/// having crashed on its own.
+fn install_black_box() {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let thread = std::thread::current();
+        let name = thread.name().unwrap_or("<sans nom>").to_string();
+        // force_capture works even without RUST_BACKTRACE set
+        let trace = std::backtrace::Backtrace::force_capture();
+        eprintln!("loom-gui : PANIQUE (thread « {name} »)\n{info}\n{trace}");
+        previous(info);
+    }));
+}
+
 fn main() -> eframe::Result {
+    install_black_box();
     let file = match parse_args(std::env::args().skip(1)) {
         Ok(Command::Open(file)) => file,
         Ok(Command::Help) => {
@@ -84,7 +104,13 @@ fn main() -> eframe::Result {
             .with_min_inner_size([640.0, 420.0]),
         ..Default::default()
     };
-    eframe::run_native("loom", options, Box::new(|cc| Ok(Box::new(app::LoomApp::new(cc, file)))))
+    eprintln!("loom-gui : démarrage (v{})", env!("CARGO_PKG_VERSION"));
+    let result = eframe::run_native("loom", options, Box::new(|cc| Ok(Box::new(app::LoomApp::new(cc, file)))));
+    match &result {
+        Ok(()) => eprintln!("loom-gui : arrêt propre"),
+        Err(e) => eprintln!("loom-gui : arrêt sur erreur — {e}"),
+    }
+    result
 }
 
 #[cfg(test)]
