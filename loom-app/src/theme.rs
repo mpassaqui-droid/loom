@@ -114,6 +114,26 @@ impl Theme {
         }
     }
 
+    /// Whether the SCÈNE draws any text (title, section, bar, hints, scene name).
+    /// Persisted next to the theme so a restart keeps the choice. The default is
+    /// `false`: the stage is a pure-visual projection, and the text only comes
+    /// back if the owner asks for it with `T`.
+    pub fn stage_text() -> bool {
+        Self::state_dir()
+            .map(|d| d.join("loom-stage-text"))
+            .is_some_and(|p| std::fs::read_to_string(&p).is_ok_and(|s| s.trim() == "1"))
+    }
+
+    /// Persist the SCÈNE text flag (mirror of `stage_text`).
+    pub fn set_stage_text(show: bool) {
+        let Some(dir) = Self::state_dir() else { return };
+        if show {
+            let _ = std::fs::write(dir.join("loom-stage-text"), "1\n");
+        } else {
+            let _ = std::fs::remove_file(dir.join("loom-stage-text"));
+        }
+    }
+
     /// Path of the active Omarchy `colors.toml`, if this is an Omarchy system.
     pub fn omarchy_colors_path() -> Option<PathBuf> {
         Self::state_dir().map(|d| d.join("theme/colors.toml")).filter(|p| p.exists())

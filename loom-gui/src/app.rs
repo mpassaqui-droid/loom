@@ -134,8 +134,9 @@ pub struct LoomApp {
     stage: Stage,
     /// True while the stage fills the window instead of the editor.
     stage_full: bool,
-    /// Draw the stage's text (title, section, hints). T turns it off for a
-    /// pure-visual projection.
+    /// Draw the stage's text (title, section, bar, hints, scene name). Off by
+    /// default — the stage is a pure-visual projection; T brings the text back.
+    /// Persisted, so a restart keeps the choice.
     stage_text: bool,
     /// Large-text accessibility mode (persisted, toggled with Ctrl+Shift+A).
     ui_large: bool,
@@ -190,7 +191,7 @@ impl LoomApp {
             metronome: false,
             stage: Stage::default(),
             stage_full: false,
-            stage_text: true,
+            stage_text: Theme::stage_text(),
             ui_large,
             studio,
             teacher: Teacher::default(),
@@ -299,7 +300,7 @@ impl LoomApp {
             Action::ToggleStage => {
                 self.stage_full = !self.stage_full;
                 if self.stage_full {
-                    self.say("Scène : N change de scène, V active le mode VJ, T cache le texte, Échap revient au code.");
+                    self.say("Scène : N change de scène, V active le mode VJ, T affiche ou cache le texte, Échap revient au code.");
                 }
             }
             Action::NextScene => self.stage.next_scene(),
@@ -309,7 +310,8 @@ impl LoomApp {
             }
             Action::ToggleStageText => {
                 self.stage_text = !self.stage_text;
-                self.say(if self.stage_text { "Texte de la scène affiché." } else { "Mode pur visuel : plus aucun texte (T pour le revoir)." });
+                Theme::set_stage_text(self.stage_text);
+                self.say(if self.stage_text { "Texte de la scène affiché (T pour le cacher)." } else { "Mode pur visuel : plus aucun texte." });
             }
             Action::Quit => {
                 self.closing = true;
