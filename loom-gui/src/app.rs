@@ -62,6 +62,8 @@ pub enum Action {
     NextScene,
     /// Auto-change the scene every 4 bars (V on the stage).
     ToggleVj,
+    /// Pure-visual mode: hide every letter on the stage (T on the stage).
+    ToggleStageText,
     /// Close the window.
     Quit,
     /// Toggle the large-text accessibility mode (Ctrl+Shift+A).
@@ -132,6 +134,9 @@ pub struct LoomApp {
     stage: Stage,
     /// True while the stage fills the window instead of the editor.
     stage_full: bool,
+    /// Draw the stage's text (title, section, hints). T turns it off for a
+    /// pure-visual projection.
+    stage_text: bool,
     /// Large-text accessibility mode (persisted, toggled with Ctrl+Shift+A).
     ui_large: bool,
 
@@ -185,6 +190,7 @@ impl LoomApp {
             metronome: false,
             stage: Stage::default(),
             stage_full: false,
+            stage_text: true,
             ui_large,
             studio,
             teacher: Teacher::default(),
@@ -293,13 +299,17 @@ impl LoomApp {
             Action::ToggleStage => {
                 self.stage_full = !self.stage_full;
                 if self.stage_full {
-                    self.say("Scène : N change de scène, V active le mode VJ, Échap revient au code.");
+                    self.say("Scène : N change de scène, V active le mode VJ, T cache le texte, Échap revient au code.");
                 }
             }
             Action::NextScene => self.stage.next_scene(),
             Action::ToggleVj => {
                 self.stage.toggle_vj();
                 self.say(if self.stage.director.vj { "Mode VJ : la scène change toutes les 4 mesures." } else { "Mode VJ coupé." });
+            }
+            Action::ToggleStageText => {
+                self.stage_text = !self.stage_text;
+                self.say(if self.stage_text { "Texte de la scène affiché." } else { "Mode pur visuel : plus aucun texte (T pour le revoir)." });
             }
             Action::Quit => {
                 self.closing = true;
@@ -605,6 +615,9 @@ impl LoomApp {
             }
             if stage_full && i.consume_key(Modifiers::NONE, Key::V) {
                 actions.push(Action::ToggleVj);
+            }
+            if stage_full && i.consume_key(Modifiers::NONE, Key::T) {
+                actions.push(Action::ToggleStageText);
             }
             if i.consume_key(Modifiers::COMMAND, Key::G) || i.consume_key(Modifiers::NONE, Key::F2) {
                 focus_vibe = true;
@@ -972,7 +985,7 @@ impl LoomApp {
         let section = status.and_then(|_| self.program.section_at(song_bar)).map(str::to_string);
         let file_title = self.path.as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().into_owned());
         let title = self.stage.director.title.clone().or(file_title).unwrap_or_default();
-        let overlay = Overlay { title: &title, section: section.as_deref(), bar: status.map(|s| s.bar() + 1) };
+        let overlay = Overlay { title: &title, section: section.as_deref(), bar: status.map(|s| s.bar() + 1), pure: !self.stage_text };
 
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(look.bg)).show(ui, |ui| {
             let rect = ui.max_rect();

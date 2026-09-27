@@ -13,6 +13,7 @@ use eframe::egui::{Color32, Pos2, Rect, Vec2};
 use super::logic::{VoiceLook, Viz};
 use super::pen::{alpha, glow, hsl, Pen};
 use super::scenes::Frame;
+use super::Look;
 
 /// Small, fast random numbers (xorshift), good enough for sparkles.
 pub struct Rng(u64);
@@ -203,8 +204,134 @@ impl Effects {
 }
 
 /// Darker edges, like a camera lens (drawn over the scene, under the text).
-pub fn vignette(pen: &mut Pen, rect: Rect) {
+/// `pump` (0..1) opens the lens when the music is loud, so the frame breathes.
+pub fn vignette(pen: &mut Pen, rect: Rect, pump: f32) {
     let (w, h) = (rect.width(), rect.height());
     let c: Pos2 = rect.center();
-    pen.band(c, w.min(h) * 0.28, w.max(h) * 0.72, Color32::TRANSPARENT, alpha(Color32::BLACK, 0.55));
+    let inner = w.min(h) * (0.28 + 0.10 * pump.clamp(0.0, 1.0));
+    pen.band(c, inner, w.max(h) * 0.72, Color32::TRANSPARENT, alpha(Color32::BLACK, 0.55));
+}
+
+/// Post-FX shared by every scene: the whole picture moves with the music —
+/// the camera kicks and the screen flashes on a bass hit, and a halo swells
+/// with the level. All of it decays to nothing, so a silent stage looks exactly
+/// as it did before (and the thumbnail stays calm too).
+#[derive(Default)]
+pub struct PostFx {
+    /// Camera shake 0..1.
+    shake: f32,
+    /// Screen flash 0..1.
+    strobe: f32,
+    /// Smoothed loudness driving the halo and the vignette (0..1).
+    pump: f32,
+    last_bass: f32,
+    rng: Rng,
+}
+
+impl PostFx {
+    /// Read the music once per frame, before anything is drawn: a bass hit
+    /// (the same rise the shockwave ring watches) kicks the camera and flashes
+    /// the screen; the overall level feeds the halo.
+    pub fn update(&mut self, k: f32, bass: f32, level: f32) {
+        if bass > 0.5 && bass - self.last_bass > 0.1 {
+            let hit = ((bass - 0.5) * 2.0).clamp(0.0, 1.0);
+            self.shake = self.shake.max(0.35 + hit * 0.65);
+            self.strobe = self.strobe.max(0.20 + hit * 0.45);
+        }
+        self.last_bass = bass;
+        self.shake *= 0.82f32.powf(k);
+        self.strobe *= 0.74f32.powf(k);
+        // the halo rises fast and falls slowly, like an optical compressor
+        let target = level.clamp(0.0, 1.0);
+        let rate: f32 = if target > self.pump { 0.35 } else { 0.08 };
+        self.pump += (target - self.pump) * (1.0 - (1.0 - rate).powf(k));
+    }
+
+    /// `rect` displaced by this frame's shake (at most ~1 % of the stage, so the
+    /// background still covers the edges). Unchanged while the shake is spent.
+    pub fn shaken(&mut self, rect: Rect) -> Rect {
+        if self.shake <= 0.001 {
+            return rect;
+        }
+        let reach = rect.width().min(rect.height()) * 0.012 * self.shake;
+        let jitter = Vec2::new(self.rng.centered() * 2.0 * reach, self.rng.centered() * 2.0 * reach);
+        rect.translate(jitter)
+    }
+
+    /// How much the lens breathes this frame (0..1).
+    pub fn pump(&self) -> f32 {
+        self.pump
+    }
+
+    /// The halo that swells with the level, under the vignette.
+    pub fn draw_bloom(&self, pen: &mut Pen, rect: Rect, look: &Look) {
+        if self.pump <= 0.01 {
+            return;
+        }
+        let radius = rect.width().min(rect.height()) * (0.30 + 0.35 * self.pump);
+        pen.radial(rect.center(), radius, glow(look.glow, self.pump * 0.16), Color32::TRANSPARENT);
+    }
+
+    /// The flash on a bass hit, over everything else.
+    pub fn draw_strobe(&self, pen: &mut Pen, rect: Rect, look: &Look) {
+        if self.strobe > 0.002 {
+            pen.rect(rect, glow(look.glow, self.strobe * 0.28));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A bass hit must kick the camera and the flash, and silence must bring
+    /// everything back to rest (a quiet stage looks like it always did).
+    #[test]
+    fn post_fx_kicks_on_bass_then_settles() {
+        let mut fx = PostFx::default();
+        fx.update(1.0, 0.0, 0.0);
+        assert_eq!((fx.shake, fx.strobe), (0.0, 0.0), "silence must not move the picture");
+
+        fx.update(1.0, 0.9, 0.5); // a rise from 0.0 to 0.9 = a hit
+        assert!(fx.shake > 0.5 && fx.strobe > 0.3, "a bass hit must kick ({}, {})", fx.shake, fx.strobe);
+
+        // holding the same loud bass is NOT a new hit, so it decays
+        let kicked = fx.shake;
+        for _ in 0..60 {
+            fx.update(1.0, 0.9, 0.0);
+        }
+        assert!(fx.shake < kicked * 0.01, "the shake must die away (got {})", fx.shake);
+        assert!(fx.strobe < 0.002, "the flash must die away (got {})", fx.strobe);
+    }
+
+    /// The halo rises with the level and falls back slower.
+    #[test]
+    fn pump_follows_the_level() {
+        let mut fx = PostFx::default();
+        for _ in 0..40 {
+            fx.update(1.0, 0.0, 1.0);
+        }
+        assert!(fx.pump() > 0.9, "loud music must open the lens (got {})", fx.pump());
+        let loud = fx.pump();
+        for _ in 0..5 {
+            fx.update(1.0, 0.0, 0.0);
+        }
+        assert!(fx.pump() < loud, "it must come back down");
+        assert!(fx.pump() > 0.2, "…but slowly (got {})", fx.pump());
+    }
+
+    /// A spent shake leaves the frame exactly where it was (no jitter at rest).
+    #[test]
+    fn shake_moves_the_frame_only_while_alive() {
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(1000.0, 800.0));
+        let mut fx = PostFx::default();
+        assert_eq!(fx.shaken(rect), rect, "at rest the frame must not move");
+
+        fx.update(1.0, 0.9, 0.0);
+        let moved = fx.shaken(rect);
+        assert_ne!(moved, rect, "a live shake must displace the frame");
+        // and never far enough to show a seam: at most ~1.2 % of the short side
+        let reach = 800.0 * 0.012 + 0.001;
+        assert!(moved.min.x.abs() <= reach && moved.min.y.abs() <= reach, "shake too wide: {moved:?}");
+    }
 }

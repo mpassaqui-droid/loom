@@ -66,6 +66,8 @@ pub struct Overlay<'a> {
     pub section: Option<&'a str>,
     /// Bar number to show (1-based), None when stopped.
     pub bar: Option<i64>,
+    /// Pure-visual mode (T on the stage): draw the picture and no text at all.
+    pub pure: bool,
 }
 
 /// Everything the stage remembers from frame to frame (buffers are reused).
@@ -77,6 +79,8 @@ pub struct Stage {
     pulses: Vec<f32>,
     hits: Vec<Hit>,
     effects: Effects,
+    /// Shake / flash / halo driven by the music, shared by every scene.
+    post: fx::PostFx,
     state: SceneState,
     pen: Pen,
     last_paint: Option<Instant>,
@@ -96,6 +100,7 @@ impl Default for Stage {
             pulses: Vec::new(),
             hits: Vec::new(),
             effects: Effects::default(),
+            post: fx::PostFx::default(),
             state: SceneState::default(),
             pen: Pen::default(),
             last_paint: None,
@@ -170,14 +175,22 @@ impl Stage {
 
         let painter = painter.with_clip_rect(rect.intersect(painter.clip_rect()));
         self.pen.rect(rect, look.bg);
-        let mut frame = scenes::Frame::new(&mut self.pen, &painter, rect, k, &self.analyser, look, &self.voices, &self.pulses, &self.hits);
+        // post-FX read the music first: the camera kicks NOW (the scene is drawn
+        // into the displaced frame), the halo and the flash go on top after.
+        self.post.update(k, self.analyser.levels.bass, self.analyser.levels.level);
+        let scene_rect = self.post.shaken(rect);
+        let mut frame = scenes::Frame::new(&mut self.pen, &painter, scene_rect, k, &self.analyser, look, &self.voices, &self.pulses, &self.hits);
         scenes::draw(self.director.scene, &mut self.state, &mut frame);
         self.effects.draw(&mut frame, &self.voices);
         self.hits.clear();
-        fx::vignette(&mut self.pen, rect);
+        self.post.draw_bloom(&mut self.pen, rect, look);
+        fx::vignette(&mut self.pen, rect, self.post.pump());
+        self.post.draw_strobe(&mut self.pen, rect, look);
         self.pen.flush(&painter);
 
         match overlay {
+            // pure-visual mode (T): the picture only, not one letter
+            Some(overlay) if overlay.pure => {}
             Some(overlay) => self.paint_overlay(&painter, rect, look, overlay, now),
             None => {
                 // thumbnail: just the scene's name
@@ -224,7 +237,7 @@ impl Stage {
 
         // how to drive it, at the bottom
         let vj = if self.director.vj { "VJ actif (V)" } else { "VJ (V)" };
-        let hint = format!("scène : {} (N)  ·  {vj}  ·  mesure {}  ·  Échap ou F11 pour revenir au code",
+        let hint = format!("scène : {} (N)  ·  {vj}  ·  texte (T)  ·  mesure {}  ·  Échap ou F11 pour revenir au code",
             self.director.scene.name(), overlay.bar.unwrap_or(0));
         text(Pos2::new(rect.center().x, rect.bottom() - 30.0 * s), Align2::CENTER_CENTER, &hint, 15.0 * s, look.dim);
     }
