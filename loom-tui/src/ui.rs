@@ -354,6 +354,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         section("IA — VIBE"),
         key("Alt+N / Alt+Z", "morceau suivant / au hasard (comme les presets du web)"),
         key("Ctrl+O puis Suppr", "mettre un de tes morceaux à la corbeille"),
+        key("Alt+C", "thème suivant : les 62 thèmes du web, gardé au prochain lancement"),
         key("Alt+K", "lien Live : chaque RUN enregistre le fichier, le device Loom de Live le suit"),
         key("Alt+X", "exporter un fichier MIDI standard (.mid) à côté du morceau, pour un DAW"),
         key("F2", "décrire la musique en mots, Claude écrit le code"),

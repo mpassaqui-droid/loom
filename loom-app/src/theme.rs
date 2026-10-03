@@ -139,17 +139,81 @@ impl Theme {
         Self::state_dir().map(|d| d.join("theme/colors.toml")).filter(|p| p.exists())
     }
 
-    /// The active Omarchy theme, or LOOM's default look.
+    /// One of the web themes (`web/index.html`), mapped onto the app's roles.
+    pub fn web(name: &str) -> Option<Theme> {
+        let (n, c) = crate::themes_web::WEB_THEMES.iter().find(|(n, _)| *n == name)?;
+        let [bg, green, dim, glow, _amber, cyan] = c.map(|h| Rgb::parse(h).unwrap_or(Rgb(0, 0, 0)));
+        let lum = 0.299 * bg.0 as f32 + 0.587 * bg.1 as f32 + 0.114 * bg.2 as f32;
+        Some(Theme {
+            name: n.to_string(),
+            dark: lum < 128.0,
+            background: bg,
+            panel: bg.mix(green, 0.06),
+            foreground: glow,
+            dim,
+            accent: green,
+            selection: bg.mix(green, 0.2),
+            drum: green,
+            note: cyan,
+            error: Theme::default().error,
+        })
+    }
+
+    /// Names of the themes Alt+C cycles through: Omarchy if present, the web themes, then LOOM's own.
+    pub fn names() -> Vec<String> {
+        let mut v = Vec::new();
+        if Self::omarchy_colors_path().is_some() { v.push("omarchy".to_string()); }
+        v.extend(crate::themes_web::WEB_THEMES.iter().map(|(n, _)| n.to_string()));
+        v.push("loom".to_string());
+        v
+    }
+
+    fn choice_path() -> Option<PathBuf> {
+        let base = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
+        Some(base.join("loom/theme"))
+    }
+
+    /// Remember the chosen theme for the next launch.
+    pub fn save_choice(name: &str) {
+        let Some(p) = Self::choice_path() else { return };
+        if let Some(d) = p.parent() { let _ = std::fs::create_dir_all(d); }
+        let _ = std::fs::write(p, format!("{name}\n"));
+    }
+
+    /// A theme by name: "omarchy", "loom" or a web theme.
+    pub fn named(name: &str) -> Theme {
+        match name {
+            "loom" => Theme::default(),
+            "omarchy" => Self::omarchy().unwrap_or_default(),
+            n => Self::web(n).unwrap_or_default(),
+        }
+    }
+
+    /// The theme after `current` in `names()`.
+    pub fn next_after(current: &str) -> Theme {
+        let names = Self::names();
+        let i = names.iter().position(|n| n == current).map_or(0, |i| (i + 1) % names.len());
+        Self::named(&names[i])
+    }
+
+    /// The saved choice, else the active Omarchy theme, else LOOM's default look.
     pub fn load() -> Theme {
-        let Some(path) = Self::omarchy_colors_path() else { return Theme::default() };
+        let saved = Self::choice_path().and_then(|p| std::fs::read_to_string(p).ok()).map(|s| s.trim().to_string());
+        match saved.as_deref() {
+            Some("loom") => Theme::default(),
+            Some(n) if n != "omarchy" && Self::web(n).is_some() => Self::web(n).unwrap_or_default(),
+            _ => Self::omarchy().unwrap_or_default(),
+        }
+    }
+
+    fn omarchy() -> Option<Theme> {
+        let path = Self::omarchy_colors_path()?;
         let name = Self::state_dir()
             .and_then(|d| std::fs::read_to_string(d.join("theme.name")).ok())
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "omarchy".into());
-        match std::fs::read_to_string(&path) {
-            Ok(text) => Theme::from_colors_toml(&name, &text),
-            Err(_) => Theme::default(),
-        }
+        std::fs::read_to_string(&path).ok().map(|text| Theme::from_colors_toml(&name, &text))
     }
 }
 
@@ -196,5 +260,20 @@ mod tests {
         assert!(!t.dark);
         assert_eq!(t.accent, Theme::default().accent);
         assert_eq!(Rgb(0, 0, 0).mix(Rgb(200, 100, 50), 0.5), Rgb(100, 50, 25));
+    }
+
+    #[test]
+    fn themes_du_web() {
+        assert!(crate::themes_web::WEB_THEMES.len() >= 60);
+        let t = Theme::web("crt").unwrap();
+        assert_eq!(t.background, Rgb(0x0b, 0x0f, 0x0b));
+        assert_eq!(t.accent, Rgb(0x5c, 0xff, 0x4a));
+        assert!(t.dark);
+        assert!(Theme::web("absent").is_none());
+        let n = Theme::names();
+        assert_eq!(n.last().map(String::as_str), Some("loom"));
+        // le cycle passe par tous les noms et revient au début
+        assert_eq!(Theme::next_after("loom").name, Theme::named(&n[0]).name);
+        assert_eq!(Theme::named("loom"), Theme::default());
     }
 }

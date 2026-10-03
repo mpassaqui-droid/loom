@@ -13,6 +13,7 @@ pub mod share;
 pub mod studio;
 pub mod teacher;
 pub mod theme;
+pub mod themes_web;
 pub mod vibe;
 
 pub use grid::{grid, Cell, Row};

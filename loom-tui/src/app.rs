@@ -286,6 +286,13 @@ impl App {
         self.info(if self.lien { format!("lien Live : chaque RUN écrit {nom} · glisse ce fichier sur le device Loom") } else { "lien Live coupé".into() });
     }
 
+    /// Alt+C: thème suivant (Omarchy, les thèmes du web, puis LOOM), gardé pour la prochaine fois.
+    pub fn next_theme(&mut self) {
+        self.theme = Theme::next_after(&self.theme.name);
+        Theme::save_choice(&self.theme.name);
+        self.info(format!("thème : {}", self.theme.name));
+    }
+
     /// Ctrl+T: tick on every beat.
     pub fn toggle_metronome(&mut self) {
         let Ok(e) = &self.engine else { return };

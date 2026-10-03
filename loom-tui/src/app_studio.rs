@@ -181,6 +181,7 @@ impl App {
             KeyCode::Char('n' | 'N') => self.other_song(false),
             KeyCode::Char('z' | 'Z') => self.other_song(true),
             KeyCode::Char('k' | 'K') => self.toggle_lien(),
+            KeyCode::Char('c' | 'C') => self.next_theme(),
             _ => return false,
         }
         true

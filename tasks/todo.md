@@ -815,5 +815,5 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] 6. Lien Live : chaque RUN écrit le .loom lié
 - [ ] 7. Scènes : plus de visuels terminal
 - [ ] 8. Partition (notation.rs) à l'écran
-- [ ] 9. Thèmes intégrés hors Omarchy
+- [x] 9. Thèmes intégrés hors Omarchy : Alt+C fait défiler les 62 thèmes du web (copiés par tools/gen_themes.py, une seule source), choix gardé dans ~/.local/state/loom/theme
 - [ ] 10. Dictée vocale dans VIBE (whisper local)
