@@ -7202,7 +7202,7 @@ const THEME_AA={
     // offline analysis is authoritative — the exact same std-only code the native
     // apps run, now in the browser. Any error / missing build falls back to JS.
     if(window.__loomUseRust && window.__loomRust && window.__loomRust.analyze){
-      try{const r=window.__loomRust.analyze(text);if(r&&r.length)return r;}catch(_){}
+      try{const r=window.__loomRust.analyze(text);if(r&&r.length){let cp=[];try{cp=window.__loomRust.counterpoint?window.__loomRust.counterpoint(text):[];}catch(_){}return r.concat(cp);}}catch(_){}
     }
     text=text.split("\n").filter(l=>!l.trim().startsWith("#")).join("\n");  // ignore comment lines
     const NN=["do","do#","ré","ré#","mi","fa","fa#","sol","sol#","la","la#","si"];
@@ -8072,6 +8072,7 @@ const THEME_AA={
         barBpm:      (src, bar) => w.bar_bpm(src, bar),
         info:        (src)      => JSON.parse(w.program_info_json(src)),
         analyze:     (src)      => w.analyze_json(src),
+        counterpoint:(src)      => w.counterpoint_json(src),
       };
       window.__loomRustMod = w;
       console.log('%c[LOOM] moteur Rust (WASM) chargé — il pilote maintenant le rythme (défaut). Décoche pour le moteur JS.',

@@ -282,6 +282,12 @@ pub fn analyze_json(src: &str) -> Vec<String> {
     loom_core::prof::analyze(src)
 }
 
+/// Le correcteur de contrepoint (quintes/octaves parallèles, croisements, sauts).
+#[wasm_bindgen]
+pub fn counterpoint_json(src: &str) -> Vec<String> {
+    loom_core::prof::counterpoint(src)
+}
+
 /// Bytebeat : `len` échantillons de la formule `expr` (variable `t`) à partir de
 /// l'échantillon absolu `start`, à `sr` Hz (`loom_core::expr::bytebeat_fill`).
 /// Expression invalide : tableau vide. Sert à la parité avec le miroir JS.

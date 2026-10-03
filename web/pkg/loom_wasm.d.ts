@@ -42,6 +42,11 @@ export function bytebeat_pcm(expr: string, start: number, len: number, sr: numbe
 export function clip_to_loom(nom: string, notes_json: string, longueur: number, meter_beats: number, batterie: boolean): string;
 
 /**
+ * Le correcteur de contrepoint (quintes/octaves parallèles, croisements, sauts).
+ */
+export function counterpoint_json(src: string): string[];
+
+/**
  * Évalue une expression entière (`vars` = les lettres des variables, dans
  * l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
  * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
@@ -114,6 +119,7 @@ export interface InitOutput {
     readonly bar_seconds: (a: number, b: number, c: number) => number;
     readonly bytebeat_pcm: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly clip_to_loom: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
+    readonly counterpoint_json: (a: number, b: number) => [number, number];
     readonly expr_eval: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly live_json: (a: number, b: number, c: number) => [number, number];
     readonly mix_json: (a: number, b: number) => [number, number];

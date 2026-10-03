@@ -16,7 +16,13 @@
 //! `loom_core::prof` and re-exported here — the same analyser the browser runs
 //! through WASM ([`loom_core::prof`]).
 
-pub use loom_core::prof::analyze;
+
+/// EXPLIQUE : l'analyse partagée avec le web, puis le correcteur de contrepoint.
+pub fn analyze(text: &str) -> Vec<String> {
+    let mut lines = loom_core::prof::analyze(text);
+    lines.extend(loom_core::prof::counterpoint(text));
+    lines
+}
 pub use loom_core::prof::lore;
 
 use std::process::Command;

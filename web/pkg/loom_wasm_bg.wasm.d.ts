@@ -7,6 +7,7 @@ export const bar_bpm: (a: number, b: number, c: number) => number;
 export const bar_seconds: (a: number, b: number, c: number) => number;
 export const bytebeat_pcm: (a: number, b: number, c: number, d: number, e: number) => [number, number];
 export const clip_to_loom: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
+export const counterpoint_json: (a: number, b: number) => [number, number];
 export const expr_eval: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
 export const live_json: (a: number, b: number, c: number) => [number, number];
 export const mix_json: (a: number, b: number) => [number, number];

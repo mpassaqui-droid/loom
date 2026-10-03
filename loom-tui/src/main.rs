@@ -40,6 +40,7 @@ usage :
                                                .ly pour LilyPond)
   loom loudness son.wav [cible]                LUFS intégré, LRA, crête vraie
                                                (cibles : spotify youtube apple deezer club)
+  loom contrepoint morceau.loom                 quintes/octaves parallèles, croisements, sauts
   loom reharm morceau.loom [jazz|tritone|iiv]  réharmonise prog: (ii-V, substitution de
                                                triton) et écrit le résultat sur la sortie
   loom-gui [morceau.loom]                      la même chose dans une fenêtre
@@ -76,6 +77,7 @@ enum Command {
     /// Mastering report of an audio file, against a platform if named.
     Loudness { file: String, target: Option<String> },
     Reharm { file: String, how: String },
+    Counterpoint { file: String },
     /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
     Bake { file: String, out: String, bars: Option<u32> },
     Tui(Option<PathBuf>),
@@ -135,6 +137,7 @@ fn parse(args: &[&str]) -> Result<Command, String> {
         },
         ["loudness", file] => Command::Loudness { file: file.to_string(), target: None },
         ["loudness", file, t] => Command::Loudness { file: file.to_string(), target: Some(t.to_string()) },
+        ["contrepoint" | "counterpoint", file] => Command::Counterpoint { file: file.to_string() },
         ["reharm", file] => Command::Reharm { file: file.to_string(), how: "jazz".into() },
         ["reharm", file, how] => Command::Reharm { file: file.to_string(), how: how.to_string() },
         [] => Command::Tui(None),
@@ -158,6 +161,13 @@ fn main() -> ExitCode {
         }
         Command::Loudness { file, target } => loudness(&file, target.as_deref()),
         Command::Reharm { file, how } => reharm(&file, &how),
+        Command::Counterpoint { file } => {
+            let src = std::fs::read_to_string(&file).map_err(|e| format!("{file} : {e}"))?;
+            let lines = loom_core::prof::counterpoint_report(&src);
+            if lines.is_empty() { println!("moins de deux lignes mélodiques : rien à corriger"); }
+            for l in lines { println!("{l}"); }
+            Ok(())
+        }
         Command::Bake { file, out, bars } => bake(&file, &out, bars),
         Command::Tui(path) => tui(path),
     });

@@ -11,11 +11,14 @@
 //! - [`analyze`] — instant offline analysis (tonality, microtuning, Plomp–Levelt
 //!   acoustics, roman-numeral harmony + cadence, form, novelty score).
 //! - [`novelty_report`] — how much the music actually changes bar to bar.
+//! - [`counterpoint`] : quintes/octaves parallèles, croisements, sauts, tessitures.
 //!
 //! No AI — pure parsing + measurement — so it works without internet.
 
 pub mod analyze;
+pub mod counterpoint;
 pub mod lore;
 
 pub use analyze::{analyze, novelty_report};
+pub use counterpoint::{counterpoint, counterpoint_report};
 pub use lore::{LORE, MOOD, SCALE_LORE, TRADITION_LORE};

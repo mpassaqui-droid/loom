@@ -115,6 +115,20 @@ export function clip_to_loom(nom, notes_json, longueur, meter_beats, batterie) {
 }
 
 /**
+ * Le correcteur de contrepoint (quintes/octaves parallèles, croisements, sauts).
+ * @param {string} src
+ * @returns {string[]}
+ */
+export function counterpoint_json(src) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.counterpoint_json(ptr0, len0);
+    var v2 = getArrayJsValueFromWasm0(ret[0], ret[1]);
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
+}
+
+/**
  * Évalue une expression entière (`vars` = les lettres des variables, dans
  * l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
  * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
