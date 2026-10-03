@@ -36,6 +36,8 @@ usage :
   loom bake morceau.loom sortie.json [N]       cuire en notes MIDI par voix (pour Ableton Live,
                                                voir tools/bake_live.py)
   loom bake morceau.loom sortie.mid [N]        fichier MIDI standard (une piste par voix)
+  loom bake morceau.loom sortie.musicxml [N]   partition (MuseScore, Sibelius, Dorico ;
+                                               .ly pour LilyPond)
   loom loudness son.wav [cible]                LUFS intégré, LRA, crête vraie
                                                (cibles : spotify youtube apple deezer club)
   loom-gui [morceau.loom]                      la même chose dans une fenêtre
@@ -254,6 +256,13 @@ fn bake(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
     let program = loom_core::Program::parse(&src);
     if program.voices.is_empty() { return Err(format!("{file} ne contient aucune voix")); }
     let bars = bars.unwrap_or_else(|| loom_audio::bake::default_bars(&program));
+    let lower = out.to_lowercase();
+    if lower.ends_with(".musicxml") || lower.ends_with(".xml") || lower.ends_with(".ly") {
+        let title = std::path::Path::new(file).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let parts = loom_app::score::write(&src, &title, bars, std::path::Path::new(out))?;
+        println!("{bars} mesures · {parts} portées → {out} (partition)");
+        return Ok(());
+    }
     let baked = loom_audio::bake::bake(&src, bars);
     // .mid = fichier MIDI standard pour n'importe quel DAW ; sinon le JSON de bake_live.py
     let octets = if out.to_lowercase().ends_with(".mid") { baked.to_midi() } else { baked.to_json().into_bytes() };

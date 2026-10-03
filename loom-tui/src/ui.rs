@@ -382,7 +382,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         key("Alt+F", "partition : la mesure en cours sur une grande portée (clé de sol et de fa)"),
         key("Alt+C", "thème suivant : les 62 thèmes du web, gardé au prochain lancement"),
         key("Alt+K", "lien Live : chaque RUN enregistre le fichier, le device Loom de Live le suit"),
-        key("Alt+X", "exporter un fichier MIDI standard (.mid) à côté du morceau, pour un DAW"),
+        key("Alt+X", "exporter .mid (pour un DAW) et .musicxml (partition pour MuseScore, Sibelius, Dorico)"),
         key("F2", "décrire la musique en mots, Claude écrit le code"),
         key("F2 puis 1..0", "les puces : + batterie, + basse, + nappe, + triste, + énergie, + exotique, varier, simplifier, continuer, corriger"),
         key("  Entrée · Échap", "envoyer · fermer (Échap annule s'il réfléchit)"),

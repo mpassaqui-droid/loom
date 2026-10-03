@@ -273,7 +273,16 @@ impl App {
         let result = path.parent().map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|_| std::fs::write(&path, baked.to_midi()));
         match result {
-            Ok(()) => self.info(format!("MIDI : {bars} mesures · {} pistes → {}", baked.tracks.len(), path.display())),
+            Ok(()) => {
+                // la partition à côté, pour MuseScore, Sibelius, Dorico
+                let xml = path.with_extension("musicxml");
+                let title = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                let score = match loom_app::score::write(&text, &title, bars, &xml) {
+                    Ok(_) => format!(" + partition {}", xml.display()),
+                    Err(e) => format!(" (partition : {e})"),
+                };
+                self.info(format!("MIDI : {bars} mesures · {} pistes → {}{score}", baked.tracks.len(), path.display()));
+            }
             Err(e) => self.error(format!("échec de l'export MIDI : {e}")),
         }
     }

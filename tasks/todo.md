@@ -824,7 +824,7 @@ Review (3 octobre, 17h) : les 10 faits, poussés sur frankenstein (41e09db → 9
 Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point, tests à chaque fois.
 - [x] 4. Export : WAV 24 bits par défaut, --16 (dither TPDF), --32f, --sr ; .flac .mp3 .m4a .aiff .ogg par afconvert/ffmpeg ; REC et stems suivent ; relus par afinfo
 - [x] 5. Loudness : studio/bs1770.rs (intégré à deux portes, LRA, court/moment max, crête vraie 4x), limiteur en crête vraie, --target spotify|apple|… et --lufs, loom loudness ; écart à ffmpeg ebur128 : I 0,0, TP 0,0, LRA 0,2
-- [ ] 1. Partition : export MusicXML (et LilyPond) depuis le morceau
+- [x] 1. Partition : loom-app/src/score.rs, MusicXML 4.0 et LilyPond (loom bake x.loom x.musicxml|.ly, Alt+X), grille par temps (double croche ou triolet), liaisons aux barres, accords, armure, batterie, repères de section, tempo ; ouvert et imprimé par MuseScore 4 (PDF vérifié à l'œil)
 - [ ] 2. Harmonie : V/V, emprunts (bVII, iv), renversements, napolitaine ; modulations détectées ; réharmonisation
 - [ ] 8. Contrepoint : quintes et octaves parallèles, tessitures, croisements ; dans le prof
 - [ ] 6. Automation : courbes à points (`0 .2 1@exp`) et automation du master et des envois

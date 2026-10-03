@@ -11,6 +11,7 @@ pub mod hum;
 pub mod lessons;
 pub mod prof;
 pub mod samples;
+pub mod score;
 pub mod library;
 pub mod lint;
 pub mod share;
