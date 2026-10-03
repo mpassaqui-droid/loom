@@ -97,11 +97,33 @@ impl Dictation {
     }
 }
 
+/// Écrit `bytes` dans un fichier temporaire neuf, lisible par moi seul. `create_new`
+/// refuse un fichier (ou un lien) déjà posé là par un autre compte dans un /tmp partagé.
+fn private_file(bytes: &[u8]) -> Result<PathBuf, String> {
+    use std::io::Write;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut opts, 0o600);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+    for i in 0..16u32 {
+        let path = std::env::temp_dir().join(format!("loom-dictee-{}-{nanos:x}-{i}.wav", std::process::id()));
+        match opts.open(&path) {
+            Ok(mut f) => {
+                f.write_all(bytes).map_err(|e| e.to_string())?;
+                return Ok(path);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Err("pas de fichier temporaire libre".into())
+}
+
 fn transcribe(exe: &std::path::Path, model: &std::path::Path, samples: &[f32], rate: u32) -> Result<String, String> {
     let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
     if samples.len() < rate as usize / 2 || peak < 0.01 { return Err("je n'ai rien entendu".into()); }
-    let path = std::env::temp_dir().join(format!("loom-dictee-{}.wav", std::process::id()));
-    std::fs::write(&path, wav(&to_16k(samples, rate))).map_err(|e| e.to_string())?;
+    let path = private_file(&wav(&to_16k(samples, rate)))?;
     let lang = std::env::var("LOOM_DICTEE_LANG").unwrap_or_else(|_| "fr".into());
     let out = std::process::Command::new(exe)
         .arg("-m").arg(model).args(["-l", &lang, "-nt", "-np"]).arg("-f").arg(&path)
@@ -129,6 +151,20 @@ mod tests {
         assert_eq!(w.len(), 44 + 32_000);
         assert_eq!(&w[..4], b"RIFF");
         assert_eq!(u32::from_le_bytes([w[24], w[25], w[26], w[27]]), 16_000);
+    }
+
+    #[test]
+    fn fichier_temporaire_prive_et_neuf() {
+        let a = private_file(b"x").unwrap();
+        let b = private_file(b"y").unwrap();
+        assert_ne!(a, b);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&a).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        let _ = std::fs::remove_file(a);
+        let _ = std::fs::remove_file(b);
     }
 
     #[test]
