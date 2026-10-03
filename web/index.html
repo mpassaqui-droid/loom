@@ -1646,7 +1646,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,loopAt=null,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1676,6 +1676,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="cresc")dyn=1;else if(p[0]==="dim"||p[0]==="decresc")dyn=-1;
       else if(p[0]==="reverse"||p[0]==="rev?")revsamp=true;
       else if(p[0]==="warp"||p[0]==="stretch")warp=true;
+      else if(p[0]==="loopAt"||p[0]==="loopat"){const nn=Number(p[1]);warp=true;loopAt=Math.max(0.25,Math.min(16,(p[1]!=null&&p[1]!==""&&isFinite(nn)&&nn>0)?nn:1));}  // Tidal loopAt N : le sample étiré (warp) sur N mesures
       else if(p[0]==="freeze")freeze=true;
       else if(p[0]==="begin")sbeg=Math.max(0,Math.min(1,parseFloat(p[1])||0));
       else if(p[0]==="end")sfin=Math.max(0,Math.min(1,parseFloat(p[1])!=null&&!isNaN(parseFloat(p[1]))?parseFloat(p[1]):1));
@@ -1739,7 +1740,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -1814,6 +1815,23 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     if(c==="mirror"){return tokens.concat(tokens.slice().reverse());}  // motif + son reflet (dans la mesure)
     if(c==="accent"){const nN=Math.max(1,parseInt(p[1])||4);return tokens.map((t,i)=>(i%nN===0&&t!=="."&&t!=="~"&&!/[!]/.test(t))?t+"!":t);}  // accentue 1 pas sur N
     if(c==="hocket"||c==="complement")return tokens.map(t=>(t==="."||t==="~")?"x":".");  // complément rythmique : voix + | hocket pavent la mesure (interlock)
+    // verbes Tidal (miroir op pour op de loom-core apply_verb)
+    const pInt=x=>/^\+?\d+$/.test(x||"")?parseInt(x,10):null;
+    if(c==="ply"){const n=Math.max(1,Math.min(16,pInt(p[1])??2));if(n===1)return tokens;  // ply N : chaque événement répété N fois dans son pas
+      return tokens.map(t=>(t==="."||t==="~")?t:"["+new Array(n).fill(t).join(" ")+"]");}
+    if(c==="linger"){if(!tokens.length)return tokens;const x=(p[1]!=null&&p[1]!=="")?Number(p[1]):NaN,f=(isFinite(x)&&x!==0)?x:0.25;  // linger F : boucle la première fraction F (F<0 : la dernière)
+      if(Math.abs(f)>=1)return tokens;const len=tokens.length,k=Math.max(1,Math.min(len,Math.floor(len*Math.abs(f)+0.5)));
+      const sl=f>0?tokens.slice(0,k):tokens.slice(len-k),out=[];for(let i=0;i<len;i++)out.push(sl[i%k]);return out;}
+    if(c==="segment"){if(!tokens.length)return tokens;const len=tokens.length,n=Math.max(1,Math.min(64,pInt(p[1])??len));  // segment N : rééchantillonne la ligne en N pas
+      const out=[];for(let i=0;i<n;i++)out.push(tokens[Math.floor(i*len/n)]);return out;}
+    if(c==="range"){  // range A B : recadre le degré le plus grave..aigu du motif sur A..B
+      const di=t=>{const m=/^([1-7])([',]*)([?*!0-9]*)$/.exec(t);if(!m)return null;let o=0;for(const ch of m[2])o+=ch==="'"?1:-1;return [(+m[1]-1)+o*7,m[3]];};
+      const rb=x=>{if(x==null)return null;if(/^[+-]?\d+$/.test(x))return Math.max(-27,Math.min(29,parseInt(x,10)))-1;const d=di(x);return(d&&d[1]==="")?d[0]:null;};
+      const a=rb(p[1]),b=rb(p[2]);if(a==null||b==null)return tokens;
+      const idx=tokens.map(di),ds=idx.filter(d=>d).map(d=>d[0]);if(!ds.length)return tokens;
+      const lo=Math.min(...ds),hi=Math.max(...ds);
+      return tokens.map((t,i)=>{const d=idx[i];if(!d)return t;const ni=hi===lo?a:a+Math.floor(((d[0]-lo)*(b-a)*2+(hi-lo))/(2*(hi-lo)));
+        const oc=Math.floor(ni/7);let s=String(((ni%7)+7)%7+1);for(let j=0;j<Math.abs(oc);j++)s+=oc>0?"'":",";return s+d[1];});}
     if(c==="develop"||c==="dev"){  // développement motivique : un arc de transformations choisi par la mesure (la section ÉVOLUE au lieu de répéter)
       const CY=["","rot 1","add 2","rev","add -2","rot 3","invert","add 4"];
       const op=CY[(((bar%CY.length)+CY.length)%CY.length)];return op?applyOne(tokens,op,bar):tokens;}
@@ -2204,8 +2222,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     if(v.type==="drum"){const n=v.name;
       if(v.midi&&midiOut){const gm={kick:36,bd:36,snare:38,sd:38,hat:42,hh:42,clap:39,cp:39}[n]||37;sendMidi(v.midi,gm,Math.round(110*vm),t,0.1);return;}
       if((n==="kick"||n==="bd")&&duckAmt>0)duckPump(t);
-      if(v.sample&&v.freeze){playSampleWarp(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),durOverride||cycleLen,v,true);return;}
-      if(v.sample&&v.warp){playSampleWarp(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),durOverride||cycleLen,v);return;}
+      if(v.sample&&v.freeze){playSampleWarp(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),v.loopAt?v.loopAt*cycleLen:(durOverride||cycleLen),v,true);return;}
+      if(v.sample&&v.warp){playSampleWarp(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),v.loopAt?v.loopAt*cycleLen:(durOverride||cycleLen),v);return;}  // loopAt N : N mesures
       if(v.sample&&playSample(v.sample,t,Math.min(1,(v.gain||0.22)*4*vm),1,v))return;
       if(n==="kick"||n==="bd")kick(t,vm);else if(n==="snare"||n==="sd")snare(t,vm);
       else if(n==="hat"||n==="hh")hat(t,vm);else if(n==="clap"||n==="cp")clap(t,vm);
@@ -2221,8 +2239,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       if(tuning==="adaptive"&&fr.length>1){const JR=[1,16/15,9/8,6/5,5/4,4/3,45/32,3/2,8/5,5/3,9/5,15/8];const lo=Math.min.apply(null,fr);
         fr=fr.map(f=>{const iv=Math.round(12*Math.log2(f/lo));const oct=Math.floor(iv/12);return lo*JR[((iv%12)+12)%12]*Math.pow(2,oct);});}
       if(v.midi&&midiOut){for(const f of fr)sendMidi(v.midi,freqToMidi(f),Math.round(96*vm),t,dur);return;}
-      if(v.sample&&v.freeze){playSampleWarp(v.sample,t,(v.gain!=null?v.gain:0.22)*vm,dur,v,true);return;}
-      if(v.sample&&v.warp){playSampleWarp(v.sample,t,(v.gain!=null?v.gain:0.22)*vm,dur,v);return;}
+      if(v.sample&&v.freeze){playSampleWarp(v.sample,t,(v.gain!=null?v.gain:0.22)*vm,v.loopAt?v.loopAt*cycleLen:dur,v,true);return;}
+      if(v.sample&&v.warp){playSampleWarp(v.sample,t,(v.gain!=null?v.gain:0.22)*vm,v.loopAt?v.loopAt*cycleLen:dur,v);return;}
       if(v.sample){const bc=noteToFreq(v.root||"c3")||noteToFreq("c3"),gm=Math.min(1,(v.gain||0.22)*3*vm);
         for(const f of fr)playSample(v.sample,t,gm,f/bc,v);return;}
       const g=(fr.length>1?v.gain*0.7:v.gain)*vm;
@@ -6021,6 +6039,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Groove","| cresc   | dim","crescendo / diminuendo : la vélocité monte / descend au fil de la mesure"],
     ["Verbes","| invert   | sequence N","invert = mélodie en miroir ; sequence = motif suivi d'une copie transposée"],
     ["Verbes (génératif)","| mutate N   | stutter N","mutate = fait évoluer le motif chaque mesure (N% de changement) ; stutter = beat-repeat (boucle le 1/N)"],
+    ["Verbes Tidal","| ply N  | linger F  | segment N  | range A B  | loopAt N","ply = chaque coup répété N fois dans son pas ; linger = boucle la fraction F de la mesure ; segment = rééchantillonne en N pas ; range = recadre les degrés sur A..B ; loopAt = sample étiré sur N mesures"],
     ["Son","| tape N","macro lo-fi cassette : wow + saturation + souffle en un seul réglage (0-1)"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
     ["Apparence","look ▸   /   🎲","48 thèmes de terminal, mémorisés"],
@@ -6341,6 +6360,7 @@ const THEME_AA={
     "- Harmonize: | harmonize N [level] adds a parallel layer N semitones away (7 = a fifth → power chords, 4 = a major third, 12 = octave, -12 = octave below). e.g. lead: 1 2 3 | harmonize 7 for power-chord stabs, or | harmonize 4 0.4 for sweet parallel thirds.",
     "- prog: auto also has: cinematic, lofi, edm, house, and random (a fresh random diatonic progression each RUN).",
     "- Generative variation: | mutate N evolves a pattern over time — each bar it randomly nudges about N% of the notes (transposes degrees, fills rests), seeded so it's reproducible. | stutter N is a beat-repeat: it loops the first 1/N of the pattern. e.g. lead: 1 2 3 5 | mutate 30 , drums: x . x . | stutter 4.",
+    "- Tidal verbs: | ply N repeats every event N times inside its own step (hat: x . x . | ply 2 = rolls). | linger F loops only the first fraction F of the bar (0.25 = first quarter; negative = the last part, linger -0.25). | segment N resamples the line into N even steps (lead: 1 3 5 | segment 6 = 1 1 3 3 5 5). | range A B rescales the pattern's lowest..highest degree onto degrees A..B (lead: walk(8) | range 3 6 , or range 1 1'' to stretch a motif over two octaves; integers above 7 mean higher octaves, 8 = 1'). | loopAt N stretches a sample (warp, pitch kept) over N bars: break: x . . . | sample amen | loopAt 2. For rhythmic echoes use | echo DIV FB or | off N (not stut, which in LOOM is the stutter beat-repeat); for strummed chords use | strum.",
     "- Tape macro: | tape N (0-1) is a one-knob lo-fi cassette character — wow-and-flutter + gentle saturation + a touch of hiss. Lovely on keys/pads/whole voices for nostalgia.",
     "- Additive synthesis: | partials A B C ... builds a sound from the amplitude of each harmonic (1 = fundamental, 2 = octave, 3 = fifth above...). e.g. | partials 1 0 0.5 0 0.33 (odd harmonics = hollow/clarinet-ish). | organ 888650000 is a Hammond drawbar shortcut (9 digits 0-8). Pure, clean tones.",
     "- Arp modes: | arp converge (outside-in), diverge (inside-out), thumb (bounce off the lowest note), pinky (bounce off the highest) — on top of up/down/updown/downup. e.g. keys: Cmaj7 . | arp converge | pluck 0.7.",
@@ -6826,7 +6846,7 @@ const THEME_AA={
       log("[ slider ] valeur réglée au geste — ⌥+glisser sur n'importe quel nombre","ai");});}
   attachNumberDrag(editor);attachNumberDrag($("stageEditor"));
   // keyword autocomplete: type a prefix + TAB to complete (cycles through matches)
-  const KEYWORDS=["rev","fast","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus","room","morph","solve",
+  const KEYWORDS=["rev","fast","ply","linger","segment","range","loopAt","loopat","slow","every","jux","chunk","off","add","semi","palindrome","sometimes","often","rarely","rot","iter","poly","markov","invert","sequence","mutate","develop","stutter","cresc","dim","arp","pink","sieve","arc","rise","fall","gendy","spectrum","tonnetz","markov","hocket","bus","room","morph","solve",
     "saw","sine","tri","pulse","square","pwm","fm","wt","pluck","bow","reed","bell","grain","vowel","vocode","supersaw","sync","fold","ring","partials","organ","harmonize","double","sub","noise",
     "gain","oct","unison","detune","spread","drive","crush","redux","flange","reson","stereo","chorus","phaser","comp","reverb","delay","echo","ir","autopan","haas","tgate","chance","lfo","lfo2","slide","bend","wow","orbit","swing","shift","humanize","nudge","degrade","gate","strum","flam","pan","eq","tape","voicing","fenv","env","drift","arpoct","chop","reverse","warp","stretch","freeze","adaptive","begin","end","root","sample","midi","viz","hue","width",
     "key","scale","prog","tune","bpm","tempo","meter","accel","groove","seed","song","duck","feel","warmth","scene","film","title",
