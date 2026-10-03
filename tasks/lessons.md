@@ -23,3 +23,10 @@ lesson: quand le propriétaire redemande de « rendre parfait » après un rappo
 
 # Silence avant tout test MIDI avec Live ouvert
 lesson: avant de lancer `loom play` (même avec des voix `| midi`), Live ouvert = son garanti : le set par défaut arme une piste MIDI en « All Ins » et LOOM envoie aussi vers le bus IAC. Toujours d'abord master Live à 0 et pistes désarmées (AbletonOSC), puis tester. Munay a entendu le test le 03/10 la nuit.
+
+## 2026-10-03 · Le hook anti-secret lit l'index AVANT la commande
+`git add X && git commit` dans une seule commande : le hook tourne avant le `git add`,
+donc il ne voit pas X. Les commits de m4l/loom_device.js passaient par accident, la ligne
+`'x-api-key: ' + k` (en-tête construit avec une variable, pas une clé) ressemble à un secret.
+Règle : stager d'abord, committer ensuite. Si le hook bloque sur un faux positif, ne pas
+contourner : laisser le commit à Munay avec la commande exacte.

@@ -215,5 +215,71 @@ for (const k in dicts) delete dicts[k];
   env.reponseia('dictionary', 'loompont_rep_0');
   ok(/^data:/.test(so.filter(o => o[0] === 4 && o[1] === 'url').pop()[2]), 'preuve rejouée (défi déjà utilisé) : page d\'aide');
 }
+// le lien Live : @voix.Param (automation dans le clip), go: (scène), import du clip sélectionné
+for (const k in dicts) delete dicts[k];
+{
+  const so = [], appels = [];
+  globalThis.patcher = null;
+  const env = {};
+  new Function('env', 'so', 'appels', `
+    var outlet = function () { so.push(Array.prototype.slice.call(arguments)); };
+    var arrayfromargs = function (a) { return Array.prototype.slice.call(a); };
+    function Task() { this.repeat = function () {}; }
+    var PISTE = 'this_device canonical_parent';
+    var params = [{ name: 'Device On', min: 0, max: 1 }, { name: 'Filter Freq', min: 20, max: 20020 }];
+    var scenes = ['intro', 'Drop', 'outro'];
+    function LiveAPI(p) {
+      this.p = p; this.unquotedpath = p;
+      var m = /devices (\\d+)( parameters (\\d+))?$/.exec(p);
+      this.id = p === 'this_device' ? 42 : p === 'live_set view detail_clip' ? 900 : m ? (m[3] !== undefined ? 100 + Number(m[3]) : (m[1] === '0' ? 42 : 7)) : 5;
+    }
+    LiveAPI.prototype.get = function (k) {
+      var p = this.p, m;
+      if (p === PISTE && k === 'name') return 'Loom bass';
+      if ((m = /parameters (\\d+)$/.exec(p))) return params[Number(m[1])][k];
+      if ((m = /^live_set scenes (\\d+)$/.exec(p)) && k === 'name') return scenes[Number(m[1])];
+      if (p === 'live_set view detail_clip') return { is_midi_clip: 1, length: 4, name: 'Riff' }[k];
+      if (/detail_clip canonical_parent canonical_parent$/.test(p) && k === 'name') return 'Loom keys';
+      if (/detail_clip canonical_parent canonical_parent devices/.test(p) && k === 'class_name') return 'InstrumentVector';
+      if (p === 'live_set' && k === 'signature_numerator') return 6;
+      if (p === 'live_set' && k === 'signature_denominator') return 8;
+      if (/clip_slots \\d+$/.test(p) && k === 'has_clip') return 0;
+      return 0;
+    };
+    LiveAPI.prototype.getcount = function (k) {
+      if (k === 'devices') return 2; if (k === 'parameters') return /devices 1$/.test(this.p) ? 2 : 1;
+      if (k === 'scenes') return 3; return 8;
+    };
+    LiveAPI.prototype.set = function () {};
+    LiveAPI.prototype.call = function (m) {
+      var a = Array.prototype.slice.call(arguments);
+      appels.push([this.p].concat(a));
+      if (m === 'create_automation_envelope') return ['id', 500];
+      if (m === 'get_notes_extended') return JSON.stringify({ notes: [{ pitch: 60, start_time: 0, duration: 0.5, velocity: 100 }, { pitch: 64, start_time: 2, duration: 0.25, velocity: 90 }] });
+    };
+    ${fs.readFileSync(tmp, 'utf8')}
+    env.bang = bang; env.editeur = editeur; env.code = code; env.importe = importe;
+  `)(env, so, appels);
+  env.bang();
+  env.editeur('text', 'bass: c2 . c2 .\n@bass.Filter Freq: 0 1\n@kick.Filter Freq: 1\ngo: drop');
+  const pas = appels.filter(c => c[0] === 'id 500' && c[1] === 'insert_step');
+  ok(appels.some(c => c[1] === 'create_automation_envelope' && c[3] === 101) && pas.length === 16 && pas[0][4] === 20 && pas[1][4] === 20020,
+    `@bass.Filter Freq : enveloppe du bon paramètre, ${pas.length} pas sur 8 mesures, 0..1 → 20..20020 Hz`);
+  ok(!appels.some(c => c[1] === 'create_automation_envelope' && c[3] === 100), 'le paramètre du device Loom lui-même n\'est jamais visé');
+  ok(appels.some(c => c[0] === 'live_set scenes 1' && c[1] === 'fire'), 'go: drop lance la scène « Drop » (casse ignorée)');
+  appels.length = 0; env.code('bass: c2 . c2 .\ngo: drop');
+  ok(!appels.some(c => c[1] === 'fire' && /scenes/.test(c[0])), 'un suiveur (code reçu, pas tapé) ne relance pas la scène');
+  appels.length = 0; env.editeur('text', 'bass: c2 c2 . .\n@bass.Filter Freq: 0 1\ngo: drop');
+  ok(!appels.some(c => c[1] === 'fire' && /scenes/.test(c[0])), 'RUN avec le même go: : la scène n\'est pas relancée');
+  appels.length = 0; env.editeur('text', 'bass: c2 c2 . .\n@bass.Volume: 1\ngo: drop');
+  ok(appels.some(c => c[1] === 'clear_envelope' && c[3] === 101) && !appels.some(c => c[1] === 'create_automation_envelope' && c[3] === 101),
+    'ligne @ effacée : son automation quitte le clip');
+  ok(appels.some(c => c[1] === 'create_automation_envelope' && c[3] === 5), '@bass.Volume vise le volume du mixeur de la piste');
+  appels.length = 0; env.editeur('text', 'bass: c2\ngo: 9');
+  ok(!appels.some(c => /scenes/.test(c[0]) && c[1] === 'fire') && so.slice(-1)[0][2].includes('aucune scène'), 'go vers une scène absente : message, rien ne part');
+  so.length = 0; env.importe();
+  const ins = so.find(o => o[0] === 4 && o[1] === 'insere');
+  ok(ins && ins[2] === 'riff: c4 _ . . . . . . e4' + ' .'.repeat(15) + ' | slow 2', `clip sélectionné en 6/8 (3 noires par mesure) → ligne de code (${ins && ins[2]})`);
+}
 console.log(echecs ? `${echecs} échec(s)` : 'device : tout passe');
 process.exit(echecs ? 1 : 0);

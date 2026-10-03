@@ -88,6 +88,33 @@ export function bytebeat_pcm(expr, start, len, sr) {
 }
 
 /**
+ * Un clip MIDI de Live (notes `[[hauteur, début, durée, vélocité], …]` en noires)
+ * devenu une ligne de code LOOM.
+ * @param {string} nom
+ * @param {string} notes_json
+ * @param {number} longueur
+ * @param {number} meter_beats
+ * @param {boolean} batterie
+ * @returns {string}
+ */
+export function clip_to_loom(nom, notes_json, longueur, meter_beats, batterie) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(nom, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(notes_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.clip_to_loom(ptr0, len0, ptr1, len1, longueur, meter_beats, batterie);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Évalue une expression entière (`vars` = les lettres des variables, dans
  * l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
  * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
@@ -112,6 +139,28 @@ export function expr_eval(src, vars, vals) {
         return getStringFromWasm0(ret[0], ret[1]);
     } finally {
         wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+
+/**
+ * Le lien Live du programme (`go:` et automations `@voix.Param:`) sur la même
+ * longueur que `bake_json` : `{"go":…, "auto":[{voice, param, points:[[temps, durée, 0..1]]}]}`.
+ * @param {string} src
+ * @param {number} bars
+ * @returns {string}
+ */
+export function live_json(src, bars) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.live_json(ptr0, len0, bars);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
 }
 

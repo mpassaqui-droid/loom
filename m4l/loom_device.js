@@ -30,7 +30,7 @@ var MODELE_IA = 'claude-fable-5-1';
 var monPatcher = (typeof this !== 'undefined' && this && this.patcher) ? this.patcher : null;
 
 var PROJET = 'loom_projet';
-var etat = { fichier: '', source: '', lu: null, voix: '', pret: false, tempoFait: false, projet: null };
+var etat = { fichier: '', source: '', lu: null, voix: '', pret: false, tempoFait: false, projet: null, goFait: null, autos: {} };
 var veille = null;
 
 function dire(t) {
@@ -103,6 +103,7 @@ function editeur() {
     d.set('code', t);
     if (etat.fichier) ecritFichier(t);
     cuire();
+    if (etat.pret) lanceScene();
 }
 
 // le code sauvé avec le set (pattr) : rendu à l'éditeur, joué quand le moteur est prêt
@@ -327,6 +328,7 @@ function anything() {
     else if (m === 'cuire') cuire();
     else if (m === 'pret') pret();
     else if (m === 'ouvre') ouvre();
+    else if (m === 'importe') importe();
     else if (m === 'fenetre') montreFenetre();
 }
 
@@ -428,8 +430,106 @@ function cuire() {
         etat.tempoFait = true;
     }
     etat.clipPath = String(clip.unquotedpath || '');
+    var autos = automatise(piste, clip, choix.name);
     publieVue(cuit, choix.name, longueur, clip);
-    dire(choix.name + ' · ' + notes.length + ' notes · ' + cuit.bars + ' mesures · ' + (Date.now() - t0) + ' ms');
+    dire(choix.name + ' · ' + notes.length + ' notes' + (autos ? ' · ' + autos + ' automation(s)' : '') + ' · ' +
+        cuit.bars + ' mesures · ' + (Date.now() - t0) + ' ms');
+}
+
+// ---- le lien Live : @voix.Param (automation dans le clip), go: (scène), import d'un clip ----
+
+function idDe(r) {
+    var a = (r && typeof r === 'object' && r.length !== undefined) ? r : String(r).split(/[\s,]+/);
+    var n = Number(a[a.length - 1]);
+    return n > 0 ? n : 0;
+}
+
+// le paramètre nommé sur la piste (insensible à la casse), sauf ceux du device Loom lui-même
+function parametre(piste, nom) {
+    var cherche = String(nom).toLowerCase(), moi = idDevice();
+    var nd = piste.api.getcount('devices');
+    for (var i = 0; i < nd; i++) {
+        var dev = new LiveAPI(piste.api.unquotedpath + ' devices ' + i);
+        if (moi && Number(dev.id) === moi) continue;
+        var np = dev.getcount('parameters');
+        for (var j = 0; j < np; j++) {
+            var p = new LiveAPI(dev.unquotedpath + ' parameters ' + j);
+            if (String(p.get('name')).toLowerCase() === cherche) return p;
+        }
+    }
+    // le mixeur de la piste : volume, pan (et leurs noms Live)
+    var mix = { 'volume': 'volume', 'track volume': 'volume', 'pan': 'panning', 'panning': 'panning', 'track panning': 'panning' }[cherche];
+    return mix ? new LiveAPI(piste.api.unquotedpath + ' mixer_device ' + mix) : null;
+}
+
+function lienLive() {
+    try { return JSON.parse(live_json(etat.source, 0)); } catch (e) { dire('lien Live illisible : ' + e); return null; }
+}
+
+function automatise(piste, clip, voix) {
+    var lien = lienLive();
+    if (!lien) return 0;
+    var faites = 0, manquent = [], vues = {};
+    (lien.auto || []).forEach(function (a) {
+        if (a.voice && a.voice !== String(voix).toLowerCase()) return;
+        var p = parametre(piste, a.param);
+        if (!p) { if (a.voice) manquent.push(a.param); return; }
+        var pid = Number(p.id), lo = Number(p.get('min')), hi = Number(p.get('max'));
+        vues[pid] = 1;
+        clip.call('clear_envelope', 'id', pid);
+        var env = idDe(clip.call('create_automation_envelope', 'id', pid)) || idDe(clip.call('automation_envelope', 'id', pid));
+        if (!env) return;
+        var e = new LiveAPI('id ' + env);
+        a.points.forEach(function (x) { e.call('insert_step', x[0], x[1], lo + (hi - lo) * x[2]); });
+        faites++;
+    });
+    // une ligne @ effacée du code : son automation quitte le clip
+    var avant = etat.autos || {};
+    for (var k in avant) if (!vues[k]) clip.call('clear_envelope', 'id', Number(k));
+    etat.autos = vues;
+    if (manquent.length) dire('paramètre introuvable sur la piste : ' + manquent.join(', '));
+    return faites;
+}
+
+// `go: drop` ou `go: 3` : lance la scène (seulement quand on joue le code, pas chez les suiveurs)
+function lanceScene() {
+    var lien = lienLive();
+    if (!lien) return;
+    // une seule fois par valeur : RUN rejoue le code sans relancer la scène
+    if (lien.go === etat.goFait) return;
+    etat.goFait = lien.go;
+    if (!lien.go) return;
+    var set = new LiveAPI('live_set'), n = set.getcount('scenes'), cible = -1;
+    if (/^\d+$/.test(lien.go)) cible = Number(lien.go) - 1;
+    for (var i = 0; cible < 0 && i < n; i++)
+        if (String(new LiveAPI('live_set scenes ' + i).get('name')).toLowerCase() === String(lien.go).toLowerCase()) cible = i;
+    if (cible < 0 || cible >= n) { dire('go : aucune scène « ' + lien.go + ' »'); return; }
+    new LiveAPI('live_set scenes ' + cible).call('fire');
+    dire('go : scène ' + lien.go);
+}
+
+// le clip sélectionné dans Live devient une ligne de code, envoyée à la fenêtre Loom
+function importe() {
+    var clip = new LiveAPI('live_set view detail_clip');
+    if (!idDe(clip.id) || !Number(clip.get('is_midi_clip'))) { dire('importe : sélectionne d\'abord un clip MIDI dans Live'); return; }
+    var longueur = Number(clip.get('length'));
+    var brut = clip.call('get_notes_extended', 0, 128, 0, longueur);
+    var notes = [];
+    try {
+        var o = typeof brut === 'string' ? JSON.parse(brut) : JSON.parse(String(brut));
+        (o.notes || []).forEach(function (n) { notes.push([n.pitch, n.start_time, n.duration, n.velocity]); });
+    } catch (e) { dire('importe : notes illisibles'); return; }
+    var piste = new LiveAPI(clip.unquotedpath + ' canonical_parent canonical_parent');
+    var batterie = /^(loom\s+)?(kick|snare|hat|clap|drums?)\b/i.test(String(piste.get('name')));
+    var nd = piste.getcount('devices');
+    for (var i = 0; !batterie && i < nd; i++)
+        if (String(new LiveAPI(piste.unquotedpath + ' devices ' + i).get('class_name')) === 'DrumGroupDevice') batterie = true;
+    var nom = String(clip.get('name')).replace(/^loom\s*·?\s*/i, '') || String(piste.get('name')).replace(/^loom\s+/i, '');
+    var set = new LiveAPI('live_set');
+    var mesure = (Number(set.get('signature_numerator')) || 4) * 4 / (Number(set.get('signature_denominator')) || 4);
+    var ligne = clip_to_loom(nom, JSON.stringify(notes), longueur, mesure, batterie);
+    outlet(4, 'insere', ligne);
+    dire('importe : ' + notes.length + ' notes → ' + ligne.split(':')[0]);
 }
 
 // Les visuels (loom_vue.js, deux v8ui) lisent ce Dict propre au device.

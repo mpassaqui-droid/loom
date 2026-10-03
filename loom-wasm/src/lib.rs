@@ -320,3 +320,22 @@ pub fn program_info_json(src: &str) -> String {
     };
     serde_json::to_string(&info).unwrap_or_else(|_| "{}".to_string())
 }
+
+/// Le lien Live du programme (`go:` et automations `@voix.Param:`) sur la même
+/// longueur que `bake_json` : `{"go":…, "auto":[{voice, param, points:[[temps, durée, 0..1]]}]}`.
+#[wasm_bindgen]
+pub fn live_json(src: &str, bars: u32) -> String {
+    let p = loom_core::Program::parse(src);
+    let bars = if bars == 0 { loom_audio::bake::default_bars(&p) } else { bars };
+    loom_core::live::live_json(src, bars, p.meter_beats)
+}
+
+/// Un clip MIDI de Live (notes `[[hauteur, début, durée, vélocité], …]` en noires)
+/// devenu une ligne de code LOOM.
+#[wasm_bindgen]
+pub fn clip_to_loom(nom: &str, notes_json: &str, longueur: f64, meter_beats: f64, batterie: bool) -> String {
+    let notes: Vec<(i32, f64, f64, u8)> = serde_json::from_str::<Vec<(f64, f64, f64, f64)>>(notes_json)
+        .unwrap_or_default().into_iter()
+        .map(|(p, d, l, v)| (p as i32, d, l, v.clamp(0.0, 127.0) as u8)).collect();
+    loom_core::live::clip_to_loom(nom, &notes, longueur, meter_beats, batterie)
+}

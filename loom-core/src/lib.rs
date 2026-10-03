@@ -16,6 +16,7 @@ pub mod prof;
 
 /// Expressions entières pures (bytebeat `t:` et pas-programmes `=(…)`).
 pub mod expr;
+pub mod live;
 pub use expr::Expr;
 
 use std::sync::Arc;
@@ -576,13 +577,15 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let Some(colon) = line.find(':') else { continue };
         let full = line[..colon].trim().to_lowercase();
         if DIRECTIVES.contains(&full.as_str()) { continue; }
+        // `@voix.Param:` = automation Live, `go:` = scène Live (voir `live`) : pas des voix
+        if full.starts_with('@') { continue; }
         // `name@section` = a per-section variant of the voice `name`
         let (name, section) = match full.split_once('@') {
             Some((b, s)) => (b.to_string(), Some(s.to_string())),
             None => (full, None),
         };
         // skip directive@section lines too (e.g. key@chorus, scene@drop) — not voices
-        if DIRECTIVES.contains(&name.as_str()) { continue; }
+        if DIRECTIVES.contains(&name.as_str()) || name == "go" { continue; }
         let rest = &line[colon + 1..];
         // voix bytebeat : `nom: t: EXPR | verbes`. L'expression peut contenir des
         // `|` (OU binaire), d'où la coupe dédiée (voir `expr::split_bytebeat`).

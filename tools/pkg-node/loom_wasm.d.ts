@@ -36,11 +36,23 @@ export function bar_seconds(src: string, bar: number): number;
 export function bytebeat_pcm(expr: string, start: number, len: number, sr: number): Float32Array;
 
 /**
+ * Un clip MIDI de Live (notes `[[hauteur, début, durée, vélocité], …]` en noires)
+ * devenu une ligne de code LOOM.
+ */
+export function clip_to_loom(nom: string, notes_json: string, longueur: number, meter_beats: number, batterie: boolean): string;
+
+/**
  * Évalue une expression entière (`vars` = les lettres des variables, dans
  * l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
  * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
  */
 export function expr_eval(src: string, vars: string, vals: Int32Array): string;
+
+/**
+ * Le lien Live du programme (`go:` et automations `@voix.Param:`) sur la même
+ * longueur que `bake_json` : `{"go":…, "auto":[{voice, param, points:[[temps, durée, 0..1]]}]}`.
+ */
+export function live_json(src: string, bars: number): string;
 
 /**
  * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror

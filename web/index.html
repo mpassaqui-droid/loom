@@ -1729,6 +1729,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
     if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph"].includes(name))continue;
+    if(name==="go"||full.startsWith("@"))continue;  // lien Live : go: scène, @voix.Param: automation
     // voix bytebeat `nom: t: EXPR | verbes` (voir bytebeatSplit) ; expression invalide = voix ignorée
     let rest=line.slice(i+1),bytebeat=null;const tb=/^\s*t:/.exec(rest);
     if(tb){const sp=bytebeatSplit(rest.slice(tb[0].length));try{bytebeat=exprCompile(sp[0],["t"]);}catch(_){continue;}rest="~"+sp[1];}
@@ -5930,16 +5931,22 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     const bt=(t,f,titre)=>{const x=document.createElement("button");x.className="tiny";x.textContent=t;x.title=titre;x.onclick=f;b.appendChild(x);return x;};
     bt("▶ Live",()=>{liveEnvoie();window.max&&window.max.outlet("lancer");},"envoie le code et lance les clips Loom de toutes les pistes");
     bt("■ Live",()=>{window.max&&window.max.outlet("arreter");},"arrête Live");
+    bt("⇣ clip Live",()=>{window.max&&window.max.outlet("importe");},"le clip MIDI sélectionné dans Live devient une ligne de code (en bas de l'éditeur)");
     const s=bt("son Loom : non",()=>{sonLoom=!sonLoom;s.textContent="son Loom : "+(sonLoom?"oui":"non");if(sonNode)sonNode.gain.value=sonLoom?1:0;},"entendre aussi le son de Loom (sortie du Mac, pas le mixeur Live)");
     document.body.appendChild(b);
     // un autre device Loom, ou le fichier lié, a changé le code : l'éditeur suit
-    if(window.max&&window.max.bindInlet)window.max.bindInlet("code",function(){const t=Array.prototype.slice.call(arguments).join(" ");
+    if(window.max&&window.max.bindInlet)window.max.bindInlet("code",function(){codeRecu=true;const t=Array.prototype.slice.call(arguments).join(" ");
       if(t&&t!==editor.value){editor.value=t;try{editor.dispatchEvent(new Event("input"));}catch(_){}}});
+    if(window.max&&window.max.bindInlet)window.max.bindInlet("insere",function(){const l=Array.prototype.slice.call(arguments).join(" ");if(!l)return;
+      editor.value=editor.value.replace(/\s*$/,"")+"\n"+l+"\n";try{editor.dispatchEvent(new Event("input"));}catch(_){}
+      log("[ live ] clip importé : "+l.split(":")[0]+" · RUN pour le jouer","ai");});
     if(window.max&&window.max.bindInlet)window.max.bindInlet("jeton",function(t){jetonPont=String(t||"");});
-    if(window.max)window.max.outlet("pret");}
+    if(window.max){window.max.outlet("pret");
+      // set sans code Loom (ou d'avant la sauvegarde du code) : on le dit au lieu de laisser croire que c'est le sien
+      setTimeout(()=>{if(!codeRecu)log("[ live ] ce set n'a pas encore de code Loom : écris le tien, ou glisse un fichier .loom sur le device (la démo : exemples/odyssey.loom). RUN écrit les clips.","ai");},1500);}}
   // VIBE dans Live : par le pont local (claude -p, l'abonnement), si aucune clé n'est saisie
   // le jeton vient du device (qui l'a lu dans le fichier du pont), jamais du réseau
-  let jetonPont="";
+  let jetonPont="",codeRecu=false;
   async function vibePont(SYStxt,userMsg){
     if(!jetonPont)throw new Error("pas de jeton du pont : referme et rouvre la fenêtre Loom");
     const res=await fetch("/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","X-Loom-Jeton":jetonPont},
@@ -6186,6 +6193,9 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Samples","| root NOTE","accorde un sample mélodique à l'oreille"],
     ["Mes sons","panneau « mes sons »","dépose tes fichiers audio → | sample <ton_nom> (mémorisés)"],
     ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
+    ["Lien Live","@voix.Param: 0 .5 1 . | slow 2","automation d'un paramètre du device Live de la piste de cette voix (0..1 = min..max, . = garde) ; sans « voix. », toutes les pistes Loom qui ont ce paramètre"],
+    ["Lien Live","go: drop   go: 3","lance la scène Live « drop » (ou la 3e) quand le code est joué"],
+    ["Lien Live","⇣ clip Live","le clip MIDI sélectionné dans Live devient une ligne de code (bouton de la fenêtre Loom)"],
     ["Exporter","REC   /   RENDER","enregistrer en live / bouncer tout le morceau en WAV"],
     ["Exporter","MIDI   /   LIEN","télécharger un fichier .mid (pour ton DAW) · copier un lien de partage (le morceau est dans l'URL)"],
     ["Groove","groove: dilla|mpc|swing16|push|laidback","groove nommé : microtiming (le swing de Dilla, le MPC…) appliqué à tout"],
@@ -6583,6 +6593,7 @@ const THEME_AA={
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
     "When the user asks for a LONG / full / structured / evolving track (or a specific length/genre), DO build it out: declare a long song: arrangement (e.g. intro*8 build*8 chorus*16 break*8 chorus*16 outro*8) and use name@section variants so each section differs (sparser intro, denser drop, filtered break), plus | in tags, real | sample sounds, and effects (lp/env/reverb/delay/drive/duck) for a polished mix.",
     "Match the requested mood/genre. Avoid always defaulting to C major / 4-step loops — pick a key and scale that fit (minor, dorian, phrygian, hijaz, etc.) and write 16-step patterns.",
+    "ABLETON LIVE LINK (only when the user works inside Ableton Live): `@voice.Param Name: 0 .5 1 . | slow 2` writes automation for the Live device parameter named Param Name on the track of that voice, one value 0..1 per step (0 = parameter minimum, 1 = maximum, . = hold), same `| slow N` / `| fast N` as patterns; without `voice.` every Loom track with that parameter follows. `go: drop` fires the Live scene named drop (or `go: 3`, the third scene) when the code is played. These lines make no sound by themselves; never invent parameter names the user did not mention.",
     "EXAMPLE of the richness to aim for when asked for a full/long track (imitate the STRUCTURE — change key, genre, sounds and notes to fit the request):",
     "seed: 5",
     "duck: 65",
@@ -6780,7 +6791,7 @@ const THEME_AA={
         const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),90000);  // long tracks need time (sonnet, 4000 tokens)
         const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctl.signal,
           headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-          body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
+          body:JSON.stringify({model:"claude-fable-5-1",max_tokens:4000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
         clearTimeout(to);const data=await res.json();if(data.error)throw new Error(data.error.message||"api error");
         text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
       }else if(MODE_LIVE&&typeof location!=="undefined"&&location.port==="7410"){
@@ -6819,6 +6830,9 @@ const THEME_AA={
   // first-play overlay: one click = audio unlocked + RUN. Escape = dismiss without playing.
   {const fp=$("firstPlay");if(fp){
     const hide=()=>{fp.style.opacity="0";fp.style.transition="opacity .45s";fp.style.pointerEvents="none";setTimeout(()=>{fp.style.display="none";},500);};
+    // dans Live : pas d'écran de départ (Live fait le son, et un RUN ici enverrait le morceau
+    // d'accueil à la place du code du set)
+    if(MODE_LIVE)fp.style.display="none";
     fp.addEventListener("click",()=>{hide();run();try{toggleStage();}catch(_){}});
     document.addEventListener("keydown",e=>{if(e.key==="Escape"&&fp.style.display!=="none")hide();},{once:false});
   }}
