@@ -823,7 +823,7 @@ Review (3 octobre, 17h) : les 10 faits, poussés sur frankenstein (41e09db → 9
 ## 3 octobre (soir) : les 12 manques de l'audit, tous (Munay : « K for all »)
 Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point, tests à chaque fois.
 - [x] 4. Export : WAV 24 bits par défaut, --16 (dither TPDF), --32f, --sr ; .flac .mp3 .m4a .aiff .ogg par afconvert/ffmpeg ; REC et stems suivent ; relus par afinfo
-- [ ] 5. Loudness : LUFS intégré BS.1770 (pondération K, portes), LRA, true-peak ; limiteur true-peak ; cibles streaming
+- [x] 5. Loudness : studio/bs1770.rs (intégré à deux portes, LRA, court/moment max, crête vraie 4x), limiteur en crête vraie, --target spotify|apple|… et --lufs, loom loudness ; écart à ffmpeg ebur128 : I 0,0, TP 0,0, LRA 0,2
 - [ ] 1. Partition : export MusicXML (et LilyPond) depuis le morceau
 - [ ] 2. Harmonie : V/V, emprunts (bVII, iv), renversements, napolitaine ; modulations détectées ; réharmonisation
 - [ ] 8. Contrepoint : quintes et octaves parallèles, tessitures, croisements ; dans le prof

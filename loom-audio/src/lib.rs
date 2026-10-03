@@ -19,6 +19,7 @@ pub mod note;
 pub mod sample;
 pub mod seq;
 pub mod tone;
+pub mod truepeak;
 pub mod wavout;
 #[cfg(feature = "device")]
 mod device;

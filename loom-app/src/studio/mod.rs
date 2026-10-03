@@ -16,6 +16,7 @@
 //! Nothing here draws, so both apps share it: `loom-tui` compiles this
 //! folder too (see the `#[path]` line in its `main.rs`).
 
+pub mod bs1770;
 pub mod clips;
 pub mod demo;
 pub mod knobs;

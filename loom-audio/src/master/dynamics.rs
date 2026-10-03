@@ -152,18 +152,35 @@ pub(crate) struct Limiter {
     /// Smallest `need` in the buffer and where it sits.
     min: f32,
     min_pos: usize,
+    /// True-peak detectors (4× oversampling) and the short delay that lines
+    /// the audio up with their estimate: the ceiling holds between samples too.
+    tp: [crate::truepeak::TruePeak; 2],
+    delay: [[f32; crate::truepeak::DELAY]; 2],
+    dpos: usize,
+    last_tp: f32,
 }
 
 impl Limiter {
     pub fn new(sr: f32, ceiling: f32) -> Limiter {
         // JS: g += (1-g)·0.0009 per sample at the browser's usual 48 kHz
         let release = 1.0 - (1.0 - 0.0009f32).powf(48000.0 / sr);
-        Limiter { ceiling, buf: [[0.0; LOOKAHEAD]; 2], need: [1.0; LOOKAHEAD], pos: 0, g: 1.0, release, min: 1.0, min_pos: 0 }
+        Limiter {
+            ceiling, buf: [[0.0; LOOKAHEAD]; 2], need: [1.0; LOOKAHEAD], pos: 0, g: 1.0, release, min: 1.0, min_pos: 0,
+            tp: Default::default(), delay: [[0.0; crate::truepeak::DELAY]; 2], dpos: 0, last_tp: 0.0,
+        }
     }
 
     #[inline]
-    pub fn process(&mut self, x: Stereo) -> Stereo {
-        let peak = x.l.abs().max(x.r.abs());
+    pub fn process(&mut self, input: Stereo) -> Stereo {
+        // the true peak around the sample leaving the short delay
+        let tp = self.tp[0].push(input.l).max(self.tp[1].push(input.r));
+        let d = self.dpos;
+        let x = Stereo { l: self.delay[0][d], r: self.delay[1][d] };
+        self.delay[0][d] = input.l;
+        self.delay[1][d] = input.r;
+        self.dpos = (d + 1) % crate::truepeak::DELAY;
+        let peak = x.l.abs().max(x.r.abs()).max(tp).max(self.last_tp);
+        self.last_tp = tp;
         let tg = if peak > self.ceiling { self.ceiling / peak } else { 1.0 };
         if tg < self.g { self.g = tg } else { self.g += (1.0 - self.g) * self.release }
         let p = self.pos;
@@ -231,5 +248,17 @@ mod tests {
             let y = l.process(Stereo { l: n.sample() * amp, r: n.sample() * amp });
             assert!(y.l.abs() <= 0.97 + 1e-6 && y.r.abs() <= 0.97 + 1e-6);
         }
+    }
+
+    #[test]
+    fn limiter_holds_the_ceiling_between_samples() {
+        // a loud fs/4 tone phased 45°: sample peaks at 0.707·amp, true peaks at amp
+        let mut l = Limiter::new(48000.0, 0.97);
+        let out: Vec<f32> = (0..48000).map(|i| {
+            let s = (std::f32::consts::FRAC_PI_2 * i as f32 + std::f32::consts::FRAC_PI_4).sin() * 1.3;
+            l.process(Stereo::mono(s)).l
+        }).collect();
+        let tp = crate::truepeak::true_peak(&out[4000..]);
+        assert!(tp <= 0.97 * 1.02, "true peak after the limiter {tp}");
     }
 }

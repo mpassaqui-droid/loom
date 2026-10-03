@@ -254,7 +254,10 @@ impl App {
         let result = path.parent().map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|_| loom_audio::write_wav(&path, &samples, 48000));
         match result {
-            Ok(()) => self.info(format!("exporté {bars} mesures → {}", path.display())),
+            Ok(()) => {
+                let r = loom_app::studio::bs1770::measure(&samples, 48000);
+                self.info(format!("exporté {bars} mesures → {} · {}", path.display(), r.text()));
+            }
             Err(e) => self.error(format!("échec de l'export : {e}")),
         }
     }
@@ -330,7 +333,15 @@ impl App {
     pub fn toggle_recording(&mut self) {
         let Ok(e) = &self.engine else { return };
         let result = if e.is_recording() {
-            e.stop_recording().map(|p| format!("● enregistrement terminé → {}", p.display()))
+            e.stop_recording().map(|p| {
+                // le compte rendu du mastering, comme après un export
+                let mesure = loom_audio::sample::SampleData::from_file(&p).ok().map(|d| {
+                    let r = d.channels.get(1).unwrap_or(&d.channels[0]);
+                    let st: Vec<f32> = d.channels[0].iter().zip(r).flat_map(|(a, b)| [*a, *b]).collect();
+                    format!(" · {}", loom_app::studio::bs1770::measure(&st, d.sample_rate as u32).text())
+                }).unwrap_or_default();
+                format!("● enregistrement terminé → {}{mesure}", p.display())
+            })
         } else {
             let path = Library::new_recording_path(self.path.as_deref());
             e.start_recording(&path).map(|_| format!("● REC → {} (F4 pour arrêter)", path.display()))

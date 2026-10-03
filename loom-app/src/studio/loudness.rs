@@ -123,7 +123,7 @@ pub fn k_weighted_mean_square(samples: &[f32], sample_rate: f32) -> f32 {
 
 /// A second-order filter (the formulas are the standard BS.1770 ones,
 /// recomputed for any sample rate).
-struct Biquad {
+pub(crate) struct Biquad {
     b: [f64; 3],
     a: [f64; 2],
     z: [f64; 2],
@@ -131,7 +131,7 @@ struct Biquad {
 
 impl Biquad {
     /// Stage 1: high shelf, +4 dB above ~1.7 kHz (the head's acoustic effect).
-    fn k_shelf(sample_rate: f32) -> Biquad {
+    pub(crate) fn k_shelf(sample_rate: f32) -> Biquad {
         let (f0, gain_db, q) = (1681.974450955533, 3.999843853973347, 0.7071752369554196);
         let k = (std::f64::consts::PI * f0 / sample_rate as f64).tan();
         let vh = 10f64.powf(gain_db / 20.0);
@@ -145,14 +145,14 @@ impl Biquad {
     }
 
     /// Stage 2: high-pass at ~38 Hz (the "RLB" curve).
-    fn k_high_pass(sample_rate: f32) -> Biquad {
+    pub(crate) fn k_high_pass(sample_rate: f32) -> Biquad {
         let (f0, q) = (38.13547087602444, 0.5003270373238773);
         let k = (std::f64::consts::PI * f0 / sample_rate as f64).tan();
         let a0 = 1.0 + k / q + k * k;
         Biquad { b: [1.0, -2.0, 1.0], a: [2.0 * (k * k - 1.0) / a0, (1.0 - k / q + k * k) / a0], z: [0.0; 2] }
     }
 
-    fn process(&mut self, x: f64) -> f64 {
+    pub(crate) fn process(&mut self, x: f64) -> f64 {
         let y = self.b[0] * x + self.z[0];
         self.z[0] = self.b[1] * x - self.a[0] * y + self.z[1];
         self.z[1] = self.b[2] * x - self.a[1] * y;
