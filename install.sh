@@ -49,7 +49,7 @@ else
 fi
 
 say "Compilation (release) — la première fois prend quelques minutes…"
-"${CARGO[@]}" build --release --manifest-path "$ROOT/Cargo.toml" -p loom-tui -p loom-gui
+"${CARGO[@]}" build --release --manifest-path "$ROOT/Cargo.toml" -p loom-tui -p loom-gui --features loom-tui/libre
 
 say "Installation des apps dans $BIN"
 mkdir -p "$BIN" "$EXAMPLES" "$SAMPLES" "$APPS" "$(dirname "$ICON")" "$(dirname "$MIME")" "$HOME/Music/loom"

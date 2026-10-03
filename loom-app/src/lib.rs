@@ -14,6 +14,7 @@ pub mod record;
 pub mod samples;
 pub mod score;
 pub mod library;
+pub mod licence;
 pub mod lint;
 pub mod share;
 pub mod studio;

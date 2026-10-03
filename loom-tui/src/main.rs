@@ -43,6 +43,7 @@ usage :
   loom contrepoint morceau.loom                 quintes/octaves parallèles, croisements, sauts
   loom reharm morceau.loom [jazz|tritone|iiv]  réharmonise prog: (ii-V, substitution de
                                                triton) et écrit le résultat sur la sortie
+  loom licence [CLÉ | --retirer]               voir l'essai, activer une clé, la libérer
   loom plugins                                 les Audio Units installés (macOS)
   loom au \"Nom\" morceau.loom sortie.wav [voix] [N]
                                                jouer les notes des voix mélodiques (ou d'une
@@ -85,6 +86,8 @@ enum Command {
     Scala { file: String, tonic: String },
     /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
     Bake { file: String, out: String, bars: Option<u32> },
+    /// Activer une clé (`Some`), la retirer (`retirer`), ou voir le statut.
+    Licence { cle: Option<String>, retirer: bool },
     /// Les Audio Units installés.
     Plugins,
     /// Les notes de `voice` (ou des voix mélodiques) jouées dans l'instrument AU `plugin`.
@@ -151,6 +154,9 @@ fn parse(args: &[&str]) -> Result<Command, String> {
         ["contrepoint" | "counterpoint", file] => Command::Counterpoint { file: file.to_string() },
         ["reharm", file] => Command::Reharm { file: file.to_string(), how: "jazz".into() },
         ["reharm", file, how] => Command::Reharm { file: file.to_string(), how: how.to_string() },
+        ["licence" | "license"] => Command::Licence { cle: None, retirer: false },
+        ["licence" | "license", "--retirer" | "--remove"] => Command::Licence { cle: None, retirer: true },
+        ["licence" | "license", cle] => Command::Licence { cle: Some(cle.to_string()), retirer: false },
         ["plugins"] => Command::Plugins,
         ["au", plugin, file, out, rest @ ..] if rest.len() <= 2 => {
             let (mut voice, mut bars) = (None, None);
@@ -173,7 +179,13 @@ fn parse(args: &[&str]) -> Result<Command, String> {
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let result = parse(&args).and_then(|command| match command {
+    let result = parse(&args).and_then(|command| {
+        // l'aide, la version et la licence marchent toujours ; le reste demande l'essai ou une clé
+        if !matches!(command, Command::Help | Command::RenderHelp | Command::Version | Command::Licence { .. }) {
+            licence_ok()?;
+        }
+        Ok(command)
+    }).and_then(|command| match command {
         Command::Help => { print!("{USAGE}"); Ok(()) }
         Command::RenderHelp => { print!("{RENDER_USAGE}"); Ok(()) }
         Command::Version => { println!("loom {}", env!("CARGO_PKG_VERSION")); Ok(()) }
@@ -197,6 +209,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         Command::Bake { file, out, bars } => bake(&file, &out, bars),
+        Command::Licence { cle, retirer } => licence(cle.as_deref(), retirer),
         Command::Plugins => plugins(),
         Command::Au { plugin, file, out, voice, bars } => au(&plugin, &file, &out, voice.as_deref(), bars),
         Command::Tui(path) => tui(path),
@@ -205,6 +218,28 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => { eprintln!("loom : {e}"); ExitCode::FAILURE }
     }
+}
+
+/// L'essai ou une clé (rien à contrôler pour la version de Munay ni en développement).
+fn licence_ok() -> Result<(), String> {
+    if cfg!(feature = "libre") || cfg!(debug_assertions) { return Ok(()); }
+    loom_app::licence::controler().map(|_| ())
+}
+
+fn licence(cle: Option<&str>, retirer: bool) -> Result<(), String> {
+    use loom_app::licence::{activer, retirer as retirer_cle, statut, Statut, ACHAT_URL};
+    let msg = match (cle, retirer) {
+        (Some(c), _) => activer(c)?,
+        (None, true) => retirer_cle()?,
+        (None, false) if cfg!(feature = "libre") => "LOOM, version libre : aucune licence à activer.".to_string(),
+        (None, false) => match statut() {
+            Statut::Licence(f) => format!("LOOM est activé (clé …{f})."),
+            Statut::Essai(j) => format!("Essai : {j} jour(s) restant(s). Une clé : {ACHAT_URL}, puis loom licence VOTRE-CLÉ"),
+            Statut::Fini => loom_app::licence::message_fini(),
+        },
+    };
+    println!("{msg}");
+    Ok(())
 }
 
 fn read(file: &str) -> Result<String, String> {
@@ -431,6 +466,8 @@ mod tests {
         assert_eq!(parse(&["loudness", "a.wav", "club"]), Ok(Command::Loudness { file: "a.wav".into(), target: Some("club".into()) }));
         assert!(render_args(&["a.loom", "a.wav", "--sr", "12"]).is_err());
         assert_eq!(parse(&["plugins"]), Ok(Command::Plugins));
+        assert_eq!(parse(&["licence", "ABCD-1234"]), Ok(Command::Licence { cle: Some("ABCD-1234".into()), retirer: false }));
+        assert_eq!(parse(&["licence", "--retirer"]), Ok(Command::Licence { cle: None, retirer: true }));
         assert_eq!(parse(&["au", "DLS", "a.loom", "a.wav", "lead", "8"]), Ok(Command::Au { plugin: "DLS".into(), file: "a.loom".into(), out: "a.wav".into(), voice: Some("lead".into()), bars: Some(8) }));
         assert_eq!(parse(&["au", "DLS", "a.loom", "a.wav"]), Ok(Command::Au { plugin: "DLS".into(), file: "a.loom".into(), out: "a.wav".into(), voice: None, bars: None }));
         assert_eq!(parse(&["bake", "a.loom", "a.json"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: None }));

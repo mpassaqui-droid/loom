@@ -12,6 +12,10 @@ depends = "libasound2"
 extended-description = "LOOM : un langage de live-coding musical, dans le terminal, avec son moteur audio natif."
 assets = [["target/release/loom", "usr/bin/", "755"]]
 
+[features]
+# sans contrôle de licence : la version de Munay (cargo install --path loom-tui --features libre)
+libre = []
+
 [[bin]]
 name = "loom"
 path = "src/main.rs"

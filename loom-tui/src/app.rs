@@ -136,8 +136,14 @@ impl App {
             // un casque Bluetooth en mode micro (16 kHz) sonne mal : le dire tout de suite
             Ok(e) if e.sample_rate() < 44_100 => app.error(format!("son dégradé : {} à {} Hz (Bluetooth en mode micro). Change de sortie ou coupe le micro du casque.",
                 e.device_name(), e.sample_rate())),
-            Ok(e) => app.info(format!("son : {} · {} Hz · {} samples · {} — Ctrl+R pour jouer, F1 pour l'aide",
-                e.device_name(), e.sample_rate(), e.sample_count(), e.midi_description())),
+            Ok(e) => {
+                let essai = match (cfg!(feature = "libre") || cfg!(debug_assertions), loom_app::licence::controler()) {
+                    (false, Ok(Some(j))) => format!(" · essai : {j} j (loom licence CLÉ)"),
+                    _ => String::new(),
+                };
+                app.info(format!("son : {} · {} Hz · {} samples · {} — Ctrl+R pour jouer, F1 pour l'aide{essai}",
+                    e.device_name(), e.sample_rate(), e.sample_count(), e.midi_description()))
+            }
             Err(err) => app.error(format!("pas de son : {err}")),
         }
         if let Some(p) = path.or_else(Library::last_file) { app.open(p); }
