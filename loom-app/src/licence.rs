@@ -107,7 +107,13 @@ fn enregistrer(e: &Etat) -> std::io::Result<()> {
     let (principal, double) = fichiers();
     if let Some(p) = principal {
         if let Some(d) = p.parent() { std::fs::create_dir_all(d)?; }
-        std::fs::write(p, e.ecrire())?;
+        std::fs::write(&p, e.ecrire())?;
+        // la clé : lisible par son propriétaire seulement
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
+        }
     }
     if let (Some(p), Some(t)) = (double, e.essai) {
         if let Some(d) = p.parent() { std::fs::create_dir_all(d)?; }
