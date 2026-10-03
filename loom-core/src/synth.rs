@@ -206,6 +206,8 @@ pub struct Synth {
     pub reverse: bool,
     /// `| warp` — time-stretch the sample to the step.
     pub warp: bool,
+    /// `| loopAt N` (Tidal): warp the sample over N bars instead of one step.
+    pub loop_at: Option<f32>,
     /// `| freeze` — hold a granular smear of the sample.
     pub freeze: bool,
     /// `| begin N` / `| end N` — playback window 0..1.
@@ -338,6 +340,10 @@ impl Synth {
             "dim" | "decresc" => self.dynamics = Some(-1),
             "reverse" | "rev?" => self.reverse = true,
             "warp" | "stretch" => self.warp = true,
+            "loopAt" | "loopat" => {
+                self.warp = true;
+                self.loop_at = Some(num(&p, 1).filter(|n| n.is_finite() && *n > 0.0).unwrap_or(1.0).clamp(0.25, 16.0));
+            }
             "freeze" => self.freeze = true,
             "begin" => self.begin = Some(num(&p, 1).unwrap_or(0.0).clamp(0.0, 1.0)),
             "end" => self.end = Some(num(&p, 1).unwrap_or(1.0).clamp(0.0, 1.0)),
@@ -675,6 +681,14 @@ mod tests {
         assert_eq!(s.fm, Some(Fm { ratio: 3.5, index: 4.0, fb: 0.0 }));
         let mut w = Wave::Square;
         assert!(!Synth::default().apply_segment("every 4 rev", &mut w), "pattern verbs are not sound verbs");
+        for v in ["ply 2", "linger 0.5", "segment 8", "range 1 5"] {
+            assert!(!Synth::default().apply_segment(v, &mut w), "{v} is a pattern verb");
+        }
+        let (s, _) = synth(&["sample amen", "loopAt 2"]);
+        assert!(s.warp);
+        assert_eq!(s.loop_at, Some(2.0));
+        assert_eq!(synth(&["loopat 99"]).0.loop_at, Some(16.0));
+        assert_eq!(synth(&["loopAt"]).0.loop_at, Some(1.0));
     }
 
     #[test]

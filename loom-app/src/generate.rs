@@ -151,10 +151,10 @@ pub fn compose(seed: u64) -> Generated {
 /// Pattern verbs `loom-core` understands (what is left in `Voice::verbs` after
 /// the sound verbs are taken out). Used by tests here and in `develop`.
 #[cfg(test)]
-pub(crate) const KNOWN_VERBS: [&str; 30] = [
+pub(crate) const KNOWN_VERBS: [&str; 34] = [
     "rev", "fast", "slow", "every", "sometimes", "often", "rarely", "someby", "palindrome", "rot", "iter", "chunk", "add",
     "trans", "mirror", "thin", "accent", "mutate", "mut", "stutter", "stut", "shuffle", "shuf", "markov", "invert", "inv",
-    "sequence", "seq", "develop", "dev",
+    "sequence", "seq", "develop", "dev", "ply", "linger", "segment", "range",
 ];
 
 /// Every voice line became a voice, and no `| segment` was left unrecognised.

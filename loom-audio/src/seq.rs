@@ -562,7 +562,9 @@ impl Sequencer {
                     continue;
                 }
                 self.seed = self.seed.wrapping_mul(1664525).wrapping_add(1013904223);
-                let spec = self.spec(ev, 0.0, step_sec, vm, bar_sec);
+                // `| loopAt N`: the warped sample spans N bars instead of the step
+                let ddur = s.loop_at.map_or(step_sec, |n| n * bar_sec);
+                let spec = self.spec(ev, 0.0, ddur, vm, bar_sec);
                 if s.sample.is_some() {
                     let gain = (ev.gain * 4.0 * vm).min(1.0);
                     let chop = self.next_chop(&ev.voice);
@@ -608,8 +610,9 @@ impl Sequencer {
             }
             if s.sample.is_some() && (s.warp || s.freeze) {
                 // JS `playSampleWarp`: one stretched hit per step at gain × velocity,
-                // whatever the chord or pitch
-                let spec = self.spec(ev, freqs[0], dur, ev.gain * vm, bar_sec);
+                // whatever the chord or pitch. `| loopAt N` stretches it over N bars.
+                let wdur = s.loop_at.map_or(dur, |n| n * bar_sec);
+                let spec = self.spec(ev, freqs[0], wdur, ev.gain * vm, bar_sec);
                 if let Some(v) = SampleVoice::new(&self.bank, &spec, ev.gain * vm, 1.0, 0) {
                     let start = at(self, dt);
                     self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
@@ -898,6 +901,25 @@ mod tests {
         };
         assert!(loud(0.0, 0.1) > 0.2, "kick at beat 1");
         assert!(loud(0.8, 1.9) < 0.01, "silence on beats 2-4");
+    }
+
+    #[test]
+    fn loop_at_stretches_the_sample_over_bars() {
+        let mut bank = SampleBank::empty();
+        bank.insert("loop", crate::sample::SampleData { sample_rate: SR, channels: vec![vec![0.5; SR as usize]] });
+        let bank = Arc::new(bank);
+        let tail = |verb: &str| {
+            let mut s = Sequencer::new(SR, bank.clone());
+            s.set_space(0.0);
+            s.set_echo(0.0);
+            s.set_program(Program::parse(&format!("bpm: 120\nkick: x . . . | sample loop | {verb}")));
+            s.play();
+            let buf = bars(&mut s, 1.0); // one 2 s bar
+            let (a, b) = ((1.2 * SR) as usize * 2, (1.9 * SR) as usize * 2);
+            buf[a..b].iter().fold(0.0f32, |m, x| m.max(x.abs()))
+        };
+        assert!(tail("warp") < 1e-3, "warp fits one step (0.5 s)");
+        assert!(tail("loopAt 1") > 0.05, "loopAt 1 fills the whole bar");
     }
 
     #[test]
