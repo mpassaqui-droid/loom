@@ -13,7 +13,8 @@ une scène par section. Lance les scènes de haut en bas. Pour le modifier, glis
 
 ## Installer
 
-1. Glisse `Loom.amxd` dans ta User Library (ou directement sur une piste).
+1. Copie `Loom.amxd` dans `User Library/Presets/MIDI Effects/Max MIDI Effect/`
+   (c'est là que le set de démo le cherche).
 2. Il faut Live 12 Suite (ou Standard avec Max for Live), Live 12.2 ou plus récent.
 
 ## Jouer
