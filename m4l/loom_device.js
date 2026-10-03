@@ -53,7 +53,10 @@ function fichier() {
     // pattr rend 0 et live.drop « none » tant que rien n'a été choisi
     if (!p || p === 'none' || p === '0' || p === etat.fichier) return;
     // live.drop rend un chemin Max « Macintosh HD:/Users/... »
-    etat.fichier = p.replace(/^[^:\/]+:\//, '/');
+    p = p.replace(/^[^:\/]+:\//, '/');
+    // le chemin peut venir d'un set partagé (pattr) : seul un fichier .loom est lu ou écrit
+    if (!/\.loom$/i.test(p)) { dire('pas un fichier .loom : ' + p); return; }
+    etat.fichier = p;
     etat.lu = null;
     etat.tempoFait = false;
     outlet(2, etat.fichier);
@@ -99,6 +102,7 @@ function restaurecode() {
 }
 
 function ecritFichier(t) {
+    if (!/\.loom$/i.test(etat.fichier)) return;
     var f = new File(etat.fichier, 'write', 'TEXT');
     if (!f.isopen) { dire('écriture impossible : ' + etat.fichier); return; }
     f.eof = 0;

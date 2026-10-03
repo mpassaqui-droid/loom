@@ -122,5 +122,25 @@ for (const k in dicts) delete dicts[k];
   ok(appels.some(a => a.endsWith("create_scene")) && appels.some(a => a.includes('clip_slots 3 create_clip')) && notes.length === 16,
     `piste pleine : une scène ajoutée, clip écrit dans le nouvel emplacement (${notes.length} notes)`);
 }
+// un set partagé ne peut pas faire écrire le device ailleurs que dans un .loom
+{
+  const s3 = [], ecrits = [];
+  new Function('s3', 'ecrits', `
+    var outlet = function () { s3.push(Array.prototype.slice.call(arguments)); };
+    var arrayfromargs = function (a) { return Array.prototype.slice.call(a); };
+    function Task() { this.repeat = function () {}; }
+    function LiveAPI(p) { this.p = p; this.unquotedpath = p; this.id = 0; }
+    LiveAPI.prototype.get = function () { return 'Loom kick'; };
+    LiveAPI.prototype.getcount = function () { return 0; };
+    LiveAPI.prototype.set = function () {}; LiveAPI.prototype.call = function () {};
+    function File(p, mode) { this.isopen = true; this.position = 0; this.eof = 0; if (mode === 'write') ecrits.push(p); }
+    File.prototype.writestring = function () {}; File.prototype.close = function () {};
+    File.prototype.readstring = function () { return ''; };
+    ${fs.readFileSync(tmp, 'utf8')}
+    bang(); restaure('Macintosh HD:/Users/x/.zshrc'); editeur('text', 'kick: x . x .');
+    fichier('/Users/x/morceau.loom'); editeur('text', 'kick: x x x x');
+  `)(s3, ecrits);
+  ok(ecrits.length === 1 && ecrits[0] === '/Users/x/morceau.loom', `chemin hors .loom refusé, seul le .loom est écrit (${JSON.stringify(ecrits)})`);
+}
 console.log(echecs ? `${echecs} échec(s)` : 'device : tout passe');
 process.exit(echecs ? 1 : 0);
