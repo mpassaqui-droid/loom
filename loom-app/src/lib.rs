@@ -2,6 +2,7 @@
 //! (`loom-gui`) front-ends both build on this, so they look and behave alike.
 
 pub mod develop;
+pub mod dictee;
 pub mod ear;
 pub mod generate;
 pub mod grid;

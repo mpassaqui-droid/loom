@@ -19,6 +19,11 @@ pub use studio_app::{MixRow, Studio};
 mod teacher_app;
 pub use teacher_app::Teacher;
 
+/// La dictée de VIBE (Ctrl+D dans VIBE, Alt+V), par whisper en local.
+#[path = "app_dictee.rs"]
+mod dictee_app;
+pub use dictee_app::Dictee;
+
 /// « Mes sons » (Alt+U) : importer, insérer, jeter ses propres samples.
 #[path = "app_sounds.rs"]
 mod sounds_app;
@@ -84,6 +89,8 @@ pub struct App {
     pub lien: bool,
     /// Les remarques du correcteur au dernier RUN (lignes soulignées dans l'éditeur).
     pub lints: Vec<loom_app::lint::Lint>,
+    /// La dictée de VIBE en cours (micro ouvert, ou whisper qui écrit).
+    pub dictee: Dictee,
     /// The SCÈNE's state (scene choice, sound analysis, sparks).
     pub stage: TermStage,
     /// STUDIO: master knobs, mixer, meters, MIDI LEARN, stems, demo…
@@ -117,6 +124,7 @@ impl App {
             metronome: false,
             lien: false,
             lints: Vec::new(),
+            dictee: Dictee::Off,
             stage: TermStage::default(),
             studio,
             teacher: Teacher::default(),
@@ -154,6 +162,7 @@ impl App {
             self.info(format!("thème Omarchy : {name}"));
         }
         self.poll_vibe();
+        self.dictee_tick();
         self.studio_tick();
         self.teacher_tick();
         // the stage listens while it's shown or the music plays (so old notes don't pile up)
@@ -515,9 +524,10 @@ impl App {
                         self.mode = Mode::Edit;
                         self.send_vibe(&words);
                     }
-                    KeyCode::Esc | KeyCode::F(2) => self.mode = Mode::Edit,
+                    KeyCode::Esc | KeyCode::F(2) => { self.mode = Mode::Edit; self.dictee = Dictee::Off; }
                     KeyCode::Backspace => { input.pop(); }
                     KeyCode::Char('u') if ctrl => input.clear(),
+                    KeyCode::Char('d') if ctrl => self.toggle_dictee(),
                     // invite vide : un chiffre = une puce (comme les boutons du web)
                     KeyCode::Char(c) if !ctrl && !alt && input.is_empty() && loom_app::vibe::chip_for_key(c).is_some() => {
                         let ask = loom_app::vibe::chip_for_key(c).unwrap_or_default();

@@ -266,9 +266,11 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
     // the VIBE prompt takes over the status line while typing…
     if let Mode::Vibe { input } = &app.mode {
         let label = " VIBE › ";
-        let help = "   Entrée envoie · ?question = le prof · Échap ferme";
+        let help = "   Entrée envoie · Ctrl+D dicte · ?question = le prof · Échap ferme";
         let mut spans = vec![Span::styled(label, accent), Span::raw(input.clone())];
-        if input.is_empty() {
+        if let Some(d) = app.dictee_label() {
+            spans.push(Span::styled(format!("  {d}"), Style::new().fg(c(t.error)).add_modifier(Modifier::BOLD)));
+        } else if input.is_empty() {
             // les puces du web, une touche chacune
             for (i, (label, _)) in loom_app::vibe::CHIPS.iter().enumerate() {
                 spans.push(Span::styled(format!("{}", (i + 1) % 10), accent));
@@ -367,6 +369,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         key("Alt+N / Alt+Z", "morceau suivant / au hasard (comme les presets du web)"),
         key("Ctrl+O puis Suppr", "mettre un de tes morceaux à la corbeille"),
         key("RUN", "le correcteur souligne en rouge les lignes fautives (n° suivi de !) et explique en bas"),
+        key("Alt+V", "dicte à VIBE : parle, whisper écrit en local (Ctrl+D dans VIBE pour arrêter ou reprendre)"),
         key("Alt+U", "mes sons : importe tes fichiers audio (glisser-déposer), | sample <nom>, Suppr, Ctrl+X vide"),
         key("Alt+F", "partition : la mesure en cours sur une grande portée (clé de sol et de fa)"),
         key("Alt+C", "thème suivant : les 62 thèmes du web, gardé au prochain lancement"),

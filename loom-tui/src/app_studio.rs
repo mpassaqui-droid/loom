@@ -10,6 +10,7 @@
 //! | Alt+P    | share: `LOOM1:` code in the status line and `<song>.share.txt`|
 //! | Alt+I    | import a code, a link or LOOM code                            |
 //! | Alt+U    | MES SONS: import your own audio files, insert, trash, empty  |
+//! | Alt+V    | DICTÉE: speak to VIBE, local whisper writes the request      |
 //! | Alt+D    | DÉMO: tour of the example songs (any key stops it)           |
 //!
 //! This file is a child module of `app.rs`, so it can use the app's state directly.
@@ -188,6 +189,7 @@ impl App {
             KeyCode::Char('k' | 'K') => self.toggle_lien(),
             KeyCode::Char('c' | 'C') => self.next_theme(),
             KeyCode::Char('u' | 'U') => self.open_sounds(),
+            KeyCode::Char('v' | 'V') => self.dictate(),
             KeyCode::Char('f' | 'F') => {
                 self.studio.show_notation = !self.studio.show_notation;
                 self.info(if self.studio.show_notation { "partition (Alt+F pour revenir)" } else { "grille" });

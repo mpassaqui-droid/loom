@@ -816,4 +816,4 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] 7. Scènes : le terminal dessine les 24 scènes natives de la fenêtre (avant 5, les autres étaient remplacées), test qui vérifie que chacune dessine
 - [x] 8. Partition à l'écran : Alt+F, grande portée (sol et fa), lignes supplémentaires, ♯/♭, tête de lecture ; vérifiée dans tmux sur ballade.loom
 - [x] 9. Thèmes intégrés hors Omarchy : Alt+C fait défiler les 62 thèmes du web (copiés par tools/gen_themes.py, une seule source), choix gardé dans ~/.local/state/loom/theme
-- [ ] 10. Dictée vocale dans VIBE (whisper local)
+- [x] 10. Dictée VIBE : Alt+V (ou Ctrl+D dans VIBE), micro puis whisper-cli en local (large-v3-turbo, français), le texte arrive dans VIBE ; test bout en bout avec say : « basse » relu en 4,5 s. Micro réel à essayer par Munay
