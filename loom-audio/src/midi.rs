@@ -65,7 +65,7 @@ impl ClockFollower {
 }
 
 /// How long before a message is due the MIDI thread stops sleeping and spins.
-const SPIN: Duration = Duration::from_millis(3);
+const SPIN: Duration = Duration::from_millis(5);
 
 /// Where the audio thread hands timed MIDI events to the MIDI thread.
 pub type MidiSender = Sender<(Instant, MidiEvent)>;
@@ -93,7 +93,9 @@ impl MidiIo {
             parts.push("port virtuel « LOOM »".into());
         }
         let hw = MidiOutput::new("LOOM").map_err(|e| e.to_string())?;
-        let hw_port = hw.ports().into_iter().find(|p| {
+        // LOOM_MIDI_HW=0 : port virtuel seul (tests avec Live ouvert, rien sur le bus IAC)
+        let hw_off = std::env::var("LOOM_MIDI_HW").is_ok_and(|v| v == "0");
+        let hw_port = hw.ports().into_iter().filter(|_| !hw_off).find(|p| {
             hw.port_name(p).map(|n| !n.contains("Through") && !n.contains("LOOM")).unwrap_or(false)
         });
         // the port we write to must never be read back: a bus (IAC) would loop our own notes in
@@ -130,6 +132,7 @@ impl MidiIo {
 
         let (tx, rx) = channel::<(Instant, MidiEvent)>();
         std::thread::Builder::new().name("loom-midi".into()).spawn(move || {
+            raise_priority();
             let mut pending: Vec<Timed> = Vec::new();
             loop {
                 // wait for new events, or until the next message is due
@@ -175,6 +178,17 @@ impl MidiIo {
     /// A handle the audio thread can use to queue events.
     pub fn sender(&self) -> MidiSender { self.tx.clone() }
 }
+
+/// Le fil MIDI passe en priorité « interactive » (macOS) : sous charge, l'OS
+/// le réveille à l'heure au lieu de le laisser dormir quelques ms de trop.
+#[cfg(target_os = "macos")]
+fn raise_priority() {
+    // SAFETY : appel sans pointeur, qui ne touche que le fil courant
+    unsafe { libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_USER_INTERACTIVE, 0); }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn raise_priority() {}
 
 fn schedule(pending: &mut Vec<Timed>, at: Instant, ev: MidiEvent) {
     match ev {

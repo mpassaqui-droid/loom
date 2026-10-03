@@ -12,6 +12,10 @@ cpal = { version = "0.18", optional = true }
 # MIDI in/out (ALSA sequencer) for `| midi N` voices, clock sync and live keyboards.
 midir = { version = "0.11", optional = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# priorité du fil MIDI (QoS « user interactive »)
+libc = "0.2"
+
 [features]
 default = ["device"]
 device = ["dep:cpal", "dep:midir"]

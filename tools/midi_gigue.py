@@ -1,6 +1,9 @@
 # Mesure la gigue du port MIDI virtuel « LOOM » (horodatage CoreMIDI, rtmidi).
 # Usage : LOOM_AUDIO_DEVICE=BlackHole ./target/release/loom play tools/gigue.loom &  python3 tools/midi_gigue.py 12
 # Affiche les trous (intervalle != 125 ms) et le nombre de notes.
+# Attention : rtmidi horodate à la réception. Sous charge (load > 5), ce récepteur Python
+# voit des « trous » qui n'existent pas à l'envoi (vérifié le 03/10 : 123 trous mesurés,
+# 0 à l'envoi). Pour juger LOOM, mesurer côté émetteur (retard du fil MIDI).
 import rtmidi, time, sys
 m=rtmidi.MidiIn()
 while 'LOOM' not in m.get_ports(): time.sleep(0.05)
