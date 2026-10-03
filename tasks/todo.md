@@ -854,7 +854,7 @@ C. Paquets
 - [x] C3 macOS : DMG signé et notarisé (profil Keychain `loom`), agrafé, Gatekeeper « Notarized Developer ID » sur le DMG et sur LOOM.app (3 octobre)
 - [x] C4 Homebrew : tap `loom` (formule qui télécharge le binaire)
 - [ ] C5 Téléchargements sur munaypassaqui.com/loom/dl (décidé) : à publier quand Munay dit go
-- [~] B3 Lemon Squeezy : compte et boutique `responia.lemonsqueezy.com` créés (RESPONIA, France, 3 octobre ; refusé Stripe Managed Payments, pas de clés de licence). Reste : prix (reco 29 € une fois), produit avec clés de licence, puis STORE_ID et PRODUCT_ID dans loom-app/src/licence.rs. À Munay : vérif identité, 2FA, compte bancaire.
+- [-] B3 annulé le 03/10 : LOOM est libre (MIT, a50a97c), plus de vente.
 - [ ] E Plus tard : app iPhone (idée de Munay, 03/10)
 D. Polir pour Munay
 - [ ] D1 Tour complet de l'app (son, latence, choix de la carte son, édition, touches, premier lancement) et liste des défauts
