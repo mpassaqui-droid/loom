@@ -20,6 +20,7 @@ pub mod live;
 pub mod harmony;
 pub mod zones;
 pub mod stretch;
+pub mod capture;
 pub use expr::Expr;
 
 use std::sync::Arc;
@@ -1480,7 +1481,14 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                     let off = step_offset(i, n, lv, groove) + shift / n as f32;
                     let p0 = i as f32 / n as f32 + off;
                     let p1 = (i + 1) as f32 / n as f32 + off;
+                    let before = events.len();
                     emit_token(&mut events, raw, p0, p1, lv, voice_key.as_ref(), base_oct, bar, seed, i, prog, (i as i64, n as i64));
+                    // `_` qui suivent : la note (ou l'accord) tient sur ces pas (comme le web)
+                    let tie = toks[i + 1..].iter().take_while(|t| pick_alt(t, bar) == "_").count();
+                    let new = &mut events[before..];
+                    if tie > 0 && !new.is_empty() && new.iter().all(|e| e.phase == new[0].phase) {
+                        for e in new { e.dur = (p1 - p0) * (1 + tie) as f32; }
+                    }
                 }
             }
         }
@@ -1591,7 +1599,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
     if !prog.is_empty() && t.starts_with('^') { t = resolve_prog(&t, prog, bar, key, base_oct); }
     // =(EXPR) : pas-programme, calculé maintenant (voir `step_program`)
     if let Some(c) = step_program(&t, v.is_drum, key.is_some(), pos.0, pos.1, bar) { t = c; }
-    if t == "." || t == "~" { return; }
+    if t == "." || t == "~" || t == "_" { return; }
     // [a b ...]: subdivide this range among the children (recursive)
     if t.len() >= 2 && t.starts_with('[') && t.ends_with(']') {
         let inner = tokenize_pat(&t[1..t.len() - 1]);
@@ -2700,6 +2708,17 @@ mod tests {
     /// A named scale as f64 (Key.scale is now f64 to allow microtonal scales).
     fn fscale(name: &str) -> Vec<f64> {
         scale_intervals(name).unwrap().into_iter().map(|x| x as f64).collect()
+    }
+
+    #[test]
+    fn la_tenue_allonge_la_note() {
+        // `_` tient la note d'avant : c4 dure trois pas sur quatre, e4 un seul
+        let ev = schedule_bar(&parse("l: c4 _ _ e4"), 0);
+        let d: Vec<(String, f32)> = ev.iter().map(|e| (e.token.clone(), e.dur)).collect();
+        assert_eq!(d.len(), 2);
+        assert!((d[0].1 - 0.75).abs() < 1e-6 && (d[1].1 - 0.25).abs() < 1e-6, "{d:?}");
+        // `_` seul ne joue rien
+        assert!(schedule_bar(&parse("l: _ _ _ _"), 0).is_empty());
     }
 
     #[test]

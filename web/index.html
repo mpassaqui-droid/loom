@@ -314,6 +314,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <span id="studioTools" style="display:none">
     <button id="metroBtn" class="go" title="métronome (clic à chaque temps)">&#9201; CLICK</button>
     <button id="humBtn" class="go" title="chante/siffle → LOOM écrit la mélodie">&#127908; HUM</button>
+    <button id="capBtn" class="go" title="prise au clavier MIDI : joue, reclique, ta prise devient une ligne rec: calée sur la grille">&#9210; CLAVIER</button>
+    <button id="takeBtn" class="go" title="prise au micro calée sur les barres, jouée en boucle au tempo ; clic droit : superposer à la dernière prise">&#127897; PRISE</button>
     <button id="filmBtn" class="go" title="filmer la SCÈNE (vidéo + son) en .webm">&#127909; FILM</button>
     <button id="renderBtn" class="go" title="exporter tout le morceau en WAV">&#11015; RENDER</button>
     <button id="stemsBtn" class="go" title="exporter chaque voix en WAV séparé (stems)">&#11015; STEMS</button>
@@ -1009,7 +1011,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     if(cmd===0xB0){const cc=d[1],val=d[2];  // control change
       if(midiLearn&&learnTarget){ccMap[cc]=learnTarget;log("[ learn ] CC"+cc+" → "+learnTarget,"ai");learnTarget=null;return;}
       const id=ccMap[cc];if(id){const el=$(id);if(el){const mn=+el.min||0,mx=(el.max!==undefined&&el.max!=="")?+el.max:127;el.value=mn+(val/127)*(mx-mn);try{el.dispatchEvent(new Event("input"));}catch(_){}}}return;}
-    if(cmd===0x90&&d[2]>0)liveNoteOn(d[1],d[2]);else if(cmd===0x80||(cmd===0x90&&d[2]===0))liveNoteOff(d[1]);}
+    if(cmd===0x90&&d[2]>0){capOn(d[1]);liveNoteOn(d[1],d[2]);}else if(cmd===0x80||(cmd===0x90&&d[2]===0)){capOff(d[1]);liveNoteOff(d[1]);}}
   function liveNoteOn(note,vel){if(!ctx)return;if(ctx.state==="suspended")ctx.resume();liveNoteOff(note);
     const v=voices.find(x=>x.name==="lead"&&x.type!=="drum")||voices.find(x=>x.type!=="drum")||{wave:"sawtooth",gain:0.22};
     const now=ctx.currentTime,freq=440*Math.pow(2,(note-69)/12),g=ctx.createGain();
@@ -1362,6 +1364,97 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const sc=key.scale,tonic=key.tonic;let best=null,bestd=99,bestOct=0;
     for(let oc=-2;oc<=3;oc++)for(let d=0;d<sc.length;d++){const m=12*(key.octave+oc+1)+tonic+sc[d];const dd=Math.abs(m-midi);if(dd<bestd){bestd=dd;best=d+1;bestOct=oc;}}
     let tok=String(best);for(let i=0;i<Math.abs(bestOct);i++)tok+=bestOct>0?"'":",";return tok;}
+  // --- ENREGISTRER : prise au clavier (miroir de loom-core capture.rs) et prise au micro ---
+  let barMarks=[];  // [début de mesure (temps audio), numéro de mesure, durée]
+  function songPos(t){for(let i=barMarks.length-1;i>=0;i--){const m=barMarks[i];if(m[0]<=t)return m[1]+(t-m[0])/m[2];}
+    return barMarks.length?barMarks[0][1]:0;}
+  const CAP_NAMES=["c","db","d","eb","e","f","gb","g","ab","a","bb","b"];
+  function capName(m){return CAP_NAMES[((m%12)+12)%12]+(Math.floor(m/12)-1);}
+  function captureBars(notes,spb){let end=0;for(const n of notes)end=Math.max(end,pvRound(n.on*spb)/spb);const need=Math.floor(end+1e-9)+1;
+    return [1,2,4,8,16,32,64].find(b=>b>=need)||64;}
+  function captureLine(name,notes,spb){spb=Math.max(1,Math.min(32,spb));const early=0.5/spb;
+    notes=notes.filter(n=>n.on>-early&&n.midi>0&&n.midi<128&&isFinite(n.on))
+      .map(n=>({on:Math.max(n.on,0),off:isFinite(n.off)?Math.max(n.off,n.on):n.on,midi:n.midi}));
+    if(!notes.length)return null;
+    const skip=Math.max(0,Math.floor(Math.min(...notes.map(n=>n.on))+early));  // mesures vides du début
+    notes=notes.map(n=>({on:Math.max(n.on-skip,0),off:Math.max(n.off-skip,0),midi:n.midi}));
+    const bars=captureBars(notes,spb),total=bars*spb;
+    let placed=[];for(const n of notes){const a=pvRound(n.on*spb);if(a>=total)continue;
+      const b=Math.min(Math.max(pvRound(n.off*spb),a+1),total);placed.push([a,b,n.midi]);}
+    placed.sort((x,y)=>x[0]-y[0]||x[2]-y[2]);placed=placed.filter((p,i)=>i===0||p[0]!==placed[i-1][0]||p[2]!==placed[i-1][2]);
+    const lanes=[];
+    for(const[a,b,m]of placed){let lane=lanes.findIndex(l=>l[a]===null);if(lane<0){lanes.push(new Array(total).fill(null));lane=lanes.length-1;}
+      for(let s=a;s<b;s++){if(s>a&&lanes[lane][s]!==null)break;lanes[lane][s]=[s===a,m];}}
+    const starts=placed.map(p=>p[0]);let div=1;
+    for(const d of[8,4,2])if(spb%d===0&&spb/d>=4&&starts.every(s=>s%d===0)){div=d;break;}
+    const lines=lanes.map(l=>{const tok=s=>l[s]===null?".":(l[s][0]||s%spb===0)?capName(l[s][1]):"_",out=[];  // une tenue qui passe la barre se rejoue
+      for(let s=0;s<spb;s+=div){const alts=[];for(let b=0;b<bars;b++)alts.push(tok(b*spb+s));
+        out.push(alts.every(t=>t===alts[0])?alts[0]:"<"+alts.join("/")+">");}return out.join(" ");});
+    return name+": "+lines.join(" ; ");}
+  let capture=null;  // {start, held:[[midi,on]], notes:[]}
+  function capOn(midi){if(!capture||!ctx)return;const p=songPos(ctx.currentTime);
+    if(p-capture.start<-0.5){capture.start=Math.floor(p);capture.held=[];capture.notes=[];}  // le morceau est reparti du début
+    capOff(midi,p);capture.held.push([midi,p-capture.start]);}
+  function capOff(midi,p){if(!capture||!ctx)return;if(p==null)p=songPos(ctx.currentTime);
+    const i=capture.held.findIndex(h=>h[0]===midi);if(i<0)return;const[m,on]=capture.held.splice(i,1)[0];capture.notes.push({on,off:p-capture.start,midi:m});}
+  function addLine(line){editor.value=editor.value.replace(/\s*$/,"")+"\n"+line+"\n";if(playing)run();}
+  function toggleCapture(){const btn=$("capBtn");
+    if(!capture){initAudio();if(!playing)run();capture={start:Math.floor(songPos(ctx.currentTime)),held:[],notes:[]};
+      if(btn)btn.classList.add("rec");log("[ prise ] joue au clavier MIDI (ou aux touches), puis reclique ⏺ CLAVIER","ai");return;}
+    const p=songPos(ctx.currentTime);for(const[m,on]of capture.held)capture.notes.push({on,off:p-capture.start,midi:m});
+    const names=parse(editor.value).map(v=>v.name);let nm="rec",i=1;while(names.includes(nm))nm="rec"+(++i);
+    const line=captureLine(nm,capture.notes,16);capture=null;if(btn)btn.classList.remove("rec");
+    if(line){addLine(line);log("[ prise ] ajoutée : "+line,"ai");}else log("[ prise ] aucune note jouée","err");}
+  // prise au micro : calée sur la barre qui suit, jouée en boucle au tempo ; clic droit = superposer à la dernière
+  function takeWindow(samples,sr,p0,barSec,latency){if(!(barSec>0)||!sr||!isFinite(p0))return null;
+    const line=(p0-Math.floor(p0))<0.05?Math.floor(p0):Math.ceil(p0),start=Math.max(0,pvRound(((line-p0)*barSec+latency)*sr));
+    const per=pvRound(barSec*sr),bars=Math.floor(Math.max(0,samples.length-start)/Math.max(1,per));if(!bars)return null;
+    const b=[16,8,4,2,1].find(x=>x<=bars)||1;return[samples.slice(start,start+b*per),b,line];}
+  // la boucle mesure par mesure : la mesure k du morceau joue la place k mod L (ligne | slow L) ;
+  // l'ancienne prise reste dessous, répétée si la neuve est plus longue (miroir de loom-core)
+  function layoutTake(nw,nb,first,old){nb=Math.max(1,nb);const per=Math.floor(nw.length/nb);
+    const ob=old?Math.max(1,pvRound(old.length/Math.max(1,per))):0,L=old?Math.max(ob,nb):nb,out=new Float32Array(L*per);
+    for(let q=0;q<L;q++){const nq=(((q-first)%nb)+nb)%nb,oq=old?q%ob:0;
+      for(let i=0;i<per;i++){const v=nw[nq*per+i];out[q*per+i]=old?Math.max(-1,Math.min(1,(old[oq*per+i]||0)+v)):v;}}
+    return[out,L];}
+  function takeLine(n,b){return n+": x | sample "+n+" | stretch | loopAt "+b+(b>1?" | slow "+b:"");}
+  let micTake=null,takeBusy=false;
+  // un seul clic à la fois : l'ouverture du micro et l'écriture de la prise sont asynchrones
+  async function toggleTake(overdub){if(takeBusy)return;takeBusy=true;try{await toggleTake1(overdub);}finally{takeBusy=false;}}
+  async function toggleTake1(overdub){const btn=$("takeBtn");
+    if(micTake){const t=micTake;micTake=null;if(btn)btn.classList.remove("rec");
+      try{t.proc.disconnect();t.src.disconnect();t.stream.getTracks().forEach(x=>x.stop());}catch(_){}
+      const all=new Float32Array(t.chunks.reduce((a,c)=>a+c.length,0));let o=0;for(const c of t.chunks){all.set(c,o);o+=c.length;}
+      if(t.p0===null){log("[ prise ] le micro n'a rien envoyé","err");return;}
+      // la vraie durée d'une mesure, mesurée pendant la prise (tempo changé, TAP, horloge MIDI)
+      const t1=ctx.currentTime,p1=songPos(t1),barSec=p1-t.p0>0.5?(t1-t.t0)/(p1-t.p0):cycleLen;
+      const w=takeWindow(all,ctx.sampleRate,t.p0,barSec,0);if(!w){log("[ prise ] moins d'une mesure entière, rien gardé","err");return;}
+      const[cut,bars,first]=w;let old=null;
+      if(t.over&&customRaw[t.name]){try{const ob=await ctx.decodeAudioData(customRaw[t.name].slice(0));old=new Float32Array(ob.length);
+        for(let c=0;c<ob.numberOfChannels;c++){const d=ob.getChannelData(c);for(let i=0;i<d.length;i++)old[i]+=d[i]/ob.numberOfChannels;}}
+        catch(_){log("[ prise ] "+t.name+" illisible : gardé tel quel, nouvelle couche abandonnée","err");return;}}
+      const[loop,L]=layoutTake(cut,bars,first,old);
+      const ab=await encodeWAV(loop,loop,ctx.sampleRate).arrayBuffer();
+      customRaw[t.name]=ab;idbPut(t.name,ab);delete sbuf[t.name];delete sload[t.name];zoneCache={};clearStretch();refreshCustomList();
+      await loadSample(t.name);const line=takeLine(t.name,L);
+      if(parse(editor.value).some(v=>v.name===t.name)){
+        // la boucle a pu s'allonger : sa ligne suit
+        editor.value=editor.value.split("\n").map(l=>l.trimStart().startsWith(t.name+":")?line:l).join("\n");
+        log("[ prise ] "+t.name+" : nouvelle couche superposée ("+L+" mesures)","ai");if(playing)run();}
+      else{addLine(line);log("[ prise ] ajoutée : "+line,"ai");}
+      return;}
+    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){log("[ prise ] micro non disponible","err");return;}
+    initAudio();if(ctx.state==="suspended")await ctx.resume();
+    const vs=parse(editor.value).map(v=>v.name);let name=null;
+    if(overdub){name=vs.filter(n=>/^take\d+$/.test(n)).pop()||null;if(!name){log("[ prise ] superposer : pas encore de prise takeN","err");return;}}
+    else{let i=1;while(vs.includes("take"+i)||customRaw["take"+i])i++;name="take"+i;}
+    let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});}catch(_){log("[ prise ] micro refusé","err");return;}
+    if(!playing)run();
+    const src=ctx.createMediaStreamSource(stream),proc=ctx.createScriptProcessor(4096,1,1),mute=ctx.createGain();mute.gain.value=0;
+    const t={name,over:overdub,stream,src,proc,chunks:[],p0:null,t0:0};
+    proc.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0);if(t.p0===null){t.t0=ctx.currentTime-d.length/ctx.sampleRate;t.p0=songPos(t.t0);}t.chunks.push(new Float32Array(d));};
+    src.connect(proc);proc.connect(mute);mute.connect(ctx.destination);micTake=t;if(btn)btn.classList.add("rec");
+    log("[ prise ] 🎙 "+(overdub?"superposition sur "+name:name)+"… reclique pour arrêter (calée sur la barre suivante)","ai");}
   async function humToMelody(){if(!(navigator&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){log("[ hum ] micro non disponible","err");return;}
     initAudio();if(ctx.state==="suspended")await ctx.resume();let stream;
     try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(_){log("[ hum ] micro refusé","err");return;}
@@ -2596,7 +2689,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   function clickSound(t,acc){if(!ctx)return;const o=ctx.createOscillator(),g=ctx.createGain();o.type="square";
     o.frequency.value=acc?2000:1250;g.gain.setValueAtTime(acc?0.22:0.12,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.03);
     o.connect(g).connect(master||ctx.destination);o.start(t);o.stop(t+0.04);}
-  function scheduleBar(barT,bar){_barTrig=0;applyAutos(barT);const sw=+$("swing").value/100;
+  function scheduleBar(barT,bar){_barTrig=0;
+    // les repères de mesure ne viennent que du jeu en direct (pas d'un rendu hors ligne)
+    if(!(window.OfflineAudioContext&&ctx instanceof window.OfflineAudioContext)){barMarks.push([barT,bar,cycleLen]);if(barMarks.length>8)barMarks.shift();}applyAutos(barT);const sw=+$("swing").value/100;
     if(loopSec&&song.length){let st=0,L=0,acc=0;for(const s of song){if(s[0]===loopSec){st=acc;L=s[1];break;}acc+=s[1];}if(L>0)bar=st+(((bar-st)%L)+L)%L;}  // loop one section
     if(metroOn){const beats=Math.max(1,Math.round(meterBeats));for(let b=0;b<beats;b++)clickSound(barT+b*(cycleLen/beats),b===0);}
     if(vjOn&&stageOn&&bar>0&&bar%4===0)sceneMode=SCENES[Math.floor(Math.random()*SCENES.length)];  // VJ mode: auto-cycle scenes
@@ -2692,7 +2787,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     key=_savedKey;}
   // schedule one token sequence for a voice within a bar (shared by normal/jux/off)
   function scheduleSeq(v,eff,barT,bar,shift,velScale){const sw=v.swing!=null?v.swing:+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n,sh=(shift||0)*step;
-      const tieN=(idx)=>{let c=0;for(let j=idx+1;j<n&&eff[j]==="_";j++)c++;return c;};  // note tie: `_` extends the previous note
+      const tieN=(idx)=>{let c=0;for(let j=idx+1;j<n&&pickAlt(eff[j],bar,v.name+"#"+j)==="_";j++)c++;return c;};  // note tie: `_` extends the previous note (<_/.> aussi)
       for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);
         {const sp=stepProg(tok,v.type==="drum",!!key,i,n,bar);if(sp!==null)tok=sp;}  // =(EXPR) : pas-programme
         if(tok==="."||tok==="~"||tok==="_")continue;
@@ -3893,7 +3988,7 @@ void main(){
       if(parts.length)info=parts.join("    ·    ");}
     if(info){log(info,lw?"err":"ai");lintUntil=now2+(lw?6000:9000);}else lintUntil=0;
     try{localStorage.setItem("loom_draft",editor.value);}catch(_){}}
-  function stop(){playing=false;if(schedTimer)clearTimeout(schedTimer);
+  function stop(){playing=false;barMarks=[];if(schedTimer)clearTimeout(schedTimer);
     if(midiClock&&midiOut)try{midiOut.send([0xFC]);}catch(_){}  // MIDI Stop
     voices.forEach(v=>v.cells.forEach(c=>c.classList.remove("play","hit")));log("[ stopped ]");}
 
@@ -6438,6 +6533,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Mes sons","panneau « mes sons »","dépose tes fichiers audio → | sample <ton_nom> (mémorisés)"],
     ["Multi-échantillons","piano_c3_v2.wav, snare_rr2.flac","| sample piano : zone la plus proche, couche de vélocité (v1 doux), prises alternées (rr) ; wav aiff flac mp3"],
     ["Étirer","| stretch | loopAt 2","vocodeur de phase : la boucle suit le tempo, hauteur et attaques gardées (| warp = granulaire)"],
+    ["Enregistrer","⏺ CLAVIER · 🎙 PRISE","clavier MIDI → ligne rec: calée sur la grille ; micro → takeN calé sur les barres, au tempo (clic droit : superposer)"],
     ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
     ["Lien Live","@voix.Param: 0 .5 1 . | slow 2","automation d'un paramètre du device Live de la piste de cette voix (0..1 = min..max, . = garde) ; sans « voix. », toutes les pistes Loom qui ont ce paramètre"],
     ["Lien Live","go: drop   go: 3","lance la scène Live « drop » (ou la 3e) quand le code est joué"],
@@ -7181,6 +7277,9 @@ const THEME_AA={
   $("uiLang").addEventListener("change",e=>applyUILang(e.target.value));
   (function(){let sv="fr";try{sv=localStorage.getItem("loom_uiLang")||"fr";}catch(_){}if(I18N[sv]){$("uiLang").value=sv;if(sv!=="fr")applyUILang(sv);}})();
   $("humBtn").addEventListener("click",humToMelody);
+  $("capBtn").addEventListener("click",toggleCapture);
+  $("takeBtn").addEventListener("click",()=>toggleTake(false));
+  $("takeBtn").addEventListener("contextmenu",e=>{e.preventDefault();toggleTake(true);});
   // --- FILM: record the SCÈNE canvas + master audio to a .webm video ---
   function recordVideo(){
     const cv=$("stage"),btn=$("filmBtn");
@@ -8266,7 +8365,7 @@ const THEME_AA={
     return bytes;
   }
 
-    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,stretchPV,pvOnsets,stretchState:()=>Object.keys(stretchCache).map(k=>k+(stretchCache[k]==="…"?" …":" ok")),parseZone,zonesOf,pickZone,sampName,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,parseTune,tokenToFreq,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,captureLine,takeWindow,layoutTake,takeLine,midiIn:d=>onMidiIn({data:d}),stretchPV,pvOnsets,stretchState:()=>Object.keys(stretchCache).map(k=>k+(stretchCache[k]==="…"?" …":" ok")),parseZone,zonesOf,pickZone,sampName,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,parseTune,tokenToFreq,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

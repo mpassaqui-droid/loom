@@ -153,7 +153,7 @@ impl LoomApp {
     }
 
     /// Remember the current text for undo, then put `code` in the editor.
-    fn record_and_set(&mut self, label: &str, code: String) {
+    pub(crate) fn record_and_set(&mut self, label: &str, code: String) {
         if code != self.text {
             self.teacher.history.record(label, &self.text);
         }

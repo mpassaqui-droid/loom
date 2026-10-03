@@ -384,3 +384,22 @@ pub fn stretch_pv(left: &[f32], right: &[f32], out_len: usize) -> Vec<f32> {
     if !right.is_empty() { chans.push(right.to_vec()); } // longueurs inégales : loom-core garde la plus courte
     loom_core::stretch::stretch(&chans, out_len).concat()
 }
+
+/// Une prise au clavier → la ligne LOOM. `notes` : `on,off,midi` séparés par `;`.
+#[wasm_bindgen]
+pub fn capture_line(name: &str, notes: &str, steps_per_bar: u32) -> String {
+    let notes: Vec<loom_core::capture::Played> = notes.split(';').filter_map(|n| {
+        let mut f = n.split(',');
+        Some(loom_core::capture::Played { on: f.next()?.parse().ok()?, off: f.next()?.parse().ok()?, midi: f.next()?.parse().ok()? })
+    }).collect();
+    loom_core::capture::capture_line(name, &notes, steps_per_bar).unwrap_or_default()
+}
+
+/// La boucle d'une prise au micro rangée mesure par mesure, l'ancienne dessous
+/// (`old` vide = pas d'ancienne). Le dernier échantillon rendu est `L`, le nombre de mesures.
+#[wasm_bindgen]
+pub fn layout_take(new: &[f32], new_bars: u32, first_bar: f64, old: &[f32]) -> Vec<f32> {
+    let (mut out, l) = loom_core::capture::layout_take(new, new_bars, first_bar as i64, if old.is_empty() { None } else { Some(old) });
+    out.push(l as f32);
+    out
+}

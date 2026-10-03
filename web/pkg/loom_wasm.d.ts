@@ -36,6 +36,11 @@ export function bar_seconds(src: string, bar: number): number;
 export function bytebeat_pcm(expr: string, start: number, len: number, sr: number): Float32Array;
 
 /**
+ * Une prise au clavier → la ligne LOOM. `notes` : `on,off,midi` séparés par `;`.
+ */
+export function capture_line(name: string, notes: string, steps_per_bar: number): string;
+
+/**
  * Un clip MIDI de Live (notes `[[hauteur, début, durée, vélocité], …]` en noires)
  * devenu une ligne de code LOOM.
  */
@@ -52,6 +57,12 @@ export function counterpoint_json(src: string): string[];
  * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
  */
 export function expr_eval(src: string, vars: string, vals: Int32Array): string;
+
+/**
+ * La boucle d'une prise au micro rangée mesure par mesure, l'ancienne dessous
+ * (`old` vide = pas d'ancienne). Le dernier échantillon rendu est `L`, le nombre de mesures.
+ */
+export function layout_take(_new: Float32Array, new_bars: number, first_bar: number, old: Float32Array): Float32Array;
 
 /**
  * Le lien Live du programme (`go:` et automations `@voix.Param:`) sur la même
@@ -136,9 +147,11 @@ export interface InitOutput {
     readonly bar_bpm: (a: number, b: number, c: number) => number;
     readonly bar_seconds: (a: number, b: number, c: number) => number;
     readonly bytebeat_pcm: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly capture_line: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly clip_to_loom: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
     readonly counterpoint_json: (a: number, b: number) => [number, number];
     readonly expr_eval: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
+    readonly layout_take: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number];
     readonly live_json: (a: number, b: number, c: number) => [number, number];
     readonly mix_json: (a: number, b: number) => [number, number];
     readonly program_info_json: (a: number, b: number) => [number, number];

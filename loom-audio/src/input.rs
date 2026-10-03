@@ -67,7 +67,9 @@ where
             *config,
             move |data: &[T], _| {
                 let mut peak = 0.0f32;
-                let Ok(mut buf) = buffer.try_lock() else { return };
+                // lock et pas try_lock : un bloc sauté serait un trou dans la prise (le
+                // lecteur ne garde le verrou que le temps de vider le tampon)
+                let Ok(mut buf) = buffer.lock() else { return };
                 for frame in data.chunks(channels) {
                     let m = frame.iter().map(|s| s.to_sample::<f32>()).sum::<f32>() / channels as f32;
                     peak = peak.max(m.abs());

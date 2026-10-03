@@ -831,6 +831,6 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 7. Micro-tons et traditions : vrai N-EDO, import Scala (.scl), ajnas/sayr maqam, aroha/avaroha raga
 - [x] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
 - [x] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo
-- [ ] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif
+- [x] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif (fait 03/10 : `loom_core::capture`, prise micro rangée mesure par mesure + `| slow N`, parité CAPTURE 502/502)
 - [ ] 11. Visuels en code : petit langage de visuel lié aux bandes du son
 - [ ] 12. Synchro et plugins : Ableton Link ; hôte AU/VST3 (au moins étude + prototype)

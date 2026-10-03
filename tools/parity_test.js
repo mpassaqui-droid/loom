@@ -490,6 +490,39 @@ for (const k of tu_keys) for (const t of tu_tunes) for (const tok of tu_toks) {
   if (!(c < 0.05)) { tu_bad++; if (tu_bad <= 8) console.log(`  TUNE DIFF [${k} | ${t || 'equal'} | ${tok}]  JS: ${js}  Rust: ${ev && ev.freq}`); }
 }
 L.setTuning('equal');
+// ── CAPTURE parity : prise au clavier → ligne LOOM (grille, piles, tenues, <m1/m2>) ──
+let cp_total = 0, cp_bad = 0;
+{ let seed = 11; const rnd = n => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
+  for (let k = 0; k < 300; k++) {
+    const spb = [16, 8, 12, 4, 32][rnd(5)], notes = [];
+    for (let j = 0, n = 1 + rnd(10); j < n; j++) {
+      const on = rnd(k % 3 === 0 ? 900 : 300) / 100 - 0.05, len = rnd(150) / 100;
+      notes.push({ on, off: on + len, midi: 36 + rnd(48) });
+    }
+    const js = L.captureLine('rec', notes, spb) || '';
+    const rs = W.capture_line('rec', notes.map(n => `${n.on},${n.off},${n.midi}`).join(';'), spb);
+    cp_total++;
+    if (js !== rs) { cp_bad++; if (cp_bad <= 6) console.log(`  CAPTURE DIFF spb${spb} ${JSON.stringify(notes)}\n    JS  : ${js}\n    Rust: ${rs}`); }
+  }
+  for (const [w, want] of [[[3.5, 2, 0], [1000, 4, 4]], [[3.02, 2, 0.01], [0, 4, 3]]]) {
+    const s = Float32Array.from({ length: 9000 }, (_, i) => i), r = L.takeWindow(s, 1000, ...w);
+    cp_total++; if (!r || r[0][0] !== want[0] || r[1] !== want[1] || r[2] !== want[2]) { cp_bad++; console.log(`  TAKE DIFF ${w} -> ${r && [r[0][0], r[1], r[2]]}`); }
+  }
+  // la boucle rangée mesure par mesure : mêmes échantillons en JS et en Rust
+  for (let k = 0; k < 200; k++) {
+    const per = 1 + rnd(6), nb = [1, 2, 4, 8][rnd(4)], first = rnd(40) - 5;
+    const nw = Float32Array.from({ length: nb * per }, () => Math.fround(Math.random() * 1.6 - 0.8));
+    const old = rnd(3) ? null : Float32Array.from({ length: [1, 2, 4, 8, 16][rnd(5)] * per + rnd(2) }, () => Math.fround(Math.random() * 1.6 - 0.8));
+    const [jo, jl] = L.layoutTake(nw, nb, first, old);
+    const ro = W.layout_take(nw, nb, first, old || new Float32Array(0)), rl = ro[ro.length - 1];
+    cp_total++;
+    let same = jl === rl && jo.length === ro.length - 1;
+    for (let i = 0; same && i < jo.length; i++) same = Math.abs(jo[i] - ro[i]) < 1e-6;
+    if (!same) { cp_bad++; if (cp_bad <= 6) console.log(`  LAYOUT DIFF nb${nb} first${first} per${per} old${old && old.length} L ${jl}/${rl}`); }
+  }
+}
+console.log(`\nCAPTURE parity (prise clavier → ligne, prise micro calée): ${cp_total - cp_bad}/${cp_total}  ${cp_bad === 0 ? '✅' : '⚠️ ' + cp_bad + ' diffs'}`);
+
 // ── STRETCH parity : vocodeur de phase (attaques, durée, stéréo), JS stretchPV <-> loom-core stretch ──
 let st_total = 0, st_bad = 0, st_worst = 0;
 { let seed = 3; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296 * 2 - 1;
@@ -581,4 +614,4 @@ console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/$
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && st_bad === 0 && zn_bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && cp_bad === 0 && st_bad === 0 && zn_bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

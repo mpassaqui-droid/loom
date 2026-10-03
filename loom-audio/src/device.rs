@@ -61,6 +61,8 @@ pub struct Engine {
     midi: Result<MidiIo, String>,
     follow: Arc<AtomicBool>,
     recording: Mutex<Option<Recording>>,
+    /// Une prise au clavier en cours (`capture_start` / `capture_stop`).
+    capture: Arc<Mutex<Option<loom_core::capture::Capture>>>,
     _stream: cpal::Stream,
 }
 
@@ -90,13 +92,25 @@ impl Engine {
 
         // MIDI: keyboard notes play live; an external clock can drive the transport
         let follow = Arc::new(AtomicBool::new(false));
+        let capture: Arc<Mutex<Option<loom_core::capture::Capture>>> = Arc::new(Mutex::new(None));
         let midi = {
             let tx = tx.clone();
             let status = status.clone();
+            let capture = capture.clone();
             let follow = follow.clone();
             let clock = Arc::new(Mutex::new(ClockFollower::default()));
             MidiIo::start(move |m| {
                 let following = follow.load(Ordering::Relaxed);
+                // une prise armée note tout ce qui est joué, calé sur la position du morceau
+                if let Ok(mut c) = capture.lock() {
+                    if let Some(c) = c.as_mut() {
+                        match m {
+                            MidiMessageIn::NoteOn { note, .. } => c.note_on(status.position(), note as i32),
+                            MidiMessageIn::NoteOff { note } => c.note_off(status.position(), note as i32),
+                            _ => {}
+                        }
+                    }
+                }
                 let _ = match m {
                     MidiMessageIn::NoteOn { note, velocity } => tx.send(Cmd::LiveOn(note, velocity)),
                     MidiMessageIn::NoteOff { note } => tx.send(Cmd::LiveOff(note)),
@@ -125,7 +139,7 @@ impl Engine {
             other => return Err(format!("format audio non géré : {other}")),
         }?;
         stream.play().map_err(|e| e.to_string())?;
-        Ok(Engine { tx, status, sample_rate: config.sample_rate, device_name, samples, banks: Mutex::new(vec![bank_keep]), midi, follow, recording: Mutex::new(None), _stream: stream })
+        Ok(Engine { tx, status, sample_rate: config.sample_rate, device_name, samples, banks: Mutex::new(vec![bank_keep]), midi, follow, recording: Mutex::new(None), capture, _stream: stream })
     }
 
     /// Parse and load LOOM source. Hot-swaps at the next bar while playing.
@@ -165,8 +179,27 @@ impl Engine {
         if !on { let _ = self.tx.send(Cmd::Tempo(None)); }
     }
     /// Play a note live with the `lead` voice (on-screen or computer keyboard).
-    pub fn live_note_on(&self, note: u8, velocity: u8) { let _ = self.tx.send(Cmd::LiveOn(note, velocity)); }
-    pub fn live_note_off(&self, note: u8) { let _ = self.tx.send(Cmd::LiveOff(note)); }
+    pub fn live_note_on(&self, note: u8, velocity: u8) {
+        if let Some(c) = self.capture.lock().ok().as_mut().and_then(|c| c.as_mut()) { c.note_on(self.status.position(), note as i32); }
+        let _ = self.tx.send(Cmd::LiveOn(note, velocity));
+    }
+    pub fn live_note_off(&self, note: u8) {
+        if let Some(c) = self.capture.lock().ok().as_mut().and_then(|c| c.as_mut()) { c.note_off(self.status.position(), note as i32); }
+        let _ = self.tx.send(Cmd::LiveOff(note));
+    }
+
+    /// Arme une prise au clavier (MIDI ou clavier de l'écran) : elle commence à la barre
+    /// la plus proche.
+    pub fn capture_start(&self) {
+        if let Ok(mut c) = self.capture.lock() { *c = Some(loom_core::capture::Capture::new(self.status.position())); }
+    }
+    /// Combien de notes la prise a déjà, `None` si aucune prise n'est armée.
+    pub fn capture_len(&self) -> Option<usize> { self.capture.lock().ok()?.as_ref().map(|c| c.len()) }
+    /// Arrête la prise : la ligne LOOM `name: …` (16 pas par mesure au plus), ou `None`.
+    pub fn capture_stop(&self, name: &str) -> Option<String> {
+        let c = self.capture.lock().ok()?.take()?;
+        c.finish(self.status.position(), name, 16)
+    }
     /// Mixer fader for a voice, 0..2 (1 = as written).
     pub fn set_voice_gain(&self, voice: &str, gain: f32) { let _ = self.tx.send(Cmd::VoiceGain(voice.into(), gain)); }
     /// Mixer pan for a voice, -1..1.

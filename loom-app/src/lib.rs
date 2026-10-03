@@ -10,6 +10,7 @@ pub mod grid;
 pub mod hum;
 pub mod lessons;
 pub mod prof;
+pub mod record;
 pub mod samples;
 pub mod score;
 pub mod library;

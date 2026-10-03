@@ -37,6 +37,17 @@ const VIBE_FIELD: &str = "loom-vibe";
 /// Widget id of the code editor (the piano roll moves its cursor).
 const EDITOR_ID: &str = "loom-editor";
 
+/// Une prise au micro en cours.
+struct MicTake {
+    mic: loom_audio::input::MicInput,
+    /// Position du morceau (mesures) et heure, au moment où le micro a commencé à remplir.
+    p0: f64,
+    t0: std::time::Instant,
+    samples: Vec<f32>,
+    /// La prise superposée, ou `None` pour une nouvelle.
+    over: Option<String>,
+}
+
 /// Something the user asked for, with a button or a shortcut.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -56,6 +67,10 @@ pub enum Action {
     Record,
     /// Tick on every beat (Ctrl+T).
     Metronome,
+    /// Prise au clavier : ce qu'on joue devient une ligne `rec: …`.
+    CaptureMidi,
+    /// Prise au micro, calée sur les barres (avec `overdub`, superposée à la dernière).
+    TakeMic { overdub: bool },
     /// Show / hide the full-window SCÈNE (F11, Ctrl+F; Échap leaves it).
     ToggleStage,
     /// Next scene (N on the stage).
@@ -129,6 +144,8 @@ pub struct LoomApp {
     midi_clock: bool,
     midi_follow: bool,
     metronome: bool,
+    /// Une prise au micro en cours : le micro, la position du morceau à son départ, ce qui est déjà lu.
+    take: Option<MicTake>,
 
     // SCÈNE: visuals that follow the music
     stage: Stage,
@@ -189,6 +206,7 @@ impl LoomApp {
             midi_clock: false,
             midi_follow: false,
             metronome: false,
+            take: None,
             stage: Stage::default(),
             stage_full: false,
             stage_text: Theme::stage_text(),
@@ -290,6 +308,8 @@ impl LoomApp {
                 }
             }
             Action::Record => self.toggle_recording(),
+            Action::CaptureMidi => self.toggle_capture(),
+            Action::TakeMic { overdub } => self.toggle_take(overdub),
             Action::Metronome => {
                 if let Some(engine) = &self.engine {
                     self.metronome = !self.metronome;
@@ -452,6 +472,89 @@ impl LoomApp {
             Ok(m) => self.say(m),
             Err(e) => self.warn(format!("REC : {e}")),
         }
+    }
+
+    /// Arme ou arrête la prise au clavier ; à l'arrêt la ligne s'ajoute au morceau.
+    fn toggle_capture(&mut self) {
+        let Some(engine) = &self.engine else { return self.warn("Pas de moteur audio : pas de prise.") };
+        if engine.capture_len().is_none() {
+            engine.capture_start();
+            if !self.is_playing() { self.run(); }
+            return self.say("⏺ Prise au clavier : joue, puis reclique « clavier ».");
+        }
+        let names: Vec<String> = self.program.voices.iter().map(|v| v.name.clone()).collect();
+        let name = (1..).map(|i| if i == 1 { "rec".to_string() } else { format!("rec{i}") }).find(|n| !names.contains(n)).unwrap();
+        match engine.capture_stop(&name) {
+            Some(line) => self.add_line(&line, "prise au clavier"),
+            None => self.say("Prise au clavier : aucune note jouée."),
+        }
+    }
+
+    /// Lance ou arrête la prise au micro.
+    fn toggle_take(&mut self, overdub: bool) {
+        if let Some(MicTake { mic, p0, t0, mut samples, over }) = self.take.take() {
+            samples.extend(mic.take());
+            let rate = mic.sample_rate();
+            drop(mic);
+            // la vraie durée d'une mesure, mesurée pendant la prise (TAP et horloge MIDI compris)
+            let p1 = self.engine.as_ref().map_or(p0, |e| e.status().position());
+            let bar_sec = if p1 - p0 > 0.5 { t0.elapsed().as_secs_f64() / (p1 - p0) } else { self.program.bar_seconds(p0.floor() as i64) };
+            let latency = std::env::var("LOOM_MIC_LATENCY").ok().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+            let Some((cut, bars, first)) = loom_app::record::take_window(&samples, rate, p0, bar_sec, latency) else {
+                return self.warn("Prise au micro : moins d'une mesure entière, rien gardé.");
+            };
+            let existing: Vec<String> = loom_audio::merged_bank().names();
+            let name = over.clone().unwrap_or_else(|| loom_app::record::next_take_name(&existing));
+            match loom_app::record::save_take(&name, &cut, bars, first, rate, over.is_some()) {
+                Ok((_, loop_bars)) => {
+                    if let Some(engine) = &self.engine { engine.reload_samples(); }
+                    let line = loom_app::record::take_line(&name, loop_bars);
+                    if self.program.voices.iter().any(|v| v.name == name) {
+                        // la boucle a pu s'allonger : sa ligne suit
+                        let code = self.text.lines().map(|l| if l.trim_start().starts_with(&format!("{name}:")) { line.clone() } else { l.to_string() })
+                            .collect::<Vec<_>>().join("\n") + "\n";
+                        self.record_and_set("superposition", code);
+                        if self.is_playing() { self.run(); }
+                        self.say(format!("🎙 {name} : nouvelle couche superposée ({loop_bars} mesures)."));
+                    } else {
+                        self.add_line(&line, "prise au micro");
+                    }
+                }
+                Err(e) => self.warn(format!("Prise au micro : {e}")),
+            }
+            return;
+        }
+        if self.engine.is_none() { return self.warn("Pas de moteur audio : pas de prise."); }
+        // la dernière prise du morceau, pour superposer
+        let over_name = overdub.then(|| self.program.voices.iter().rev().find(|v| v.name.starts_with("take")).map(|v| v.name.clone())).flatten();
+        if overdub && over_name.is_none() { return self.warn("Superposer : pas encore de prise takeN dans le morceau."); }
+        if !self.is_playing() { self.run(); }
+        match loom_audio::input::MicInput::start() {
+            Ok(mic) => {
+                // ce que le micro a pris pendant son ouverture est jeté : la prise part d'ici
+                let _ = mic.take();
+                let p0 = self.engine.as_ref().map_or(0.0, |e| e.status().position());
+                self.say(match &over_name { Some(n) => format!("🎙 Superposition sur {n}… reclique pour arrêter."), None => "🎙 Prise au micro… reclique pour arrêter (elle commence à la barre suivante).".into() });
+                self.take = Some(MicTake { mic, p0, t0: std::time::Instant::now(), samples: Vec::new(), over: over_name });
+            }
+            Err(e) => self.warn(format!("Micro : {e}")),
+        }
+    }
+
+    /// Le micro en cours de prise se vide dans la mémoire à chaque image (son tampon est borné).
+    fn poll_take(&mut self) {
+        if let Some(t) = self.take.as_mut() { t.samples.extend(t.mic.take()); }
+    }
+
+    /// Ajoute une ligne au bout du morceau (annulable) et la fait entendre si ça joue.
+    fn add_line(&mut self, line: &str, label: &str) {
+        let mut code = self.text.trim_end().to_string();
+        code.push('\n');
+        code.push_str(line);
+        code.push('\n');
+        self.record_and_set(label, code);
+        if self.is_playing() { self.run(); } else { self.set_program(Program::parse(&self.text)); }
+        self.say(format!("{label} ajoutée : {line}"));
     }
 
     fn export(&mut self, ctx: &egui::Context) {
@@ -749,6 +852,18 @@ impl LoomApp {
                         if ui.button(rec).on_hover_text("Enregistrer tout ce qui joue en WAV, changements live compris (F4)").clicked() {
                             actions.push(Action::Record);
                         }
+                        let capturing = engine.capture_len();
+                        let cap = match capturing {
+                            Some(n) => RichText::new(format!("⏺ clavier ({n})")).strong().color(color(theme.error)),
+                            None => RichText::new("⏺ clavier"),
+                        };
+                        if ui.button(cap).on_hover_text("Prise au clavier MIDI : joue, puis reclique, ta prise devient une ligne rec: calée sur la grille").clicked() {
+                            actions.push(Action::CaptureMidi);
+                        }
+                        let mic = if self.take.is_some() { RichText::new("🎙 stop").strong().color(color(theme.error)) } else { RichText::new("🎙 prise") };
+                        let r = ui.button(mic).on_hover_text("Prise au micro calée sur les barres, jouée en boucle au tempo (clic droit : superposer à la dernière prise)");
+                        if r.clicked() { actions.push(Action::TakeMic { overdub: false }); }
+                        if r.secondary_clicked() { actions.push(Action::TakeMic { overdub: true }); }
                         if ui.selectable_label(self.metronome, "♩ Métronome").on_hover_text("Un clic sur chaque temps (Ctrl+T)").clicked() {
                             actions.push(Action::Metronome);
                         }
@@ -1102,6 +1217,7 @@ impl eframe::App for LoomApp {
         }
         self.poll_export();
         self.poll_vibe();
+        self.poll_take();
         self.studio_frame(ctx);
         self.teacher_frame(ctx);
         if self.stage_full || self.is_playing() {

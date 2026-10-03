@@ -88,6 +88,30 @@ export function bytebeat_pcm(expr, start, len, sr) {
 }
 
 /**
+ * Une prise au clavier → la ligne LOOM. `notes` : `on,off,midi` séparés par `;`.
+ * @param {string} name
+ * @param {string} notes
+ * @param {number} steps_per_bar
+ * @returns {string}
+ */
+export function capture_line(name, notes, steps_per_bar) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(notes, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.capture_line(ptr0, len0, ptr1, len1, steps_per_bar);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Un clip MIDI de Live (notes `[[hauteur, début, durée, vélocité], …]` en noires)
  * devenu une ligne de code LOOM.
  * @param {string} nom
@@ -154,6 +178,26 @@ export function expr_eval(src, vars, vals) {
     } finally {
         wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
+}
+
+/**
+ * La boucle d'une prise au micro rangée mesure par mesure, l'ancienne dessous
+ * (`old` vide = pas d'ancienne). Le dernier échantillon rendu est `L`, le nombre de mesures.
+ * @param {Float32Array} _new
+ * @param {number} new_bars
+ * @param {number} first_bar
+ * @param {Float32Array} old
+ * @returns {Float32Array}
+ */
+export function layout_take(_new, new_bars, first_bar, old) {
+    const ptr0 = passArrayF32ToWasm0(_new, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF32ToWasm0(old, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.layout_take(ptr0, len0, new_bars, first_bar, ptr1, len1);
+    var v3 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v3;
 }
 
 /**

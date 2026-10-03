@@ -89,6 +89,15 @@ impl Status {
     pub fn song_bar(&self) -> i64 { self.song_bar.load(Ordering::Relaxed) }
     /// Position inside the current bar, 0..1.
     pub fn phase(&self) -> f32 { f32::from_bits(self.phase.load(Ordering::Relaxed)) }
+    /// La position dans le morceau en mesures (mesure + phase), à un bloc audio près.
+    pub fn position(&self) -> f64 {
+        // mesure et phase sont deux atomiques : relire si la barre est passée entre les deux
+        loop {
+            let b = self.bar();
+            let ph = self.phase();
+            if self.bar() == b { return b as f64 + ph as f64; }
+        }
+    }
     /// Output peak of the last audio block, 0..1.
     pub fn peak(&self) -> f32 { f32::from_bits(self.peak.load(Ordering::Relaxed)) }
     /// Number of notes currently sounding.
