@@ -375,6 +375,25 @@ export function schedule_bar_json(src, bar) {
         wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
     }
 }
+
+/**
+ * `| stretch` : `left` (et `right`, vide en mono) étirés à `out_len` trames, hauteur
+ * gardée. Rend les canaux bout à bout (`out_len` trames chacun).
+ * @param {Float32Array} left
+ * @param {Float32Array} right
+ * @param {number} out_len
+ * @returns {Float32Array}
+ */
+export function stretch_pv(left, right, out_len) {
+    const ptr0 = passArrayF32ToWasm0(left, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF32ToWasm0(right, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.stretch_pv(ptr0, len0, ptr1, len1, out_len);
+    var v3 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v3;
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -459,6 +478,13 @@ function getUint8ArrayMemory0() {
 function passArray32ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 4, 4) >>> 0;
     getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArrayF32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getFloat32ArrayMemory0().set(arg, ptr / 4);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }

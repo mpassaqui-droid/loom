@@ -830,7 +830,7 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 6. Automation : courbes à points `lp 200..4000@exp..800` (8 points, @lin @exp @log @step @smooth) sur tout param balayable, `auto: master …` et `auto: send NOM …` (natif lissé 10 ms, web 8 rampes par mesure). Bug corrigé au passage : après un export web, les `send:` restaient branchés sur le graphe hors-ligne. Workspace 492, onsets 498/498, rendu 10/10.
 - [x] 7. Micro-tons et traditions : vrai N-EDO, import Scala (.scl), ajnas/sayr maqam, aroha/avaroha raga
 - [x] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
-- [ ] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo
+- [x] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo
 - [ ] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif
 - [ ] 11. Visuels en code : petit langage de visuel lié aux bandes du son
 - [ ] 12. Synchro et plugins : Ableton Link ; hôte AU/VST3 (au moins étude + prototype)

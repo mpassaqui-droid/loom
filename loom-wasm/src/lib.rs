@@ -375,3 +375,12 @@ pub fn sample_zone(names: &str, inst: &str, midi: f32, vel: f32, counter: u32) -
         .map(|z| format!("{} {}", z.name, z.root.map_or("-".into(), |r| r.to_string())))
         .unwrap_or_default()
 }
+
+/// `| stretch` : `left` (et `right`, vide en mono) étirés à `out_len` trames, hauteur
+/// gardée. Rend les canaux bout à bout (`out_len` trames chacun).
+#[wasm_bindgen]
+pub fn stretch_pv(left: &[f32], right: &[f32], out_len: usize) -> Vec<f32> {
+    let mut chans = vec![left.to_vec()];
+    if !right.is_empty() { chans.push(right.to_vec()); } // longueurs inégales : loom-core garde la plus courte
+    loom_core::stretch::stretch(&chans, out_len).concat()
+}

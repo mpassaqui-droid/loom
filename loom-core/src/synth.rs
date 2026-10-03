@@ -286,6 +286,8 @@ pub struct Synth {
     pub loop_at: Option<f32>,
     /// `| freeze` — hold a granular smear of the sample.
     pub freeze: bool,
+    /// `| stretch` : comme `| warp`, mais par vocodeur de phase (attaques gardées).
+    pub stretch: bool,
     /// `| begin N` / `| end N` — playback window 0..1.
     pub begin: Option<f32>,
     pub end: Option<f32>,
@@ -415,7 +417,8 @@ impl Synth {
             "cresc" => self.dynamics = Some(1),
             "dim" | "decresc" => self.dynamics = Some(-1),
             "reverse" | "rev?" => self.reverse = true,
-            "warp" | "stretch" => self.warp = true,
+            "warp" => self.warp = true,
+            "stretch" => { self.warp = true; self.stretch = true; }
             "loopAt" | "loopat" => {
                 self.warp = true;
                 self.loop_at = Some(num(&p, 1).filter(|n| n.is_finite() && *n > 0.0).unwrap_or(1.0).clamp(0.25, 16.0));

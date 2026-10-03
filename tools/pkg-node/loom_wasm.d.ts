@@ -120,3 +120,9 @@ export function scala_key_line(scl: string, tonic: string): string;
  * Schedule one bar and return its events as JSON for the JS audio layer.
  */
 export function schedule_bar_json(src: string, bar: number): string;
+
+/**
+ * `| stretch` : `left` (et `right`, vide en mono) étirés à `out_len` trames, hauteur
+ * gardée. Rend les canaux bout à bout (`out_len` trames chacun).
+ */
+export function stretch_pv(left: Float32Array, right: Float32Array, out_len: number): Float32Array;

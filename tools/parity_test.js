@@ -490,6 +490,30 @@ for (const k of tu_keys) for (const t of tu_tunes) for (const tok of tu_toks) {
   if (!(c < 0.05)) { tu_bad++; if (tu_bad <= 8) console.log(`  TUNE DIFF [${k} | ${t || 'equal'} | ${tok}]  JS: ${js}  Rust: ${ev && ev.freq}`); }
 }
 L.setTuning('equal');
+// ── STRETCH parity : vocodeur de phase (attaques, durée, stéréo), JS stretchPV <-> loom-core stretch ──
+let st_total = 0, st_bad = 0, st_worst = 0;
+{ let seed = 3; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296 * 2 - 1;
+  const sr = 22050;
+  const beats = Float32Array.from({ length: sr }, (_, i) => rnd() * Math.exp(-(i % (sr / 4)) / sr * 60) * 0.8);
+  const sine = Float32Array.from({ length: sr / 2 }, (_, i) => Math.sin(2 * Math.PI * 330 * i / sr) * 0.5);
+  const right = Float32Array.from(beats, (x, i) => x * 0.5 + sine[i % sine.length] * 0.3);
+  const cases = [['coups ×2', [beats], sr * 2], ['coups ×0,75', [beats], Math.round(sr * 0.75)], ['sinus ×3', [sine], sr * 1.5],
+    ['stéréo ×1,4', [beats, right], Math.round(sr * 1.4)], ['court', [sine.subarray(0, 600)], 1000],
+    ['fin nette ×10', [sine.subarray(0, 4410)], 44100], ['un échantillon', [sine.subarray(1, 2)], 7],
+    ['NaN', [Float32Array.from(sine, (x, i) => i === 50 ? NaN : x)], sr]];
+  for (const [nm, chans, n] of cases) {
+    const js = L.stretchPV(chans, n);
+    const all = W.stretch_pv(chans[0], chans[1] || new Float32Array(0), n);
+    let worst = 0;
+    for (let c = 0; c < chans.length; c++) for (let i = 0; i < n; i++) worst = Math.max(worst, Math.abs(js[c][i] - all[c * n + i]));
+    st_total++; st_worst = Math.max(st_worst, worst);
+    if (!(worst < 1e-5) || all.length !== n * chans.length) { st_bad++; console.log(`  STRETCH DIFF [${nm}] pire ${worst} (${all.length} / ${n * chans.length})`); }
+  }
+  const on = L.pvOnsets(Float64Array.from(beats)), ron = [];
+  st_total++; if (on.length !== 3) { st_bad++; console.log(`  STRETCH attaques JS ${on}`); }
+}
+console.log(`\nSTRETCH parity (vocodeur de phase, JS <-> Rust, échantillon par échantillon): ${st_total - st_bad}/${st_total}  pire ${st_worst.toExponential(2)}  ${st_bad === 0 ? '✅' : '⚠️ ' + st_bad + ' diffs'}`);
+
 // ── ZONES parity : instruments multi-échantillons (zone, couche de vélocité, prise), JS <-> loom-core ──
 const zn_names = ['piano_c3_v1', 'piano_c3_v2', 'piano_g3_v1', 'piano_g3_v2', 'piano_c5', 'pianola', 'bd', 'bd_rr2', 'bd_rr3',
   'grand-piano-F#4-rr2-v1', 'grand-piano-F#4-rr1-v1', 'grand_piano_a2', 'cello_cs2', 'amen_break', 'snare_v1_rr1', 'snare_v1_rr2', 'snare_v2', 'x_c+3'];
@@ -557,4 +581,4 @@ console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/$
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && zn_bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && st_bad === 0 && zn_bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

@@ -166,6 +166,70 @@ impl SampleBank {
 
 use std::sync::{Mutex, OnceLock};
 
+// --- `| stretch` : les sons étirés par vocodeur de phase, gardés en cache ---
+//
+// Étirer deux mesures coûte des dizaines de millisecondes : trop pour le fil audio.
+// En direct, le premier coup part en `| warp` granulaire pendant qu'un fil à part
+// calcule ; les coups suivants jouent la version étirée. Hors direct (rendu WAV,
+// tests), on calcule tout de suite : le résultat ne dépend pas de la vitesse.
+
+thread_local! {
+    static LIVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Le fil audio en direct s'annonce ici (à chaque bloc, ça ne coûte rien) : sur ce
+/// fil, `| stretch` ne calcule jamais lui-même. Les rendus WAV tournent ailleurs.
+pub fn mark_live_thread() { LIVE.with(|l| l.set(true)); }
+
+/// (adresse du son d'origine, trames de sortie) → son étiré. La valeur garde aussi
+/// l'original vivant, pour que son adresse ne serve pas à un autre son.
+type StretchMap = HashMap<(usize, usize), Option<(Arc<SampleData>, Arc<SampleData>)>>;
+
+fn stretch_cache() -> &'static Mutex<StretchMap> {
+    static CACHE: OnceLock<Mutex<StretchMap>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn compute_stretch(src: &SampleData, frames: usize) -> SampleData {
+    SampleData { sample_rate: src.sample_rate, channels: loom_core::stretch::stretch(&src.channels, frames) }
+}
+
+/// `src` étiré à `frames` trames, hauteur gardée. `None` en direct tant que le
+/// calcul n'est pas fini (ou si le cache est occupé : le fil audio n'attend jamais).
+pub fn stretched(src: &Arc<SampleData>, frames: usize) -> Option<Arc<SampleData>> {
+    let key = (Arc::as_ptr(src) as usize, frames);
+    let live = LIVE.with(|l| l.get());
+    {
+        let mut map = if live { stretch_cache().try_lock().ok()? } else { stretch_cache().lock().ok()? };
+        match map.get(&key) {
+            Some(Some((_, done))) => return Some(done.clone()),
+            // en cours : le direct attend, un rendu calcule lui-même
+            Some(None) if live => return None,
+            _ => {}
+        }
+        if live {
+            // au plus 4 calculs à la fois (un tempo qui glisse change la clé à chaque mesure)
+            if map.values().filter(|v| v.is_none()).count() >= 4 { return None; }
+            // un cache borné : on oublie les sons finis, jamais un calcul en cours
+            if map.len() >= 64 { map.retain(|_, v| v.is_none()); }
+            map.insert(key, None);
+        } else if map.len() >= 64 {
+            map.retain(|_, v| v.is_none());
+        }
+    }
+    if live {
+        let src = src.clone();
+        std::thread::spawn(move || {
+            let done = Arc::new(compute_stretch(&src, frames));
+            if let Ok(mut map) = stretch_cache().lock() { map.insert(key, Some((src, done))); }
+        });
+        return None;
+    }
+    let done = Arc::new(compute_stretch(src, frames));
+    if let Ok(mut map) = stretch_cache().lock() { map.insert(key, Some((src.clone(), done.clone()))); }
+    Some(done)
+}
+
 struct SessionBank {
     /// The last scan of the default sample folders.
     fresh: SampleBank,
@@ -357,6 +421,18 @@ impl SampleVoice {
         let mut rate = if rate.is_finite() && rate > 0.0 { rate } else { 1.0 };
         let mut voice = SampleVoice { data, reverse: false, grains: Vec::new(), first: 0, t: 0, end: 0 };
 
+        if s.stretch && !s.freeze && voice.data.duration() >= 0.02 && spec.dur > 0.03 {
+            let frames = (spec.dur as f64 * voice.data.sample_rate as f64).round() as usize;
+            if let Some(done) = stretched(&voice.data, frames) {
+                // le son étiré joué en entier, comme le web (ni chop, ni begin/end, ni reverse)
+                let len = ((done.frames() as f64) * spec.sr as f64 / done.sample_rate as f64).ceil() as u64;
+                let step = done.sample_rate as f64 / spec.sr as f64;
+                voice.data = done;
+                voice.grains.push(Grain { start: 0, len, pos: 0.0, step, gain, shape: Shape::Flat { fade_in: 0, fade_out: 0 }, mix: IDENTITY });
+                return Some(voice.finish());
+            }
+            // pas encore prêt : ce coup-ci en granulaire
+        }
         if s.warp || s.freeze {
             if voice.data.duration() >= 0.02 && spec.dur > 0.03 {
                 voice.warp(spec, gain, s.freeze);
@@ -531,6 +607,25 @@ pub fn sample_names_in(src: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stretch_en_direct_ne_bloque_pas_puis_sert_le_cache() {
+        let src = Arc::new(SampleData { sample_rate: 8000.0, channels: vec![(0..8000).map(|i| (i as f32 * 0.3).sin()).collect()] });
+        let s2 = src.clone();
+        std::thread::spawn(move || {
+            mark_live_thread();
+            assert!(stretched(&s2, 12000).is_none(), "le fil audio n'attend pas");
+            let mut got = None;
+            for _ in 0..400 {
+                got = stretched(&s2, 12000);
+                if got.is_some() { break; }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            assert_eq!(got.expect("calculé à part").frames(), 12000);
+        }).join().unwrap();
+        // hors direct : tout de suite, et le même que le cache
+        assert_eq!(stretched(&src, 12000).unwrap().frames(), 12000);
+    }
 
     #[test]
     fn index_des_zones_comme_une_relecture_complete() {

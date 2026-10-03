@@ -1009,6 +1009,26 @@ mod tests {
     }
 
     #[test]
+    fn stretch_garde_la_hauteur_et_remplit_la_mesure() {
+        let sine: Vec<f32> = (0..(SR * 0.5) as usize).map(|i| (std::f32::consts::TAU * 440.0 * i as f32 / SR).sin() * 0.02).collect();
+        let mut bank = SampleBank::empty();
+        bank.insert("tone", crate::sample::SampleData { sample_rate: SR, channels: vec![sine] });
+        let mut s = Sequencer::new(SR, Arc::new(bank));
+        s.set_space(0.0);
+        s.set_echo(0.0);
+        s.set_program(Program::parse("bpm: 120\nkick: x . . . | sample tone | stretch | loopAt 1"));
+        s.play();
+        let buf = bars(&mut s, 1.0); // une mesure de 2 s
+        let left: Vec<f32> = buf.iter().step_by(2).copied().collect();
+        let mid = &left[(0.5 * SR) as usize..(1.5 * SR) as usize];
+        let ups = mid.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
+        assert!((ups as i32 - 440).abs() <= 3, "{ups} Hz");
+        // le son dure toute la mesure (un `| warp` plain s'arrêterait à 0,5 s)
+        let late = left[(1.7 * SR) as usize..(1.9 * SR) as usize].iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        assert!(late > 0.005, "{late}");
+    }
+
+    #[test]
     fn multi_echantillon_zones_et_prises() {
         let dc = |v: f32| crate::sample::SampleData { sample_rate: SR, channels: vec![vec![v; (SR * 0.2) as usize]] };
         let mut bank = SampleBank::empty();

@@ -240,6 +240,7 @@ where
         .build_output_stream::<T, _, _>(
             *config,
             move |out: &mut [T], _| {
+                crate::sample::mark_live_thread();
                 while let Ok(cmd) = rx.try_recv() {
                     match cmd {
                         Cmd::Load(p) => seq.set_program(*p),

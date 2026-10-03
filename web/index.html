@@ -888,8 +888,92 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     for(let ch=0;ch<b.numberOfChannels;ch++){const src=b.getChannelData(ch),dst=r.getChannelData(ch),L=src.length;for(let i=0;i<L;i++)dst[i]=src[L-1-i];}
     sbufRev[name]=r;return r;}
   // WARP / time-stretch: granular OLA — fit a sample to `dur` seconds keeping pitch
+  // --- | stretch : vocodeur de phase, attaques gardées (miroir exact de loom-core stretch.rs) ---
+  const PV_FRAME=2048,PV_HOP=512,PV_TRANSIENT=0.35,PV_LOCK=PV_FRAME/2+PV_HOP;
+  const pvRound=x=>x<0?-Math.round(-x):Math.round(x);  // l'arrondi de Rust (moitié loin de zéro)
+  function pvFFT(re,im,inverse){const n=re.length;let j=0;
+    for(let i=1;i<n;i++){let bit=n>>1;while(j&bit){j^=bit;bit>>=1;}j|=bit;
+      if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}}
+    for(let len=2;len<=n;len<<=1){const ang=2*Math.PI/len*(inverse?1:-1),wr=Math.cos(ang),wi=Math.sin(ang);
+      for(let st=0;st<n;st+=len){let cr=1,ci=0;
+        for(let k=0;k<len/2;k++){const a=st+k,b=st+k+len/2;const tr=re[b]*cr-im[b]*ci,ti=re[b]*ci+im[b]*cr;
+          re[b]=re[a]-tr;im[b]=im[a]-ti;re[a]+=tr;im[a]+=ti;const nr=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=nr;}}}}
+  function pvHann(n){const w=new Float64Array(n);for(let i=0;i<n;i++)w[i]=0.5-0.5*Math.cos(2*Math.PI*i/n);return w;}
+  function pvWrap(x){const tau=2*Math.PI;return x-tau*pvRound(x/tau);}
+  function pvOnsets(mono){const N=PV_FRAME,win=pvHann(N),prev=new Float64Array(N/2+1),re=new Float64Array(N),im=new Float64Array(N);const out=[];
+    for(let a=0;a<mono.length;a+=PV_HOP){
+      for(let i=0;i<N;i++){const j=a+i;re[i]=(j<mono.length?mono[j]:0)*win[i];im[i]=0;}
+      pvFFT(re,im,false);let rise=0,total=0;
+      for(let b=0;b<=N/2;b++){const m=Math.sqrt(re[b]*re[b]+im[b]*im[b]);rise+=Math.max(m-prev[b],0);total+=m;prev[b]=m;}
+      const r=total>1e-3?rise/total:0;
+      if(a>0&&a+N<=mono.length&&r>PV_TRANSIENT){const t=a+3*N/4,l=out[out.length-1];
+        if(l&&t<l[0]+N){if(r>l[1]){l[0]=t;l[1]=r;}}else out.push([t,r]);}}
+    return out.map(([t])=>{const a=t-3*N/4,e=[];
+      for(let j=0;j<N/64;j++){let s=0;for(let i=0;i<64;i++){const k=a+j*64+i;const x=k<mono.length?mono[k]:0;s+=x*x;}e.push(s);}
+      const r=j=>{const lo=Math.max(j-4,0);let s=0;for(let q=lo;q<j;q++)s+=e[q];return e[j]/(s/(j-lo)+1e-9);};
+      let best=0,bv=-Infinity;for(let j=1;j<e.length;j++){const v=r(j);if(v>=bv){bv=v;best=j;}}
+      return a+best*64;});}
+  function pvTimeMap(onsets,inLen,outLen){const f=outLen/inLen,segs=[];let pi=0,po=0;
+    for(const t of [0].concat(onsets)){const ia=Math.max(t-PV_LOCK,0),ib=Math.min(t+PV_LOCK,inLen);if(ib<=ia)continue;
+      const oa=t*f-(t-ia),ob=t*f+(ib-t);
+      if(ia<pi||oa<po||ob>outLen||((ia>pi)!==(oa>po))||ib>=inLen)continue;
+      if(ia>pi)segs.push([pi,ia-pi,po,oa-po,false]);segs.push([ia,ib-ia,oa,ob-oa,true]);pi=ib;po=ob;}
+    if(pi<inLen&&po<outLen)segs.push([pi,inLen-pi,po,outLen-po,false]);else if(!segs.length)segs.push([0,inLen,0,outLen,false]);
+    return t=>{const sg=segs.find(s=>t<s[2]+s[3])||segs[segs.length-1];const[ia,il,oa,ol,lock]=sg;
+      return[ia+(t-oa)*(ol>0?il/ol:1),lock&&t>=oa];};}
+  function stretchPV(chans,outLen){const inLen=chans.length?Math.min(...chans.map(c=>c.length)):0;
+    // canaux inégaux : la longueur la plus courte ; NaN / infini : un silence (comme loom-core)
+    chans=chans.map(c=>{const o=new Float32Array(inLen);for(let i=0;i<inLen;i++){const x=c[i];o[i]=isFinite(x)?x:0;}return o;});
+    if(!inLen||!outLen)return chans.map(()=>new Float32Array(outLen));
+    const N=PV_FRAME,H=PV_HOP,pad=N-H,frames=Math.ceil((outLen+pad)/H)+1,win=pvHann(N),half=N/2;
+    const mono=new Float64Array(inLen);for(let i=0;i<inLen;i++){let s=0;for(const c of chans)s+=c[i];mono[i]=s;}
+    const at=pvTimeMap(pvOnsets(mono),inLen,outLen),plan=[];let was=false;
+    for(let k=0;k<frames;k++){const[c,lock]=at(k*H-pad+half);plan.push([pvRound(c-half),k===0||(lock&&!was)]);was=lock;}
+    const omega=new Float64Array(N/2+1);for(let b=0;b<=N/2;b++)omega[b]=2*Math.PI*b/N;
+    const total=frames*H+N,norm=new Float64Array(total);for(let k=0;k<frames;k++)for(let i=0;i<N;i++)norm[k*H+i]+=win[i]*win[i];
+    return chans.map(ch=>{const acc=new Float64Array(total),re=new Float64Array(N),im=new Float64Array(N),last=new Float64Array(N/2+1),syn=new Float64Array(N/2+1);
+      for(let k=0;k<frames;k++){const[a,reset]=plan[k];
+        for(let i=0;i<N;i++){const j=a+i;re[i]=(j>=0&&j<ch.length?ch[j]:0)*win[i];im[i]=0;}
+        pvFFT(re,im,false);const step=k===0?0:a-plan[k-1][0];
+        for(let b=0;b<=N/2;b++){const mag=Math.sqrt(re[b]*re[b]+im[b]*im[b]),ph=Math.atan2(im[b],re[b]);
+          if(reset||step<=0)syn[b]=ph;else{const dev=pvWrap(ph-last[b]-omega[b]*step);syn[b]=pvWrap(syn[b]+(omega[b]+dev/step)*H);}
+          last[b]=ph;re[b]=mag*Math.cos(syn[b]);im[b]=mag*Math.sin(syn[b]);if(b>0&&b<N/2){re[N-b]=re[b];im[N-b]=-im[b];}}
+        im[0]=0;im[N/2]=0;pvFFT(re,im,true);const s=k*H;for(let i=0;i<N;i++)acc[s+i]+=re[i]/N*win[i];}
+      const out=new Float32Array(outLen);for(let i=0;i<outLen;i++){const q=pad+i;out[i]=norm[q]>1e-3?acc[q]/norm[q]:0;}return out;});}
+  // sons étirés : calculés à part en direct (le coup d'avant part en granulaire), tout de suite hors ligne
+  let stretchCache={},stretchGen=0,pvWorker=null,pvJobs=0;
+  function clearStretch(){stretchCache={};stretchGen++;}
+  // en direct le calcul part dans un Worker (le fil principal programme les notes, il ne doit pas attendre)
+  function pvWorkerGet(){if(pvWorker!==null)return pvWorker;
+    try{const src=["const PV_FRAME="+PV_FRAME+",PV_HOP="+PV_HOP+",PV_TRANSIENT="+PV_TRANSIENT+",PV_LOCK="+PV_LOCK+";",
+        "const pvRound="+pvRound.toString()+";",pvFFT,pvHann,pvWrap,pvOnsets,pvTimeMap,stretchPV].map(String).join("\n")+
+        "\nonmessage=e=>{const r=stretchPV(e.data.chans,e.data.frames);postMessage({id:e.data.id,res:r},r.map(x=>x.buffer));};";
+      pvWorker=new Worker(URL.createObjectURL(new Blob([src],{type:"text/javascript"})));
+      pvWorker.onerror=()=>{pvJobs=0;pvWorker=false;};}catch(_){pvWorker=false;}
+    return pvWorker;}
+  function pvBuffer(res,sr){const nb=new AudioBuffer({length:res[0].length,numberOfChannels:res.length,sampleRate:sr});
+    res.forEach((d,c)=>nb.copyToChannel(d,c));return nb;}
+  function stretchedBuffer(name,b,frames){const key=name+"|"+frames,hit=stretchCache[key];
+    const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext,offline=!!(OAC&&ctx instanceof OAC);
+    if(hit&&hit!=="…")return hit;
+    if(hit&&!offline)return null;  // en cours : ce coup-ci en granulaire
+    const chans=[];for(let c=0;c<Math.min(2,b.numberOfChannels);c++)chans.push(b.getChannelData(c));
+    if(Object.keys(stretchCache).length>=64)for(const k in stretchCache)if(stretchCache[k]!=="…")delete stretchCache[k];
+    if(offline){let res=null;const R=window.__loomRustMod;
+      if(window.__loomUseRust&&R&&R.stretch_pv){try{const all=R.stretch_pv(chans[0],chans[1]||new Float32Array(0),frames);
+        res=chans.map((_,c)=>all.slice(c*frames,(c+1)*frames));}catch(_){res=null;}}
+      if(!res)res=stretchPV(chans,frames);
+      return (stretchCache[key]=pvBuffer(res,b.sampleRate));}
+    const w=pvWorkerGet();if(!w||pvJobs>=4)return null;
+    const gen=stretchGen,id=Math.random();stretchCache[key]="…";pvJobs++;
+    const on=e=>{if(e.data.id!==id)return;w.removeEventListener("message",on);pvJobs--;
+      if(gen===stretchGen)try{stretchCache[key]=pvBuffer(e.data.res,b.sampleRate);}catch(_){delete stretchCache[key];}};
+    w.addEventListener("message",on);w.postMessage({id,frames,chans:chans.map(c=>c.slice())});return null;}
   function playSampleWarp(name,t,gain,dur,v,frozen){const b=sbuf[name];if(!b||!ctx)return false;
     const L=b.duration;if(L<0.02||!(dur>0.03))return playSample(name,t,gain,1,v);
+    if(v&&v.stretch&&!frozen){const sb=stretchedBuffer(name,b,Math.round(dur*b.sampleRate));
+      if(sb){const s=ctx.createBufferSource();s.buffer=sb;const g=ctx.createGain();g.gain.value=gain!=null?gain:0.9;
+        s.connect(g).connect(bus);connectFx(g,v);s.start(t);return true;}}  // pas encore prêt : ce coup-ci en granulaire
     const grain=frozen?0.13:0.10,hop=frozen?0.07:0.05,ratio=L/dur;let out=0,rd=frozen?L*0.35:0,n=0;
     while(out<dur&&n<400){const gl=Math.min(grain,L-rd);if(gl<=0.006)break;
       const s=ctx.createBufferSource();s.buffer=b;const g=ctx.createGain(),gt=t+out;
@@ -1890,7 +1974,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
     let syncName=null;
-    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,loopAt=null,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
+    let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,stretch=false,loopAt=null,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
       else if(p[0]==="oct"){const o=parseInt(p[1],10);if(!isNaN(o))oct=o;}
@@ -1919,7 +2003,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="voicing"||p[0]==="voice")voicing=p[1]||"open";
       else if(p[0]==="cresc")dyn=1;else if(p[0]==="dim"||p[0]==="decresc")dyn=-1;
       else if(p[0]==="reverse"||p[0]==="rev?")revsamp=true;
-      else if(p[0]==="warp"||p[0]==="stretch")warp=true;
+      else if(p[0]==="warp")warp=true;
+      else if(p[0]==="stretch"){warp=true;stretch=true;}  // vocodeur de phase
       else if(p[0]==="loopAt"||p[0]==="loopat"){const nn=Number(p[1]);warp=true;loopAt=Math.max(0.25,Math.min(16,(p[1]!=null&&p[1]!==""&&isFinite(nn)&&nn>0)?nn:1));}  // Tidal loopAt N : le sample étiré (warp) sur N mesures
       else if(p[0]==="freeze")freeze=true;
       else if(p[0]==="begin")sbeg=Math.max(0,Math.min(1,parseFloat(p[1])||0));
@@ -1985,7 +2070,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,bytebeat,syncName,syncv:null,type:DRUMS.has(name)?"drum":"mel",cells:[]});}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,stretch,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,bytebeat,syncName,syncv:null,type:DRUMS.has(name)?"drum":"mel",cells:[]});}
     // | sync AUTRE : résolu quand toutes les voix sont connues (miroir de loom-core SyncTo)
     for(const v of out){if(!v.syncName||v.syncName===v.name)continue;
       const l=out.find(w=>w.name===v.syncName&&!w.section)||out.find(w=>w.name===v.syncName);if(l)v.syncv=syncCycle(l);}
@@ -6352,6 +6437,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Samples","| root NOTE","accorde un sample mélodique à l'oreille"],
     ["Mes sons","panneau « mes sons »","dépose tes fichiers audio → | sample <ton_nom> (mémorisés)"],
     ["Multi-échantillons","piano_c3_v2.wav, snare_rr2.flac","| sample piano : zone la plus proche, couche de vélocité (v1 doux), prises alternées (rr) ; wav aiff flac mp3"],
+    ["Étirer","| stretch | loopAt 2","vocodeur de phase : la boucle suit le tempo, hauteur et attaques gardées (| warp = granulaire)"],
     ["MIDI","| midi CH","envoie la voix en MIDI (drums → canal 10)"],
     ["Lien Live","@voix.Param: 0 .5 1 . | slow 2","automation d'un paramètre du device Live de la piste de cette voix (0..1 = min..max, . = garde) ; sans « voix. », toutes les pistes Loom qui ont ce paramètre"],
     ["Lien Live","go: drop   go: 3","lance la scène Live « drop » (ou la 3e) quand le code est joué"],
@@ -6691,9 +6777,9 @@ const THEME_AA={
     const kr=st.getAllKeys(),vr=st.getAll();kr.onsuccess=()=>{vr.onsuccess=()=>{const ks=kr.result||[],vs=vr.result||[];
       for(let i=0;i<ks.length;i++)customRaw[ks[i]]=vs[i];zoneCache={};refreshCustomList();};};}catch(_){}}
   function addCustomFiles(files){for(const f of files){const name=sampName(f.name);
-    f.arrayBuffer().then(ab=>{customRaw[name]=ab;zoneCache={};idbPut(name,ab);delete sbuf[name];delete sload[name];
+    f.arrayBuffer().then(ab=>{customRaw[name]=ab;zoneCache={};clearStretch();idbPut(name,ab);delete sbuf[name];delete sload[name];
       if(ctx)loadSample(name);refreshCustomList();log("[ sample ] « "+name+" » ajouté","ai");});}}
-  function clearCustomSamples(){for(const n of Object.keys(customRaw)){delete customRaw[n];delete sbuf[n];delete sload[n];}zoneCache={};
+  function clearCustomSamples(){for(const n of Object.keys(customRaw)){delete customRaw[n];delete sbuf[n];delete sload[n];}zoneCache={};clearStretch();
     idbClear();refreshCustomList();log("[ sample ] samples perso vidés","ai");}
 
   const SYS=["You are the composition engine for LOOM, a live-coding music language.",
@@ -6768,6 +6854,7 @@ const THEME_AA={
     "- More sound design: unison N (2-7 stacked detuned oscillators = fat super-saw), detune C (cents spread), drive X (0-1 distortion/warmth), lfo TARGET RATE DEPTH (TARGET = cutoff | pitch | gain; RATE in Hz; DEPTH 0-1) e.g. | saw | unison 5 | detune 18 | lp 1200 | lfo cutoff 0.3 0.6 for a moving super-saw. Use drive on bass/lead for grit, lfo cutoff for movement, lfo pitch for vibrato, lfo gain for tremolo.",
     "- Real samples: add | sample NAME to a voice to play a real recorded sound instead of the synth. Synth drums (no sample needed): kick snare hat clap tom cowbell rim. Sampled drums: bd sd hh cp kick2 kick909 clubkick clap2 oh(open hat) rim cow perc tom tom2 tom3 ride tabla. Melodic (repitched): bass bass1 arpy gtr casio sax sitar juno pad2 hoover stab bleep sid voodoo. Loops/breaks (one-shot a whole drum loop): amen break amencut. BEAT-SLICING: | chop N cuts a loop/break into N slices and plays the next slice each hit (break: x x x x x x x x | sample amen | chop 8). Vocal/texture: vox yeah breath wood metal glass bottle. e.g. kick: x . x . | sample kick909 , lead: 1 3 5 1' | sample sitar , break: x . . . | sample amen. A melodic sample is repitched assuming its natural pitch is c3; if it sounds off, tune it with | root NOTE (e.g. | sample gtr | root c4). Samples load on the first RUN (a moment of delay; until then it falls back to the synth).",
     "- Multisample instruments: files named piano_c3, piano_g3_v2, snare_rr2 form ONE instrument. | sample piano picks the zone whose root is nearest the note (c3 = MIDI 48), the velocity layer matching the hit (v1 softest), and cycles the round-robin takes (rr1, rr2…). Files can be WAV, AIFF, FLAC or MP3.",
+    "- Time-stretch: | warp fits a sample to its step with grains (pitch kept, a bit grainy); | stretch does it with a phase vocoder that keeps the attacks dry and on the beat, so a drum loop stays tight at any tempo. Add | loopAt N to spread it over N bars: the loop then follows the bpm. | freeze holds one spot.",
     "- MIDI out: add | midi CH (1-16) to a voice to send it as MIDI notes to your DAW / hardware synth instead of the built-in sound (the browser asks permission on the first RUN). Melodic voices send their pitches; drum voices send the General-MIDI drum notes (kick=36 snare=38 hat=42 clap=39) — put drums on | midi 10. e.g. bass: 1 . 5 . | midi 1 , kick: x . x . | midi 10. If no MIDI device is connected it falls back to the internal sound.",
     "- Bitcrush / lo-fi: crush BITS (1-8) quantizes a voice to fewer bits for a crunchy, gritty, IDM/lo-fi texture (lower = dirtier). e.g. drums or a lead: ... | crush 4. Great for Aphex-style grit.",
     "- Chorus / width: chorus N (0-1) thickens and widens a voice with modulated stereo delays — lovely on pads, keys and leads, e.g. pad: ... | chorus 0.6. Phaser: | phaser N (0-1) sweeps a chain of all-pass notches with an LFO for the classic psychedelic whoosh — pads, leads, even hats. Per-voice compression: | comp N (0-1) tames transients and adds punch/glue — great on bass, drums, busy pads.",
@@ -8179,7 +8266,7 @@ const THEME_AA={
     return bytes;
   }
 
-    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,parseZone,zonesOf,pickZone,sampName,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,parseTune,tokenToFreq,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,stretchPV,pvOnsets,stretchState:()=>Object.keys(stretchCache).map(k=>k+(stretchCache[k]==="…"?" …":" ok")),parseZone,zonesOf,pickZone,sampName,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,parseTune,tokenToFreq,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

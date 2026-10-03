@@ -121,6 +121,12 @@ export function scala_key_line(scl: string, tonic: string): string;
  */
 export function schedule_bar_json(src: string, bar: number): string;
 
+/**
+ * `| stretch` : `left` (et `right`, vide en mono) étirés à `out_len` trames, hauteur
+ * gardée. Rend les canaux bout à bout (`out_len` trames chacun).
+ */
+export function stretch_pv(left: Float32Array, right: Float32Array, out_len: number): Float32Array;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -143,6 +149,7 @@ export interface InitOutput {
     readonly sample_zone: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
     readonly scala_key_line: (a: number, b: number, c: number, d: number) => [number, number];
     readonly schedule_bar_json: (a: number, b: number, c: number) => [number, number];
+    readonly stretch_pv: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
