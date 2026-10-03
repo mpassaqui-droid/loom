@@ -749,3 +749,15 @@ Rust d'abord (tests unitaires par feature + rétro-compat 144 ok) → `SynthV1` 
 `./build-wasm.sh` → miroir JS → parité (RENDER + RENDER2 + RENDER3 + analyse +
 onsets, worst seuil 5e-3) → clippy -D · check_web 4/4 · `git diff --check` ·
 commit + push · todo.md coché.
+
+## Nuit 2026-10-03 — LOOM Frankenstein vers Ableton (branche `frankenstein`)
+
+Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live à 0, sortie Mac coupée).
+
+- [x] **A · base** : `p6-3a-wip` fusionnée, miroir JS des 13 sources riches (af2518d). Tests 406/406, check_web 4/4, parité RENDER 9/9, RENDER2 16/16, WAV 16/16, analyse 24/24, onsets 278/278.
+- [x] **C1 · spike port MIDI « LOOM »** (`tools/midi_gigue.py`, horodatage CoreMIDI) :
+  - le fil MIDI dort jusqu'à 3 ms avant l'échéance puis tourne sur l'horloge : P95 1,0 à 1,5 ms (avant : 2,6 à 3,2 ms) sur les passes saines.
+  - boucle IAC corrigée : LOOM écrivait sur le bus IAC ET le relisait (ses propres notes rejouées en touches live, c'est le son entendu cette nuit).
+  - `LOOM_AUDIO_DEVICE=BlackHole` choisit la sortie audio (pour nourrir Live).
+  - ❌ ouvert : environ 1 passe sur 2, un décalage persistant d'exactement un pas (125,0 ms) apparaît en cours de route. Le séquenceur hors ligne est propre (test `midi_notes_survive_any_block_size`, 5 tailles de bloc), le rendu d'un bloc coûte 0,16 ms au pire. Cause à chercher côté fil audio temps réel / fil MIDI. Deux tentatives d'ancre d'horloge (WallClock) ont empiré : abandonnées.
+  - Conclusion produit : le port natif suffit pour jouer, pas pour vendre. Le produit Live passe par l'horloge de Live (cuisson en clips, device M4L).

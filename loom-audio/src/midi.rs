@@ -64,6 +64,9 @@ impl ClockFollower {
     }
 }
 
+/// How long before a message is due the MIDI thread stops sleeping and spins.
+const SPIN: Duration = Duration::from_millis(3);
+
 /// Where the audio thread hands timed MIDI events to the MIDI thread.
 pub type MidiSender = Sender<(Instant, MidiEvent)>;
 
@@ -93,8 +96,11 @@ impl MidiIo {
         let hw_port = hw.ports().into_iter().find(|p| {
             hw.port_name(p).map(|n| !n.contains("Through") && !n.contains("LOOM")).unwrap_or(false)
         });
+        // the port we write to must never be read back: a bus (IAC) would loop our own notes in
+        let mut out_name = String::new();
         if let Some(port) = hw_port {
             let name = hw.port_name(&port).unwrap_or_default();
+            out_name = name.clone();
             if let Ok(conn) = hw.connect(&port, "LOOM out") {
                 outputs.push(conn);
                 parts.push(format!("sortie {name}"));
@@ -105,7 +111,7 @@ impl MidiIo {
         let probe = MidiInput::new("LOOM").map_err(|e| e.to_string())?;
         for port in probe.ports() {
             let Ok(name) = probe.port_name(&port) else { continue };
-            if name.contains("Through") || name.contains("LOOM") { continue; }
+            if name.contains("Through") || name.contains("LOOM") || name == out_name { continue; }
             let Ok(mut input) = MidiInput::new("LOOM") else { continue };
             input.ignore(midir::Ignore::Sysex | midir::Ignore::ActiveSense);
             let cb = on_input.clone();
@@ -127,8 +133,11 @@ impl MidiIo {
             let mut pending: Vec<Timed> = Vec::new();
             loop {
                 // wait for new events, or until the next message is due
-                let wait = pending.iter().map(|m| m.at).min()
-                    .map(|t| t.saturating_duration_since(Instant::now()))
+                // the OS wakes a sleeping thread up to ~2 ms late: sleep until SPIN
+                // before the next message, then spin on the clock for the last stretch
+                let next = pending.iter().map(|m| m.at).min();
+                let wait = next
+                    .map(|t| t.saturating_duration_since(Instant::now()).saturating_sub(SPIN))
                     .unwrap_or(Duration::from_secs(1));
                 match rx.recv_timeout(wait) {
                     Ok((at, ev)) => {
@@ -137,6 +146,11 @@ impl MidiIo {
                     }
                     Err(RecvTimeoutError::Timeout) => {}
                     Err(RecvTimeoutError::Disconnected) => break,
+                }
+                if let Some(t) = pending.iter().map(|m| m.at).min() {
+                    if t.saturating_duration_since(Instant::now()) <= SPIN {
+                        while Instant::now() < t { std::hint::spin_loop(); }
+                    }
                 }
                 let now = Instant::now();
                 pending.sort_by_key(|m| m.at);

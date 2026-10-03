@@ -63,7 +63,15 @@ impl Engine {
     /// Open the default output device, the MIDI ports, and start the (silent) audio stream.
     pub fn start() -> Result<Engine, String> {
         let host = cpal::default_host();
-        let device = host.default_output_device().ok_or("aucune sortie audio trouvée")?;
+        // `LOOM_AUDIO_DEVICE=BlackHole` (part of a name) picks another output, e.g. to feed Live
+        let wanted = std::env::var("LOOM_AUDIO_DEVICE").ok().filter(|w| !w.is_empty());
+        let named = wanted.as_ref().and_then(|w| {
+            host.output_devices().ok()?.find(|d| d.description().map(|n| n.to_string().contains(w.as_str())).unwrap_or(false))
+        });
+        let device = match named {
+            Some(d) => d,
+            None => host.default_output_device().ok_or("aucune sortie audio trouvée")?,
+        };
         let device_name = device.description().map(|d| d.to_string()).unwrap_or_else(|_| "sortie audio".into());
         let supported = device.default_output_config().map_err(|e| e.to_string())?;
         let format = supported.sample_format();

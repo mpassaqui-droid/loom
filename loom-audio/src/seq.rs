@@ -933,6 +933,26 @@ mod tests {
     }
 
     #[test]
+    fn midi_notes_survive_any_block_size() {
+        // 16 bars of 16ths, rendered in small audio blocks like a live device: no note lost
+        for block in [64usize, 256, 441, 512, 1024] {
+            let mut s = seq();
+            s.set_program(Program::parse("bpm: 120\nlead: c4 d4 e4 f4 g4 a4 b4 c5 c4 d4 e4 f4 g4 a4 b4 c5 | midi 1"));
+            s.play();
+            let mut buf = vec![0.0; block * 2];
+            let total = (16.0 * 2.0 * SR) as usize;
+            let mut notes = Vec::new();
+            for _ in 0..total / block {
+                s.render(&mut buf, 2);
+                for m in s.midi_out.drain(..) { if let MidiEvent::Note(n) = m { notes.push(n.at) } }
+            }
+            let mut d: Vec<f64> = notes.windows(2).map(|w| w[1] - w[0]).collect();
+            d.retain(|x| (x - 0.125).abs() > 1e-3);
+            assert!(notes.len() >= 255 && d.is_empty(), "bloc {block}: {} notes, écarts {d:?}", notes.len());
+        }
+    }
+
+    #[test]
     fn midi_voices_emit_notes_instead_of_sound() {
         let mut s = seq();
         s.set_program(Program::parse("bpm: 120\nkeys: c4 . e4 . | midi 2"));

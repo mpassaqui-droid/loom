@@ -20,3 +20,6 @@ confirmed: toute feature de langage passe par loom-core d'abord (parser + tests,
 
 # Finition demandée explicitement
 lesson: quand le propriétaire redemande de « rendre parfait » après un rapport de limites connues, traiter ces limites comme du travail à finir et vérifier les portes de qualité avant de conclure.
+
+# Silence avant tout test MIDI avec Live ouvert
+lesson: avant de lancer `loom play` (même avec des voix `| midi`), Live ouvert = son garanti : le set par défaut arme une piste MIDI en « All Ins » et LOOM envoie aussi vers le bus IAC. Toujours d'abord master Live à 0 et pistes désarmées (AbletonOSC), puis tester. Munay a entendu le test le 03/10 la nuit.
