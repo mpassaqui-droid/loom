@@ -28,6 +28,13 @@ une scène par section. Lance les scènes de haut en bas. Pour le modifier, glis
 Le device écrit un clip « Loom · kick » dans la piste, de la longueur du morceau
 (`song:`), en boucle. Lance-le comme n'importe quel clip.
 
+## Voir
+
+Le device montre le piano-roll de sa voix, avec la tête de lecture du clip : les
+notes s'allument quand elles sonnent. Clique dessus : la scène s'ouvre dans une
+fenêtre, tout le morceau, chaque voix dans sa couleur tire ses particules quand
+elle joue (comme la scène de l'éditeur web).
+
 ## Coder en direct
 
 Chaque fois que tu enregistres le fichier `.loom`, le device recuit le clip

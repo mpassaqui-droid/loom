@@ -42,6 +42,31 @@ def code():
     ])
 
 
+def vue_code():
+    return open(os.path.join(ICI, 'loom_vue.js')).read()
+
+
+def v8ui(id, rect, mode, presentation_rect=None):
+    b = boite(id, 'v8ui', rect, None, 1, 1, [''], parameter_enable=0, filename='loom_vue.js', embed=1,
+              jsarguments=[mode],
+              textfile={'filename': 'loom_vue.js', 'flags': 0, 'embed': 1, 'autowatch': 0, 'text': vue_code()})
+    if presentation_rect:
+        b.update(presentation=1, presentation_rect=presentation_rect)
+    return b
+
+
+def scene():
+    # la fenêtre de la scène : un sous-patch avec le v8ui en mode « scene »
+    W, H = 960.0, 540.0
+    p = amxd.patcher([
+        boite('obj-1', 'inlet', [10, 10, 30, 30], None, 0, 1, ['']),
+        v8ui('obj-2', [0, 0, W, H], 'scene', [0, 0, W, H]),
+    ], [], 'Loom · scène', largeur=W)
+    p.update(rect=[120.0, 120.0, W, H], openrect=[0.0, 0.0, W, H], toolbarvisible=0, statusbarvisible=0,
+             enablehscroll=0, enablevscroll=0, devicewidth=0.0)
+    return p
+
+
 def boite(id, classe, rect, texte=None, ins=1, outs=0, types=None, **attrs):
     b = {'id': id, 'maxclass': classe, 'numinlets': ins, 'numoutlets': outs, 'patching_rect': rect}
     if texte is not None:
@@ -79,6 +104,10 @@ def patch(test=False):
                                                       'parameter_shortname': 'loomfichier',
                                                       'parameter_type': 3, 'parameter_invisible': 1}}),
         boite('obj-12', 'newobj', [200, 520, 100, 22], 'prepend restaure', 1, 1, ['']),
+        # les visuels : piano-roll dans le device, un clic ouvre la scène
+        v8ui('obj-13', [460, 200, 388, 96], 'mini', [6, 66, 388, 96]),
+        boite('obj-14', 'newobj', [460, 310, 60, 22], 'pcontrol', 1, 1, ['']),
+        boite('obj-15', 'newobj', [460, 340, 80, 22], 'p scène', 1, 0, None, patcher=scene()),
         boite('obj-9', 'newobj', [400, 20, 50, 22], 'midiin', 1, 1, ['int']),
         boite('obj-10', 'newobj', [400, 440, 50, 22], 'midiout', 1, 0),
     ]
@@ -91,6 +120,7 @@ def patch(test=False):
         ('obj-2', 1, 'obj-8', 0),
         ('obj-9', 0, 'obj-10', 0),
         ('obj-2', 2, 'obj-11', 0), ('obj-11', 0, 'obj-12', 0), ('obj-12', 0, 'obj-2', 0),
+        ('obj-13', 0, 'obj-14', 0), ('obj-14', 0, 'obj-15', 0),
     ]
     boites = [b for b in boites if b['id'] != 'obj-6']
     if not test:

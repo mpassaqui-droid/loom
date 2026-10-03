@@ -134,7 +134,29 @@ function cuire() {
         new LiveAPI('live_set').set('tempo', cuit.bar_bpm[0]);
         etat.tempoFait = true;
     }
+    publieVue(cuit, choix.name, longueur, clip);
     dire(choix.name + ' · ' + notes.length + ' notes · ' + cuit.bars + ' mesures · ' + (Date.now() - t0) + ' ms');
+}
+
+// Les visuels (loom_vue.js, deux v8ui) lisent ce Dict propre au device.
+function publieVue(cuit, voix, longueur, clip) {
+    var id = Number(new LiveAPI('this_device').id);
+    if (!(id > 0)) return;
+    var d = new Dict('loomvue_' + id);
+    d.parse(JSON.stringify({
+        version: Date.now(),
+        voix: voix,
+        beats: longueur,
+        mesure: cuit.meter_beats,
+        clip: String(clip.unquotedpath || ''),
+        // pas de tableaux imbriqués dans un Dict Max : des objets
+        sections: (cuit.sections || []).map(function (x) { return { nom: x[0], debut: x[1] }; }),
+        pistes: cuit.tracks.map(function (t) {
+            var n = [];
+            t.notes.forEach(function (x) { n.push(x[0], x[1], x[2], x[3]); });
+            return { nom: t.name, drum: t.drum ? 1 : 0, n: n };
+        }),
+    }));
 }
 
 // Le clip de Loom : celui dont le nom commence par « Loom », sinon le premier emplacement vide.
