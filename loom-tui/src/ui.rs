@@ -33,7 +33,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let grid_width = (GRID_STEPS as u16 * 2 + 14).min(body.width / 2);
     let [code, side] = Layout::horizontal([Constraint::Min(20), Constraint::Length(grid_width)]).areas(body);
     draw_editor(f, app, code);
-    if app.studio.show_roll { studio_view::draw_roll(f, app, side) } else { draw_grid(f, app, side) }
+    if app.studio.show_notation { studio_view::draw_notation(f, app, side) }
+    else if app.studio.show_roll { studio_view::draw_roll(f, app, side) } else { draw_grid(f, app, side) }
     if matches!(app.mode, Mode::Mixer { .. }) { studio_view::draw_mixer(f, app, body); }
     if has_song { studio_view::draw_timeline(f, app, timeline); }
     draw_status(f, app, bottom);
@@ -354,6 +355,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         section("IA — VIBE"),
         key("Alt+N / Alt+Z", "morceau suivant / au hasard (comme les presets du web)"),
         key("Ctrl+O puis Suppr", "mettre un de tes morceaux à la corbeille"),
+        key("Alt+F", "partition : la mesure en cours sur une grande portée (clé de sol et de fa)"),
         key("Alt+C", "thème suivant : les 62 thèmes du web, gardé au prochain lancement"),
         key("Alt+K", "lien Live : chaque RUN enregistre le fichier, le device Loom de Live le suit"),
         key("Alt+X", "exporter un fichier MIDI standard (.mid) à côté du morceau, pour un DAW"),

@@ -208,6 +208,75 @@ pub fn draw_roll(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(Paragraph::new(lines), inner);
 }
 
+/// La partition (Alt+F) à la place de la grille : clé de sol en haut, clé de fa en bas,
+/// une tête de note par note de la mesure en cours, ♯/♭ devant si besoin.
+pub fn draw_notation(f: &mut Frame, app: &App, area: Rect) {
+    use loom_app::studio::notation::{midi_name, staff};
+    let t = &app.theme;
+    let block = Block::new().borders(Borders::ALL).border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(c(t.dim)))
+        .title(Span::styled(" partition · Alt+F grille ", Style::new().fg(c(t.foreground))));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    let status = app.engine.as_ref().ok().map(|e| e.status()).filter(|s| s.playing());
+    let program = app.studio_program();
+    let (notes, _) = staff(&roll::roll(&program, status.map_or(0, |s| s.song_bar())));
+    if inner.width < 10 || inner.height < 4 {
+        return;
+    }
+    let label_w = 3usize;
+    let cols = inner.width as usize - label_w;
+    // chaque portée : degrés 10 (2 lignes supp. au-dessus) à -2 (en dessous)
+    const TOP: i32 = 10;
+    const LOW: i32 = -2;
+    let per = (TOP - LOW + 1) as usize;
+    let line_c = c(t.dim);
+    let mut lines: Vec<Line> = Vec::new();
+    for treble in [true, false] {
+        let mut rows: Vec<Vec<(char, Color)>> = (0..per).map(|r| {
+            let deg = TOP - r as i32;
+            let ch = if (0..=8).contains(&deg) && deg % 2 == 0 { '─' } else { ' ' };
+            vec![(ch, line_c); cols]
+        }).collect();
+        for n in notes.iter().filter(|n| n.treble == treble) {
+            let deg = n.degree.clamp(LOW, TOP);
+            let r = (TOP - deg) as usize;
+            let x = ((n.start * cols as f32) as usize).min(cols - 1);
+            let colour = hue_color(n.hue, 0.7);
+            // lignes supplémentaires sous la tête
+            let mut d = if deg > 8 { 10 } else { -2 };
+            while (deg > 8 && d <= deg) || (deg < 0 && d >= deg) {
+                let lr = (TOP - d) as usize;
+                for cell in &mut rows[lr][x.saturating_sub(1)..(x + 2).min(cols)] {
+                    if cell.0 == ' ' { *cell = ('─', line_c); }
+                }
+                d += if deg > 8 { 2 } else { -2 };
+            }
+            rows[r][x] = ('●', colour);
+            let name = midi_name(n.midi);
+            if x > 0 {
+                if name.contains('♯') { rows[r][x - 1] = ('♯', colour); }
+                if name.contains('♭') { rows[r][x - 1] = ('♭', colour); }
+            }
+        }
+        let head = status.map(|s| ((s.phase() * cols as f32) as usize).min(cols - 1));
+        for (r, cells) in rows.into_iter().enumerate() {
+            let label = if r == (TOP - 4) as usize { if treble { "sol" } else { "fa " } } else { "   " };
+            let mut spans = vec![Span::styled(label.to_string(), Style::new().fg(c(t.dim)))];
+            for (x, (ch, colour)) in cells.into_iter().enumerate() {
+                let mut style = Style::new().fg(colour);
+                if head == Some(x) { style = style.bg(c(t.selection)); }
+                spans.push(Span::styled(ch.to_string(), style));
+            }
+            lines.push(Line::from(spans));
+        }
+    }
+    if notes.is_empty() {
+        lines.push(Line::styled(" écris une mélodie (notes, degrés ou accords)", Style::new().fg(c(t.dim))));
+    }
+    f.render_widget(Paragraph::new(lines), inner);
+}
+
 /// The import prompt on the status line (Alt+I).
 pub fn draw_import(f: &mut Frame, app: &App, area: Rect) {
     let Mode::Import { input } = &app.mode else { return };

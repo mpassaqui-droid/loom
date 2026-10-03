@@ -54,6 +54,8 @@ pub struct Studio {
     pub demo: Option<DemoRun>,
     /// The side panel shows the piano roll instead of the grid.
     pub show_roll: bool,
+    /// Alt+F: la partition (grande portée) à la place de la grille.
+    pub show_notation: bool,
     tap: TapTempo,
     scope: Box<[f32; SCOPE_LEN]>,
     clock: Instant,
@@ -73,6 +75,7 @@ impl Studio {
             clips: Clips::default(),
             demo: None,
             show_roll: false,
+            show_notation: false,
             tap: TapTempo::default(),
             scope: Box::new([0.0; SCOPE_LEN]),
             clock: Instant::now(),
@@ -182,6 +185,10 @@ impl App {
             KeyCode::Char('z' | 'Z') => self.other_song(true),
             KeyCode::Char('k' | 'K') => self.toggle_lien(),
             KeyCode::Char('c' | 'C') => self.next_theme(),
+            KeyCode::Char('f' | 'F') => {
+                self.studio.show_notation = !self.studio.show_notation;
+                self.info(if self.studio.show_notation { "partition (Alt+F pour revenir)" } else { "grille" });
+            }
             _ => return false,
         }
         true
