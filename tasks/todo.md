@@ -851,7 +851,7 @@ B. Vente
 C. Paquets
 - [x] C1 Versions et `loom --version`, notes de version
 - [x] C2 GitHub Actions : macOS (Intel + Apple Silicon), Windows .msi, Linux .deb et .tar.gz
-- [~] C3 macOS : DMG signé (LOOM.app + binaire universel) fait ; notarisation en attente du profil notarytool de Munay
+- [x] C3 macOS : DMG signé et notarisé (profil Keychain `loom`), agrafé, Gatekeeper « Notarized Developer ID » sur le DMG et sur LOOM.app (3 octobre)
 - [x] C4 Homebrew : tap `loom` (formule qui télécharge le binaire)
 - [ ] C5 Téléchargements sur munaypassaqui.com/loom/dl (décidé) : à publier quand Munay dit go
 - [ ] B3 Lemon Squeezy : créer le produit, mettre STORE_ID et PRODUCT_ID dans loom-app/src/licence.rs
