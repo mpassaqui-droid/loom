@@ -56,8 +56,11 @@ def compose(requete, executable='claude'):
                 '--no-session-persistence', '--setting-sources', '', '--model', modele,
                 '--system-prompt', systeme]
     with tempfile.TemporaryDirectory() as vide:     # aucun fichier du Mac à portée
-        r = subprocess.run(commande, input=demande, capture_output=True, text=True,
-                           timeout=DELAI, cwd=vide, env=env)
+        try:
+            r = subprocess.run(commande, input=demande, capture_output=True, text=True,
+                               timeout=DELAI, cwd=vide, env=env)
+        except FileNotFoundError:
+            raise RuntimeError('Claude Code n\'est pas installé sur ce Mac : colle ta clé Anthropic dans VIBE (clé)') from None
     if r.returncode != 0:
         raise RuntimeError((r.stderr or r.stdout or 'claude -p a échoué').strip()[:300])
     return r.stdout.strip()

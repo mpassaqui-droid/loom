@@ -13,9 +13,10 @@ une scène par section. Lance les scènes de haut en bas. Pour le modifier, glis
 
 ## Installer
 
-1. Copie `Loom.amxd` dans `User Library/Presets/MIDI Effects/Max MIDI Effect/`
-   (c'est là que le set de démo le cherche).
-2. Il faut Live 12 Suite (ou Standard avec Max for Live), Live 12.2 ou plus récent.
+Double-clique `installe.command`. Il pose le device **Loom** dans ta User Library,
+et installe la fenêtre Loom (la page de Loom et son petit serveur local, qui
+n'écoute que ce Mac) avec un service qui la lance à chaque session.
+Il faut Live 12 Suite (ou Standard avec Max for Live), Live 12.2 ou plus récent.
 
 ## Jouer
 
@@ -23,18 +24,35 @@ une scène par section. Lance les scènes de haut en bas. Pour le modifier, glis
 2. Nomme la piste comme une voix de ton morceau : `kick`, `bass`, `pad`…
    (`Loom kick` marche aussi).
 3. Pose le device **Loom** sur la piste, avant l'instrument.
-4. Écris ton code dans l'éditeur du device, puis **Tab** (ou **▶ jouer**).
+4. Clique **Ouvrir Loom** : c'est Loom en entier, comme sur le web (éditeur,
+   visuels, VIBE). **RUN** écrit les clips dans Live ; **▶ Live** les lance,
+   **■ Live** arrête. **son Loom** : entendre aussi le son de Loom lui-même.
 
 Le code est celui de tout le morceau, partagé par tous les devices Loom du set :
 écris-le sur n'importe quelle piste, chaque piste cuit sa voix. Il est sauvé avec
 le set. Une erreur garde l'ancien clip : la musique ne s'arrête pas.
 
 Tu préfères ton éditeur ? Glisse un fichier `.loom` sur la zone « fichier » :
-le device suit ses enregistrements, et l'éditeur du device écrit dedans.
+le device suit ses enregistrements.
 
 Le device écrit un clip « Loom · kick » dans la piste, de la longueur du morceau
-(`song:`), en boucle. Lance-le comme n'importe quel clip. Si la piste n'a plus
-d'emplacement libre, il ajoute une scène en bas.
+(`song:`), en boucle. Si la piste n'a plus d'emplacement libre, il ajoute une scène en bas.
+
+## VIBE (l'IA)
+
+Décris ta musique, Claude écrit le code, Loom le vérifie avant de le jouer.
+Colle ta clé Anthropic dans VIBE (clé), ou, si Claude Code est installé sur ce
+Mac, rien à faire : la fenêtre passe par lui.
+
+## Relier Live et Loom
+
+- `@bass.Filter Freq: 0 .25 .5 1 | slow 2` : l'automation du paramètre « Filter Freq »
+  d'un device de la piste `bass`, écrite dans le clip, un pas par valeur
+  (0 = minimum, 1 = maximum, `.` = garde la valeur). Sans `bass.`, toutes les
+  pistes Loom qui ont ce paramètre le suivent.
+- `go: drop` : quand tu joues le code, Live lance la scène « drop » (`go: 3` = la 3e).
+- **⇣ clip Live** (dans la fenêtre) : le clip MIDI sélectionné dans Live devient
+  une ligne de code en bas de l'éditeur.
 
 ## Voir
 

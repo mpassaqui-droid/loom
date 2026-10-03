@@ -3,8 +3,9 @@
 
     ./build-wasm.sh && python3 m4l/package.py
 
-Contenu : le device, le mode d'emploi FR/EN, le script de cuisson complète
-(bake_live.py) et quelques morceaux d'exemple. Rien n'est publié.
+Contenu : le device, la fenêtre Loom (web/ + le pont local), l'installeur
+(installe.command), le mode d'emploi, le script de cuisson complète (bake_live.py)
+et quelques morceaux d'exemple. Rien n'est publié.
 """
 import os, shutil, subprocess, sys
 
@@ -19,6 +20,13 @@ os.makedirs(os.path.join(DIST, 'exemples'))
 shutil.copy(os.path.join(ICI, 'LOOM.amxd'), os.path.join(DIST, 'Loom.amxd'))
 shutil.copy(os.path.join(ICI, 'LISEZ-MOI.md'), DIST)
 shutil.copy(os.path.join(RACINE, 'tools', 'bake_live.py'), DIST)
+# la fenêtre Loom : la page web (sans les fichiers de travail) et son pont local
+shutil.copytree(os.path.join(RACINE, 'web'), os.path.join(DIST, 'web'),
+                ignore=shutil.ignore_patterns('.DS_Store', '*.d.ts', 'package.json', '.gitignore'))
+os.makedirs(os.path.join(DIST, 'pont'))
+shutil.copy(os.path.join(RACINE, 'tools', 'loom_pont_ia.py'), os.path.join(DIST, 'pont'))
+shutil.copy(os.path.join(ICI, 'installe.command'), DIST)
+os.chmod(os.path.join(DIST, 'installe.command'), 0o755)
 for e in EXEMPLES:
     shutil.copy(os.path.join(RACINE, e), os.path.join(DIST, 'exemples', os.path.basename(e)))
 # le set de démo (m4l/demo_live.py, puis enregistré dans Live sous m4l/demo/), s'il existe
