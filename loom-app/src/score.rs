@@ -64,6 +64,8 @@ fn value_of(d: u32) -> (&'static str, bool, bool) {
 
 /// Les notes d'une voix calées sur la grille et coupées en mesures.
 pub fn staff(track: &BakedTrack, bars: u32, meter_beats: f64) -> Staff {
+    let bars = bars.clamp(1, MAX_BARS);
+    let meter_beats = if meter_beats.is_finite() { meter_beats.clamp(0.25, 64.0) } else { 4.0 };
     let bar = (meter_beats * DIV as f64).round().max(1.0) as u32;
     let total = bar * bars;
     // chaque temps choisit sa grille : double croche ou triolet de croches.
@@ -283,6 +285,21 @@ pub fn musicxml(baked: &Baked, title: &str, key: Option<&loom_core::Key>) -> Str
     x
 }
 
+/// Une chaîne LilyPond sûre : guillemets et barres obliques échappés, pas de
+/// caractère de contrôle (un `\` final fermait la chaîne et laissait passer du Scheme).
+fn ly_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars().filter(|c| !c.is_control()) {
+        match c { '\\' => out.push_str("\\\\"), '"' => out.push_str("\\\""), _ => out.push(c) }
+    }
+    out.push('"');
+    out
+}
+
+/// Au plus tant de mesures dans une partition (une heure à 120 bpm en 4/4).
+pub const MAX_BARS: u32 = 2048;
+
 fn ly_duration(d: u32) -> String {
     let (kind, dot, _) = value_of(d);
     let n = match kind { "whole" => "1", "half" => "2", "quarter" => "4", "eighth" => "8", "16th" => "16", _ => "32" };
@@ -311,14 +328,14 @@ pub fn lilypond(baked: &Baked, title: &str, key: Option<&loom_core::Key>) -> Str
     const MAJ: [&str; 15] = ["ces", "ges", "des", "aes", "ees", "bes", "f", "c", "g", "d", "a", "e", "b", "fis", "cis"];
     let key_cmd = format!("\\key {} \\major", MAJ[(fifths + 7).clamp(0, 14) as usize]);
     let bpm = baked.bar_bpm.first().copied().unwrap_or(120.0).round();
-    let mut out = format!("\\version \"2.24.0\"\n\\header {{ title = \"{}\" tagline = \"LOOM\" }}\n\n\\score {{\n  <<\n", title.replace('"', "'"));
+    let mut out = format!("\\version \"2.24.0\"\n\\header {{ title = {} tagline = \"LOOM\" }}\n\n\\score {{\n  <<\n", ly_str(title));
     for t in baked.tracks.iter().filter(|t| !t.notes.is_empty()) {
         let s = staff(t, baked.bars, baked.meter_beats);
-        let name = s.name.replace('"', "'");
+        let name = ly_str(&s.name);
         let mut body = String::new();
         for (m, items) in s.measures.iter().enumerate() {
             if let Some((sec, ..)) = baked.sections.iter().find(|(_, start, _)| *start as usize == m) {
-                body.push_str(&format!("\\mark \\markup \\box \"{}\" ", sec.replace('"', "'")));
+                body.push_str(&format!("\\mark \\markup \\box {} ", ly_str(sec)));
             }
             for it in items {
                 let d = ly_duration(it.dur);
@@ -339,10 +356,10 @@ pub fn lilypond(baked: &Baked, title: &str, key: Option<&loom_core::Key>) -> Str
             body.push_str("|\n      ");
         }
         if s.drum {
-            out.push_str(&format!("    \\new DrumStaff \\with {{ instrumentName = \"{name}\" }} \\drummode {{\n      \\time {num}/{den} \\tempo 4 = {bpm}\n      {body}}}\n"));
+            out.push_str(&format!("    \\new DrumStaff \\with {{ instrumentName = {name} }} \\drummode {{\n      \\time {num}/{den} \\tempo 4 = {bpm}\n      {body}}}\n"));
         } else {
             let clef = if s.bass_clef { "bass" } else { "treble" };
-            out.push_str(&format!("    \\new Staff \\with {{ instrumentName = \"{name}\" }} {{\n      \\clef {clef} {key_cmd} \\time {num}/{den} \\tempo 4 = {bpm}\n      {body}}}\n"));
+            out.push_str(&format!("    \\new Staff \\with {{ instrumentName = {name} }} {{\n      \\clef {clef} {key_cmd} \\time {num}/{den} \\tempo 4 = {bpm}\n      {body}}}\n"));
         }
     }
     out.push_str("  >>\n  \\layout { }\n}\n");
@@ -351,6 +368,7 @@ pub fn lilypond(baked: &Baked, title: &str, key: Option<&loom_core::Key>) -> Str
 
 /// Écrit la partition à côté du morceau : `.musicxml` (ou `.xml`) ou `.ly`.
 pub fn write(src: &str, title: &str, bars: u32, path: &std::path::Path) -> Result<usize, String> {
+    if bars > MAX_BARS { return Err(format!("partition : {MAX_BARS} mesures au plus")); }
     let baked = loom_audio::bake::bake(src, bars);
     let program = loom_core::Program::parse(src);
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
@@ -422,6 +440,18 @@ mod tests {
         let mut ride = track(&[(60, 0.0, 0.5), (60, 1.0, 0.5)]);
         ride.name = "ride".into();
         assert!(staff(&ride, 1, 4.0).drum);
+    }
+
+    #[test]
+    fn chaines_lilypond_sures_et_taille_bornee() {
+        assert_eq!(ly_str("a\\"), "\"a\\\\\"");
+        assert_eq!(ly_str("x\" #(system \"rm\")"), "\"x\\\" #(system \\\"rm\\\")\"");
+        let b = loom_audio::bake::bake("lead: c4 d4", 2);
+        let ly = lilypond(&b, "fin\\", None);
+        assert!(ly.contains("title = \"fin\\\\\""), "{ly}");
+        let s = staff(&track(&[(60, 0.0, 1.0)]), u32::MAX, 4.0);
+        assert_eq!(s.measures.len(), MAX_BARS as usize);
+        assert!(write("lead: c4", "t", MAX_BARS + 1, std::path::Path::new("/tmp/x.ly")).is_err());
     }
 
     #[test]
