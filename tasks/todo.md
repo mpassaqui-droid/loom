@@ -784,3 +784,8 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] **C5 · paquet** : `python3 m4l/package.py` → `dist/LOOM-pour-Live/` (device, LISEZ-MOI FR/EN, `bake_live.py`, 6 exemples) + zip 387 Ko. Rien publié. Reste : un set de démo `.als` (il faut sauver depuis l'interface de Live).
 - [x] **B4 · sûreté du live** : vérifié, le TUI (`app.rs:160`), le web (`run()` : « no valid voices ») et le device gardent l'ancienne version quand le code n'a aucune voix ; le GUI ne le faisait pas (RUN d'un code vide coupait la musique) : corrigé. Le fondu à la mesure existe déjà (`morph: N`).
 - [x] **Contre-vérification de la cuisson** (sous-agent, à froid) : `skip_to_next_bar` contre `render()` réel, 62 fichiers .loom, 549 voix, 0 différence (hauteur, temps, vélocité, durée). Risque résiduel noté : un futur verbe qui lirait `clock.seconds`/`clock.bars` au moment de planifier ferait diverger la cuisson ; non couverts : horloge MIDI, `bpm_override`, `morph:`.
+
+## Fusion verbes-tidal dans frankenstein (2026-10-03)
+- [x] `origin/verbes-tidal` fusionnée (2d3b3da) : `ply`, `linger`, `segment`, `range`, `loopAt`. Sautés : `stut`, `rolled`, `nudge`, `chop` (déjà là), `striate` (reporté).
+- [x] Portes après fusion : 414 tests, clippy propre, check_web 4/4, RENDER2 16/16, WAV 16/16, ANALYSE 24/24, TIDAL 88/88, onsets 366/366, runtime 41 ticks, device 5/5.
+- [x] Revue sécurité : le port UDP de contrôle (7402) n'est plus dans le device livré, seulement avec `build_device.py --test`.

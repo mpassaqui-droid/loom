@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fabrique le device Max for Live « LOOM.amxd » (MIDI Effect).
 
-    ./build-wasm.sh && python3 m4l/build_device.py [--installe]
+    ./build-wasm.sh && python3 m4l/build_device.py [--installe] [--test]
     node m4l/test_device.js       (le device simulé hors de Max : cuisson = loom bake)
 
 Tout tient dans un seul fichier : le code du device (m4l/loom_device.js), la colle
@@ -9,6 +9,7 @@ wasm-bindgen (web/pkg/loom_wasm.js, débarrassée de ses `export` et de
 `import.meta`) et le moteur loom-core en WASM, encodé en base64, dans un
 [v8.codebox]. --installe copie le device dans la User Library de Live
 (Presets/MIDI Effects/Max MIDI Effect), là où le navigateur de Live le voit.
+--test ajoute le port UDP de contrôle (7402 entrée, 7401 sortie), jamais livré.
 """
 import base64, os, re, shutil, sys
 
@@ -51,7 +52,7 @@ def boite(id, classe, rect, texte=None, ins=1, outs=0, types=None, **attrs):
     return b
 
 
-def patch():
+def patch(test=False):
     boites = [
         boite('obj-1', 'newobj', [20, 20, 90, 22], 'live.thisdevice', 1, 3, ['bang', 'int', 'int']),
         boite('obj-2', 'v8.codebox', [20, 200, 420, 200], None, 1, 3, ['', '', ''],
@@ -92,6 +93,11 @@ def patch():
         ('obj-2', 2, 'obj-11', 0), ('obj-11', 0, 'obj-12', 0), ('obj-12', 0, 'obj-2', 0),
     ]
     boites = [b for b in boites if b['id'] != 'obj-6']
+    if not test:
+        # le port UDP de contrôle n'existe que pour les tests : dans le device livré,
+        # personne sur le réseau ne doit pouvoir charger un chemin ou du code
+        boites = [b for b in boites if b['id'] not in ('obj-5', 'obj-8')]
+        lignes = [l for l in lignes if 'obj-5' not in (l[0], l[2]) and 'obj-8' not in (l[0], l[2])]
     return amxd.patcher(boites, lignes, 'LOOM', largeur=400.0)
 
 
@@ -99,7 +105,7 @@ if __name__ == '__main__':
     if '--code' in sys.argv:                      # le JS seul, pour m4l/test_device.js
         open(sys.argv[sys.argv.index('--code') + 1], 'w').write(code())
         sys.exit(0)
-    amxd.ecrit(SORTIE, patch(), 'midi')
+    amxd.ecrit(SORTIE, patch('--test' in sys.argv), 'midi')
     print(SORTIE, os.path.getsize(SORTIE) // 1024, 'Ko')
     if '--installe' in sys.argv:
         os.makedirs(BIBLIO, exist_ok=True)
