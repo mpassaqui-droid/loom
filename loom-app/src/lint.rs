@@ -33,6 +33,21 @@ pub const KNOWN: &[&str] = &[
     "cutoff", "pitch", "reso", "hall", "plate", "spring", "cathedral", "auto", "bd", "sd", "hh", "cp", "oh", "rim", "cow",
     "perc", "tom", "ride", "tabla", "amen", "break", "sitar", "arpy", "sax", "juno", "vox", "yeah", "breath", "glass",
     "metal", "wood",
+    // lus par le parseur (synth.rs, lib.rs) : verbes, gammes, accords, grooves
+    "7b5", "7b9", "M13", "acoustic", "add11", "add9", "aeolian", "air", "ajam", "altered",
+    "aug", "augmented", "ayoub", "baiao", "bebop", "bebop_dominant", "bebop_major", "bembe", "blues_major", "bossa",
+    "byzantine", "chinese", "cinquillo", "conv", "decresc", "dilla", "dim7", "diminished", "div", "dom7",
+    "double_harmonic", "drawbars", "egyptian", "enigmatic", "fifth", "flutter", "formant", "glide", "grace", "granular",
+    "gypsy", "harm", "harmonicminor", "hijazkar", "hirajoshi", "hmz", "humanish", "hungarian_major", "hungarian_minor", "huzam",
+    "insen", "ionian", "iwato", "jiharkah", "kumoi", "laidback", "lydian_augmented", "lydian_dominant", "m11", "m13",
+    "m7b5", "maj", "maj13", "maj7", "maj9", "majblues", "majpent", "maqsum", "marwa", "melodicminor",
+    "messiaen3", "messiaen4", "min", "min6", "min7", "min7b5", "min9", "minpent", "modal", "montuno",
+    "mpc", "neapolitan_major", "neapolitan_minor", "octatonic", "octatonic_hw", "octatonic_wh", "octup", "overtone", "persian", "phrygian_dominant",
+    "pinkyup", "prometheus", "purvi", "push", "rand", "ritusen", "rotate", "rumba", "samba", "sawtooth",
+    "send", "shiko", "sikah", "someby", "son", "spanish", "string", "super_locrian", "sus", "sus2",
+    "sus4", "swing16", "thumbup", "todi", "trancegate", "transpose", "tresillo", "triangle", "vocoder", "voice",
+    "whole_tone", "wholetone", "widen", "wind",
+    "mmaj7", "mMaj7", "aug7",
     // ajoutés à la main par le web
     "in", "lp", "hp", "bp", "notch", "q", "mute", "solo", "over", "chord", "s",
 ];
@@ -181,6 +196,25 @@ mod tests {
         let src = "bpm: 120\nkick: x . x . | gain 0.8\nlead: c4 eb4 g4 | saw | reverb 0.3   # c#4 en commentaire\n";
         assert!(lint(src, None).is_empty());
         assert_eq!(summary(&[]), None);
+    }
+
+    /// Chaque mot que le parseur accepte en tête de branche est connu du correcteur
+    /// (sinon `| send …` passait pour une faute de `bend`).
+    #[test]
+    fn connait_tout_ce_que_le_parseur_lit() {
+        for f in ["synth.rs", "lib.rs"] {
+            let src = std::fs::read_to_string(format!("{}/../loom-core/src/{f}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+            for line in src.lines() {
+                let l = line.trim_start();
+                let Some(arm) = l.split("=>").next().filter(|_| l.starts_with('"') && l.contains("=>")) else { continue };
+                let arm = arm.split(" if ").next().unwrap_or(arm);
+                for w in arm.split('|').map(|x| x.trim().trim_matches('"')) {
+                    let ok = w.len() < 3 || !w.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+                    assert!(ok || KNOWN.contains(&w), "{f} : « {w} » lu par le parseur mais inconnu du correcteur");
+                }
+            }
+        }
+        assert!(lint("lead: c4 | send rev 0.4 | glide 0.1 | widen 1.2\n", None).is_empty());
     }
 
     #[test]

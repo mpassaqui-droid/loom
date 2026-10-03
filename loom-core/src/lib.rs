@@ -1726,8 +1726,8 @@ pub fn degree_freq(midi: i32, interval_from_tonic: i32, tuning: Tuning) -> f32 {
 //     key: c minor
 //     bass: 1 . 5 . 3 . 5 .      # 1=c, 5=g, 3=eb  (the b3 comes from the scale)
 // Octave marks: `'` raises one octave, `,` lowers one (Lilypond-style).
-// Chromatic alterations on degrees (#/b) are intentionally NOT supported yet —
-// the scale itself supplies the right accidentals.
+// Chromatic alterations on degrees: `4#` / `7b` raise or lower the degree by a
+// semitone (see `is_degree` / `degree_to_midi`); otherwise the scale supplies them.
 // ---------------------------------------------------------------------------
 
 /// A declared tonality: a tonic pitch-class plus a scale (intervals from the
