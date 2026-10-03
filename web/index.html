@@ -1713,6 +1713,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       if(toks.length)stacks.push(toks);}
     if(!stacks.length)continue;const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
+    let syncName=null;
     let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,loopAt=null,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
     for(const seg of segs.slice(1)){if(!seg)continue;const p=seg.split(/\s+/);
       if(WAVES[p[0]])wave=WAVES[p[0]];else if(p[0]==="gain")gain=Math.max(0,Math.min(1,parseFloat(p[1])||0.22));
@@ -1795,6 +1796,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="double"||p[0]==="octup"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.5;if(nn>1)nn/=100;double=Math.max(0,Math.min(1,nn));}
       else if(p[0]==="bow")bow=true;
       else if(p[0]==="reed"||p[0]==="wind")reed=true;
+      else if(p[0]==="sync"&&p[1]&&/^[A-Za-z_]/.test(p[1]))syncName=p[1].toLowerCase();  // | sync AUTRE : repart avec le cycle d'une autre voix (un nombre = hard sync)
       else if(p[0]==="sync"){let nn=parseFloat(p[1]);sync=isNaN(nn)?3:Math.max(1.2,Math.min(8,nn));}
       else if(p[0]==="vocode"||p[0]==="vocoder")vocode=p[1]||"vox";
       else if(p[0]==="redux"){let nn=parseFloat(p[1]);if(isNaN(nn))nn=0.5;if(nn>1)nn/=100;redux=Math.max(0,Math.min(1,nn));}
@@ -1807,7 +1809,21 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,bytebeat,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,bytebeat,syncName,syncv:null,type:DRUMS.has(name)?"drum":"mel",cells:[]});}
+    // | sync AUTRE : résolu quand toutes les voix sont connues (miroir de loom-core SyncTo)
+    for(const v of out){if(!v.syncName||v.syncName===v.name)continue;
+      const l=out.find(w=>w.name===v.syncName&&!w.section)||out.find(w=>w.name===v.syncName);if(l)v.syncv=syncCycle(l);}
+    return out;}
+  // durée du cycle d'une voix meneuse en mesures {num,den} : poly N → L/N, poly m:n → L/(m·n),
+  // voix simple → 1 (K avec slow K), bytebeat → 1
+  function syncCycle(l){if(l.bytebeat)return{num:1,den:1};const len=Math.max(1,l.tokens.length);
+    if(typeof l.poly==="number")return{num:len,den:Math.max(1,l.poly)};
+    if(l.poly&&typeof l.poly==="object")return{num:len,den:Math.max(1,l.poly.m*l.poly.n)};
+    for(const vb of l.verbs){const w=vb.trim().split(/\s+/);if(w[0]==="slow"){const k=/^[+-]?\d+$/.test(w[1]||"")?parseInt(w[1],10):2;return{num:Math.max(1,k),den:1};}}
+    return{num:1,den:1};}
+  // pas local depuis la dernière reprise du meneur : r = ⌊s·den/(spb·num)⌋, s_r = ⌈r·num·spb/den⌉
+  function syncLocal(s,spb,sy){const a=Math.max(1,sy.num),b=Math.max(1,sy.den);spb=Math.max(1,spb);
+    const r=Math.floor(s*b/(spb*a)),sr=Math.floor((r*a*spb+b-1)/b);return s-sr;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -2376,7 +2392,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       // drifts against the bar grid when its length != N (Reich-style phasing).
       // `| poly m:n` = explicit polyrhythm (triolet): n windows of m steps each.
       if(v.poly){if(typeof v.poly==="object"&&v.poly.m>0&&v.poly.n>0){const m=v.poly.m,n=v.poly.n,total=n*m,gstep=cycleLen/total,toks=v.tokens,nn=toks.length;
-        if(nn)for(let g=0;g<total;g++){const s=bar*total+g;let tok=toks[((s%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
+        if(nn)for(let g=0;g<total;g++){const s=bar*total+g,ls=v.syncv?syncLocal(s,total,v.syncv):s;let tok=toks[((ls%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
           const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
           const base=tm[0];if(base===""||base==="."||base==="~")continue;
           let t0=barT+g*gstep,vel=1;if(g%2===1)t0+=(v.swing!=null?v.swing:sw)*gstep;
@@ -2384,7 +2400,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
           for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2],vel*tm[3]*rampF(j,tm[2],tm[4]));}
         continue;}
       const spb=(typeof v.poly==="number"&&v.poly>0)?v.poly:16,gstep=cycleLen/spb,toks=v.tokens,nn=toks.length;
-        if(nn)for(let i=0;i<spb;i++){const s=bar*spb+i;let tok=toks[((s%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
+        if(nn)for(let i=0;i<spb;i++){const s=bar*spb+i,ls=v.syncv?syncLocal(s,spb,v.syncv):s;let tok=toks[((ls%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
           const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
           const base=tm[0];if(base===""||base==="."||base==="~")continue;
           let t0=barT+i*gstep,vel=1;if(i%2===1)t0+=(v.swing!=null?v.swing:sw)*gstep;
@@ -2396,7 +2412,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       //  off N <verb>: an extra copy shifted N steps later, quieter (canon/echo)
       const hu=(o,d)=>o.hue!=null?(o.hue+d)%360:null;
       const stk=(v.stacks&&v.stacks.length>1)?v.stacks:[v.tokens];
-      for(const toks of stk){const baseEff=effectiveOf(toks,v,bar);
+      for(const toks of stk){let baseEff=effectiveOf(toks,v,bar);
+        if(v.syncv&&baseEff.length){const n=baseEff.length,e0=baseEff;baseEff=e0.map((_,i)=>e0[((syncLocal(bar*n+i,n,v.syncv)%n)+n)%n]);}  // | sync : la mesure repart à chaque reprise du meneur
         let layers=[[v,baseEff,0]];
         if(v.jux&&baseEff.length)layers=[[{...v,pan:-0.82},baseEff,0],
           [{...v,pan:0.82,hue:hu(v,30)},applyOne(baseEff,v.jux,bar),0]];
@@ -3566,6 +3583,7 @@ void main(){
     let usesDeg=false,usesProg=false;
     for(const v of voices){
       if(v.sample&&!okSample(v.sample))w.push("sample « "+v.sample+" » inconnu ("+v.name+")");
+      if(v.syncName&&!v.syncv&&v.syncName!==v.name)w.push("« sync "+v.syncName+" » : voix inconnue, ignoré ("+v.name+")");
       if(v.sections)for(const s of v.sections)if(secs.size&&!secs.has(s))w.push("« "+v.name+" » joue dans « "+s+" » mais cette section n'est pas dans song:");
       if(v.section&&secs.size&&!secs.has(v.section))w.push("« "+v.name+"@"+v.section+" » : section absente de song:");
       for(const t of (v.tokens||[])){if(/^[1-7][#b]?[',]*([?*!].*)?$/.test(t))usesDeg=true;else if(t&&t[0]==="^")usesProg=true;}}
@@ -6110,6 +6128,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Verbes","| invert   | sequence N","invert = mélodie en miroir ; sequence = motif suivi d'une copie transposée"],
     ["Verbes (génératif)","| mutate N   | stutter N","mutate = fait évoluer le motif chaque mesure (N% de changement) ; stutter = beat-repeat (boucle le 1/N)"],
     ["Bytebeat","nom: t: EXPR","voix-formule : t compte à 8000 Hz depuis le début, sortie = octet bas de la valeur ; entiers 32 bits, + - * / % & | ^ << >> ~ < > ==, division par 0 = 0 · ex. crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3"],
+    ["Sync","| sync AUTRE","le motif repart de son premier jeton à chaque reprise du cycle de la voix AUTRE (poly N : L/N mesure, voix simple : 1 mesure, slow K : K) · ex. arp: 1 3 5 | poly 16 | sync kick · | sync 3 (un nombre) = hard sync"],
     ["Verbes Tidal","| ply N  | linger F  | segment N  | range A B  | loopAt N","ply = chaque coup répété N fois dans son pas ; linger = boucle la fraction F de la mesure ; segment = rééchantillonne en N pas ; range = recadre les degrés sur A..B ; loopAt = sample étiré sur N mesures"],
     ["Son","| tape N","macro lo-fi cassette : wow + saturation + souffle en un seul réglage (0-1)"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
@@ -6432,6 +6451,7 @@ const THEME_AA={
     "- prog: auto also has: cinematic, lofi, edm, house, and random (a fresh random diatonic progression each RUN).",
     "- Generative variation: | mutate N evolves a pattern over time — each bar it randomly nudges about N% of the notes (transposes degrees, fills rests), seeded so it's reproducible. | stutter N is a beat-repeat: it loops the first 1/N of the pattern. e.g. lead: 1 2 3 5 | mutate 30 , drums: x . x . | stutter 4.",
     "- Bytebeat voice: a voice whose body starts with t: is a formula of t, the sample counter at 8000 Hz since the song started (crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3). Integers only, 32-bit wrapping, operators + - * / % & | ^ << >> ~ and comparisons < > == (0 or 1), C precedence, parentheses; division by zero gives 0. Output = low byte of the value (0..255) as a waveform. It plays no notes: only gain, pan, reverb, delay, send, bus, mute, solo, chance and in apply. Keep gain at 0.2..0.4 (it is loud) and use one bytebeat voice at most, as texture or lo-fi lead (classics: t*(42&t>>10), t*((t>>12|t>>8)&63&t>>4)).",
+    "- | sync OTHER (OTHER = a voice name): this voice's pattern restarts from its first token every time voice OTHER's cycle restarts (like Sonic Pi live_loop sync). Cycle of OTHER: | poly N with L tokens = L/N bar, | poly m:n = L/(m*n), a plain voice = 1 bar (K bars with | slow K). Use it to re-align a polymeter on the bar or on another loop: arp: 1 3 5 | poly 16 | sync kick (the 3-note loop restarts every bar instead of drifting). A number (| sync 3) is still the oscillator hard sync.",
     "- Tidal verbs: | ply N repeats every event N times inside its own step (hat: x . x . | ply 2 = rolls). | linger F loops only the first fraction F of the bar (0.25 = first quarter; negative = the last part, linger -0.25). | segment N resamples the line into N even steps (lead: 1 3 5 | segment 6 = 1 1 3 3 5 5). | range A B rescales the pattern's lowest..highest degree onto degrees A..B (lead: walk(8) | range 3 6 , or range 1 1'' to stretch a motif over two octaves; integers above 7 mean higher octaves, 8 = 1'). | loopAt N stretches a sample (warp, pitch kept) over N bars: break: x . . . | sample amen | loopAt 2. For rhythmic echoes use | echo DIV FB or | off N (not stut, which in LOOM is the stutter beat-repeat); for strummed chords use | strum.",
     "- Tape macro: | tape N (0-1) is a one-knob lo-fi cassette character — wow-and-flutter + gentle saturation + a touch of hiss. Lovely on keys/pads/whole voices for nostalgia.",
     "- Additive synthesis: | partials A B C ... builds a sound from the amplitude of each harmonic (1 = fundamental, 2 = octave, 3 = fifth above...). e.g. | partials 1 0 0.5 0 0.33 (odd harmonics = hollow/clarinet-ish). | organ 888650000 is a Hammond drawbar shortcut (9 digits 0-8). Pure, clean tones.",

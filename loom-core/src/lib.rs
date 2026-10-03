@@ -83,6 +83,63 @@ pub struct Voice {
     /// 8 kHz depuis le début du morceau). Une telle voix ne produit AUCUN
     /// événement (`tokens` = un silence `~`) : le moteur audio la rend en continu.
     pub bytebeat: Option<Arc<Expr>>,
+    /// `| sync AUTRE` : le cycle du motif repart à chaque reprise du cycle de la
+    /// voix `AUTRE` (voir [`SyncTo`]). `None` sans sync, ou si la voix est inconnue.
+    pub sync: Option<SyncTo>,
+}
+
+/// `| sync AUTRE` (live_loop sync de Sonic Pi, réalignement de polymétrie).
+///
+/// Sémantique exacte (identique dans le miroir JS) :
+/// - toute voix est vue comme une suite de pas, `spb` pas par mesure : `poly N`
+///   → N, `poly m:n` → m·n, une voix simple → le nombre de pas de SA mesure
+///   (motif effectif, verbes appliqués). Le pas global est `s = mesure·spb + i`.
+/// - le cycle du meneur `AUTRE` dure `num/den` mesures : `poly N` avec L jetons
+///   → L/N ; `poly m:n` avec L jetons → L/(m·n) ; une voix simple → 1 mesure,
+///   ou K mesures avec un verbe `slow K` ; une voix bytebeat → 1 mesure.
+///   Ses reprises tombent aux temps `k·num/den` mesures depuis le début.
+/// - sans sync, le jeton joué au pas `s` est `jetons[s mod L]` (poly) ou
+///   `jetons[i]` (voix simple). Avec sync, il devient `jetons[(s − s_r) mod L]`
+///   où `s_r` est le premier pas de la voix à l'instant de la dernière reprise
+///   du meneur ou après (`r = ⌊s·den/(spb·num)⌋`, `s_r = ⌈r·num·spb/den⌉`) :
+///   le motif repart de son premier jeton à chaque reprise du meneur.
+/// - le meneur est cherché parmi toutes les voix (la variante de base d'abord) ;
+///   il n'a pas besoin de jouer à cette mesure. Son propre `sync` est ignoré
+///   (pas de chaîne). Une voix inconnue, ou soi-même, est ignorée sans erreur
+///   (le linter du web le signale). `| sync 3` (un nombre) reste le hard sync
+///   d'oscillateur : un nom de voix commence par une lettre.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncTo {
+    pub leader: String,
+    /// Durée du cycle du meneur en mesures : `num / den`.
+    pub num: u32,
+    pub den: u32,
+}
+
+/// Pas local depuis la dernière reprise du meneur (voir [`SyncTo`]).
+fn sync_local(s: i64, spb: i64, sy: &SyncTo) -> i64 {
+    let (a, b) = (sy.num.max(1) as i64, sy.den.max(1) as i64);
+    let spb = spb.max(1);
+    let r = (s * b).div_euclid(spb * a);
+    let sr = (r * a * spb + b - 1).div_euclid(b);
+    s - sr
+}
+
+/// Durée du cycle d'une voix meneuse, en mesures `(num, den)`.
+fn cycle_of(v: &Voice) -> (u32, u32) {
+    if v.bytebeat.is_some() { return (1, 1); }
+    let len = v.tokens.len().max(1) as u32;
+    match v.poly {
+        Some(Poly::Meter(n)) => (len, n.max(1)),
+        Some(Poly::Grid(m, n)) => (len, (m * n).max(1)),
+        None => {
+            let slow = v.verbs.iter().find_map(|vb| {
+                let mut w = vb.split_whitespace();
+                (w.next() == Some("slow")).then(|| w.next().and_then(|x| x.parse::<i64>().ok()).unwrap_or(2).max(1))
+            });
+            (slow.unwrap_or(1).min(u32::MAX as i64) as u32, 1)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -512,6 +569,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
     let expanded = expand_macros(src);
     let src = expanded.as_str();
     let mut out = Vec::new();
+    let mut names_sync: Vec<Option<String>> = Vec::new();
     for raw in src.lines() {
         let line = decomment(raw).trim();
         if line.is_empty() || line.starts_with('#') { continue; }
@@ -565,6 +623,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
         let mut off = None;
         let mut degrade = 0.0_f32;
         let mut chance = None;
+        let mut sync_name: Option<String> = None;
         let mut synth = Synth::default();
         let mut verbs = Vec::new();
 
@@ -621,6 +680,9 @@ pub fn parse(src: &str) -> Vec<Voice> {
             } else if head == "chance" {
                 let c2 = parts.next().and_then(|x| x.parse::<f32>().ok()).unwrap_or(0.5);
                 chance = Some((if c2 > 1.0 { c2 / 100.0 } else { c2 }).clamp(0.0, 1.0));
+            } else if head == "sync" && seg.split_whitespace().nth(1).is_some_and(|w| w.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')) {
+                // `| sync AUTRE` : une voix (un nombre = le hard sync du synthé)
+                sync_name = parts.next().map(|w| w.to_lowercase());
             } else if head == "in" {
                 let secs: Vec<String> = parts.map(|s| s.to_lowercase()).collect();
                 if !secs.is_empty() { sections = Some(secs); }
@@ -629,7 +691,19 @@ pub fn parse(src: &str) -> Vec<Voice> {
             }
         }
         let synth = Arc::new(synth);
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance, synth, bytebeat });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance, synth, bytebeat, sync: None });
+        names_sync.push(sync_name);
+    }
+    // `| sync AUTRE` : résolu quand toutes les voix sont connues
+    for k in 0..out.len() {
+        let Some(name) = &names_sync[k] else { continue };
+        if *name == out[k].name { continue; }
+        let leader = out.iter().find(|w| w.name == *name && w.section.is_none())
+            .or_else(|| out.iter().find(|w| w.name == *name));
+        if let Some(l) = leader {
+            let (num, den) = cycle_of(l);
+            out[k].sync = Some(SyncTo { leader: name.clone(), num, den });
+        }
     }
     out
 }
@@ -1317,7 +1391,8 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                 if nn > 0 {
                     for i in 0..spb {
                         let s = bar * spb as i64 + i as i64;
-                        let idx = s.rem_euclid(nn as i64) as usize;
+                        let ls = v.sync.as_ref().map_or(s, |sy| sync_local(s, spb as i64, sy));
+                        let idx = ls.rem_euclid(nn as i64) as usize;
                         let off = step_offset(i, spb, v, groove);
                         let p0 = i as f32 / spb as f32 + off;
                         let p1 = (i + 1) as f32 / spb as f32 + off;
@@ -1337,7 +1412,8 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                         for i in 0..m {
                             let g = w * m + i; // global step index within the bar
                             let s = bar * total as i64 + g as i64;
-                            let idx = s.rem_euclid(nn as i64) as usize;
+                            let ls = v.sync.as_ref().map_or(s, |sy| sync_local(s, total as i64, sy));
+                            let idx = ls.rem_euclid(nn as i64) as usize;
                             let off = step_offset(g, total, v, groove);
                             let p0 = g as f32 / total as f32 + off;
                             let p1 = (g + 1) as f32 / total as f32 + off;
@@ -1353,8 +1429,13 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
         // stacks: each `;`-separated line plays simultaneously (a single line = one stack)
         let lines: &[Vec<String>] = if v.stacks.len() > 1 { &v.stacks } else { std::slice::from_ref(&v.tokens) };
         for line in lines {
-            let eff = effective_of(line, v, bar, seed);
+            let mut eff = effective_of(line, v, bar, seed);
             if eff.is_empty() { continue; }
+            // `| sync AUTRE` : la mesure repart du début à chaque reprise du meneur
+            if let Some(sy) = &v.sync {
+                let n = eff.len() as i64;
+                eff = (0..n).map(|i| eff[sync_local(bar * n + i, n, sy).rem_euclid(n) as usize].clone()).collect();
+            }
             // Pattern algebra layers (mirrors the JS engine):
             //  jux <verb> : original hard-left + a <verb>-copy hard-right (stereo split)
             //  off N <verb>: for each layer, an extra copy shifted N steps later, quieter
@@ -2430,6 +2511,78 @@ mod tests {
         assert_eq!(p.voices.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), vec!["ok"]);
         // une voix nommée t reste une voix normale
         assert!(parse("t: x . x .")[0].bytebeat.is_none());
+    }
+
+    /// (phase arrondie au millième, jeton) d'une voix sur une mesure.
+    fn hits(p: &Program, voice: &str, bar: i64) -> Vec<(i32, String)> {
+        p.schedule_bar(bar).into_iter().filter(|e| e.voice == voice)
+            .map(|e| ((e.phase * 1000.0).round() as i32, e.token)).collect()
+    }
+
+    #[test]
+    fn sync_restarts_a_poly_loop_on_every_bar_of_a_plain_leader() {
+        // 3 jetons en poly 4 dérivent (a b c a | b c a b …) ; synchronisés sur
+        // une voix simple (cycle d'une mesure), chaque mesure repart de « a ».
+        let free = Program::parse("lead: c4 d4 e4 | poly 4\nkick: x . x .");
+        assert_eq!(hits(&free, "lead", 1).iter().map(|h| h.1.as_str()).collect::<Vec<_>>(), vec!["d4", "e4", "c4", "d4"]);
+        let p = Program::parse("lead: c4 d4 e4 | poly 4 | sync kick\nkick: x . x .");
+        assert_eq!(p.voices[0].sync, Some(SyncTo { leader: "kick".into(), num: 1, den: 1 }));
+        for bar in 0..4 {
+            assert_eq!(hits(&p, "lead", bar).iter().map(|h| h.1.as_str()).collect::<Vec<_>>(), vec!["c4", "d4", "e4", "c4"], "bar {bar}");
+        }
+    }
+
+    #[test]
+    fn sync_follows_a_drifting_poly_leader() {
+        // meneur : 5 jetons en poly 16 -> cycle de 5/16 de mesure, reprises aux
+        // pas 0 5 10 15 20 25 30 ... ; le suiveur (3 jetons, poly 16) repart à chacune.
+        let p = Program::parse("arp: c4 d4 e4 | poly 16 | sync lead\nlead: x . . . . | poly 16");
+        assert_eq!(p.voices[0].sync, Some(SyncTo { leader: "lead".into(), num: 5, den: 16 }));
+        let want = |bar: i64| -> Vec<String> {
+            (0..16).map(|i| {
+                let s = bar * 16 + i;
+                let last = s / 5 * 5;
+                ["c4", "d4", "e4"][((s - last) % 3) as usize].to_string()
+            }).collect()
+        };
+        for bar in 0..3 {
+            assert_eq!(hits(&p, "arp", bar).into_iter().map(|h| h.1).collect::<Vec<_>>(), want(bar), "bar {bar}");
+        }
+    }
+
+    #[test]
+    fn sync_rotates_a_plain_voice_mid_bar() {
+        // meneur : 3 jetons en poly 4 -> cycle 3/4 de mesure ; à la mesure 1 il
+        // repart au temps 1,5 mesure, soit au pas 2 d'une voix simple de 4 pas.
+        let p = Program::parse("m: c4 d4 e4 f4 | sync l\nl: x . . | poly 4");
+        assert_eq!(hits(&p, "m", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["c4", "d4", "e4", "c4"]);
+        assert_eq!(hits(&p, "m", 1).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["d4", "e4", "c4", "d4"]);
+        // les positions ne bougent pas, seuls les jetons tournent
+        assert_eq!(hits(&p, "m", 1).iter().map(|h| h.0).collect::<Vec<_>>(), vec![0, 250, 500, 750]);
+    }
+
+    #[test]
+    fn sync_with_slow_leader_and_bad_names() {
+        // meneur `slow 2` : cycle de 2 mesures, le suiveur ne repart qu'une mesure sur deux
+        let p = Program::parse("a: c4 d4 e4 | poly 4 | sync b\nb: x . | slow 2");
+        assert_eq!(p.voices[0].sync.as_ref().map(|s| (s.num, s.den)), Some((2, 1)));
+        let toks = |bar| hits(&p, "a", bar).into_iter().map(|h| h.1).collect::<Vec<_>>();
+        assert_eq!(toks(0), vec!["c4", "d4", "e4", "c4"]);
+        assert_eq!(toks(1), vec!["d4", "e4", "c4", "d4"]);
+        assert_eq!(toks(2), vec!["c4", "d4", "e4", "c4"]);
+        // voix inconnue ou soi-même : ignoré, même résultat que sans sync
+        let free = Program::parse("a: c4 d4 e4 | poly 4");
+        for src in ["a: c4 d4 e4 | poly 4 | sync nobody", "a: c4 d4 e4 | poly 4 | sync a"] {
+            let q = Program::parse(src);
+            assert!(q.voices[0].sync.is_none());
+            for bar in 0..3 { assert_eq!(hits(&q, "a", bar), hits(&free, "a", bar)); }
+        }
+        // un nombre reste le hard sync d'oscillateur
+        let h = Program::parse("a: c4 | saw | sync 3\nb: x");
+        assert!(h.voices[0].sync.is_none() && h.voices[0].synth.sync == Some(3.0));
+        // meneur avec variante de section : la variante de base donne le cycle
+        let v = Program::parse("song: x*1 y*1\nm: c4 d4 e4 | poly 4 | sync k\nk: x x | poly 4\nk@y: x | poly 4");
+        assert_eq!(v.voices[0].sync.as_ref().map(|s| (s.num, s.den)), Some((2, 4)));
     }
 
     #[test]

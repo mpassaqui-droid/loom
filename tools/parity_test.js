@@ -141,6 +141,17 @@ const tidal_pieces = {
 };
 Object.assign(pieces, tidal_pieces);
 
+// `| sync AUTRE` (B5) : le cycle repart avec celui d'une autre voix. Parité
+// stricte onset + jeton (seuls les jetons tournent), sur 4 mesures.
+const sync_pieces = {
+  'sync poly sur voix simple': "key: c minor\nlead: 1 3 5 | poly 4 | sync kick\nkick: x . x .\nfree: 1 3 5 | poly 4",
+  'sync sur meneur poly qui dérive': "key: d dorian\narp: 1 2 3 | poly 16 | sync lead\nlead: 5 . . . 1 | poly 16\nhat: x . x | poly 8 | sync lead",
+  'sync voix simple tournée en cours de mesure': "key: a minor\nm: 1 2 3 4 | sync l\nl: 1 . 5 | poly 4\nm2: 1 [3 5] . 7 | every 2 rev | sync l | jux rev",
+  'sync meneur slow 2 + poly m:n': "key: c major\na: 1 2 3 | poly 4 | sync b\nb: x . | slow 2\nc: 1 3 5 7 5 | poly 3:2 | sync l2\nl2: x x x | poly 4",
+  'sync inconnu, soi-même, hard sync': "key: c major\na: 1 2 3 | poly 4 | sync nobody\nb: 1 2 3 | poly 4 | sync b\nc: 1 3 | saw | sync 3",
+};
+Object.assign(pieces, sync_pieces);
+
 // ── ANALYSER PARITY (offline teacher analysis) ─────────────────────────────
 // The Rust analyser (loom-core::prof, now the web's default via analyze_json)
 // must agree line-for-line with the JS analyzePiece (the long-tested fallback):
@@ -400,7 +411,22 @@ for (const line of ['crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4 | pan -0.5', '
 }
 console.log(`\nBYTEBEAT parity (expressions + PCM + coupe, JS <-> Rust): ${bb_total - bb_bad}/${bb_total}  ${bb_bad === 0 ? '✅' : '⚠️ ' + bb_bad + ' diffs'}`);
 
+let sy_total = 0, sy_bad = 0;
+for (const [name, src] of Object.entries(sync_pieces)) {
+  const key = L.parseKey(src);
+  for (let bar = 0; bar < 4; bar++) {
+    const js = notesOf(L.scheduleBar(src, bar), e => jsMidi(e.tok, key, e.drum));
+    const rs = notesOf(JSON.parse(W.schedule_bar_json(src, bar)), rsMidi);
+    for (const v of new Set([...Object.keys(js), ...Object.keys(rs)])) {
+      sy_total++;
+      const a = (js[v] || []).join(' '), b = (rs[v] || []).join(' ');
+      if (a !== b) { sy_bad++; if (sy_bad <= 8) console.log(`  SYNC DIFF [${name} bar${bar} ${v}]\n    JS  : ${a}\n    Rust: ${b}`); }
+    }
+  }
+}
+console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/${sy_total} voice×bar  ${sy_bad === 0 ? '✅' : '⚠️ ' + sy_bad + ' diffs'}`);
+
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
