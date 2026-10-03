@@ -11,13 +11,22 @@
 // (Dict « loom_projet ») : chaque piste recuit sa voix. Il est sauvé avec le set
 // (pattr), et écrit dans le fichier .loom s'il y en a un de lié.
 //
-// Messages : fichier <chemin> · code <texte> · editeur <texte> · voix <nom> · cuire · bang (init)
+// L'IA (la même consigne SYS que l'éditeur web) : on décrit la musique, Claude
+// écrit le code, le moteur le vérifie AVANT de l'appliquer (jamais de code cassé).
+// La clé Claude reste sur ce Mac (~/.loom_claude_key), jamais dans le set.
+//
+// Messages : fichier <chemin> · code <texte> · editeur <texte> · ia <demande> · cle <clé>
+//            reponseia dictionary <nom> · lancer · arreter · voix <nom> · cuire · bang (init)
 // Sorties  : 0 = texte d'état · 1 = OSC de contrôle (tests) · 2 = pattr chemin
-//            3 = pattr code · 4 = l'éditeur (set <texte>)
+//            3 = pattr code · 4 = l'éditeur (set <texte>) · 5 = maxurl · 6 = champ de la clé
 
 autowatch = 0;
 inlets = 1;
-outlets = 5;
+outlets = 7;
+
+var MODELE_IA = 'claude-fable-5-1';
+// le patcher du device, pris au chargement (« this » au niveau du script = l'objet Max)
+var monPatcher = (typeof this !== 'undefined' && this && this.patcher) ? this.patcher : null;
 
 var PROJET = 'loom_projet';
 var etat = { fichier: '', source: '', lu: null, voix: '', pret: false, tempoFait: false, projet: null };
@@ -38,7 +47,10 @@ function bang() {
             return;
         }
     }
-    dire(etat.fichier ? 'Loom prêt · ' + etat.fichier : 'Loom prêt · écris ton code, Tab pour jouer');
+    dire(etat.fichier ? 'Loom prêt · ' + etat.fichier : 'Loom prêt · Ouvrir Loom pour écrire');
+    outlet(1, '/loom/maison', maison() || '?');   // diagnostic (port de test seulement)
+    // un « lancer » d'une session d'avant ne doit pas relancer ce device à son arrivée
+    if (etat.lance === undefined) etat.lance = new Dict(PROJET).get('lancer');
     if (!veille) {
         veille = new Task(surveille, this);
         veille.interval = 500;
@@ -101,6 +113,99 @@ function restaurecode() {
     if (etat.pret) cuire();
 }
 
+// ---- l'IA ----
+
+function maison() {
+    // le dossier de l'utilisateur, tiré du chemin du device (User Library ou projet)
+    var p = String((monPatcher && monPatcher.filepath) || '');
+    var m = /^(?:[^:\/]+:)?(\/Users\/[^\/]+)\//.exec(p);
+    return m ? m[1] : '';
+}
+
+function fichierCle() { var h = maison(); return h ? h + '/.loom_claude_key' : ''; }
+
+var cleMemoire = '';
+
+function lisCle() {
+    if (cleMemoire) return cleMemoire;
+    var chemin = fichierCle();
+    if (!chemin) return '';
+    var f = new File(chemin, 'read');
+    if (!f.isopen) return '';
+    var t = f.eof > 0 ? f.readstring(f.eof) : '';
+    f.close();
+    cleMemoire = String(t || '').replace(/\s/g, '');
+    return cleMemoire;
+}
+
+function cle() {
+    var k = texteDe(arguments).replace(/\s/g, '');
+    if (!k) return;
+    cleMemoire = k;
+    var chemin = fichierCle();
+    if (chemin) {
+        var f = new File(chemin, 'write', 'TEXT');
+        if (f.isopen) { f.eof = 0; f.writestring(k); f.close(); }
+    }
+    outlet(6, 'set', 'clé enregistrée sur ce Mac');
+    dire('IA prête');
+}
+
+function idDevice() {
+    try { var id = Number(new LiveAPI('this_device').id); return id > 0 ? id : 0; } catch (e) { return 0; }
+}
+
+function ia() {
+    var demande = texteDe(arguments).replace(/^\s+|\s+$/g, '');
+    if (!demande) return;
+    var k = lisCle();
+    if (!k) { dire('IA : colle ta clé Claude dans le champ « clé », puis Retour'); return; }
+    var id = idDevice();
+    var corps = JSON.stringify({
+        model: MODELE_IA,
+        max_tokens: 4000,
+        system: SYS.join('\n'),
+        messages: [{ role: 'user', content: 'Current LOOM code:\n' + etat.source + '\n\nRequest: ' + demande +
+            '\n\nReturn the full updated LOOM program. Code only.' }],
+    });
+    // le corps part d'un fichier : un Dict Max changerait un tableau d'un élément en valeur seule
+    var h = maison(), requete = h + '/.loom_ia_requete_' + id + '.json';
+    var f = new File(requete, 'write', 'TEXT');
+    if (!f.isopen) { dire('IA : écriture impossible de la requête'); return; }
+    f.eof = 0; f.writestring(corps); f.close();
+    var d = new Dict('loomia_req_' + id);
+    d.clear();
+    d.set('url', 'https://api.anthropic.com/v1/messages');
+    d.set('http_method', 'post');
+    d.set('filename_in', requete);
+    d.set('headers', 'Content-Type: application/json', 'x-api-key: ' + k, 'anthropic-version: 2023-06-01');
+    d.set('response_dict', 'loomia_rep_' + id);
+    d.set('timeout', 120);
+    d.set('parse_type', 'none');
+    etat.iaEnCours = Date.now();
+    dire('IA : je compose… (jusqu\'à une minute)');
+    outlet(5, 'dictionary', 'loomia_req_' + id);
+}
+
+function reponseia() {
+    var a = arrayfromargs(arguments), nom = a[a.length - 1];
+    var d = new Dict(String(nom));
+    var corps = String(d.get('body') || '');
+    var rep;
+    try { rep = JSON.parse(corps); } catch (e) { dire('IA : réponse illisible (' + (d.get('http_status') || '?') + ')'); return; }
+    if (rep.error) { dire('IA : ' + (rep.error.message || 'erreur')); return; }
+    var texte = (rep.content || []).filter(function (b) { return b.type === 'text'; })
+        .map(function (b) { return b.text; }).join('\n')
+        .replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').replace(/^\s+|\s+$/g, '');
+    // le moteur valide AVANT d'appliquer : un code qui ne donne aucune voix ne remplace rien
+    var ok = false;
+    try { ok = texte && JSON.parse(bake_json(texte, 0)).tracks.length > 0; } catch (e) { ok = false; }
+    if (!ok) { dire('IA : code refusé par le moteur, rien n\'a changé'); return; }
+    outlet(4, 'set', texte);
+    editeur('text', texte);
+    dire('IA : nouveau code joué · ' + Math.round((Date.now() - etat.iaEnCours) / 1000) + ' s');
+}
+
 function ecritFichier(t) {
     if (!/\.loom$/i.test(etat.fichier)) return;
     var f = new File(etat.fichier, 'write', 'TEXT');
@@ -124,13 +229,39 @@ function anything() {
     else if (m === 'fichier') fichier.apply(this, a);
     else if (m === 'voix') voix.apply(this, a);
     else if (m === 'editeur') editeur.apply(this, a);
+    else if (m === 'ia') ia.apply(this, a);
+    else if (m === 'lancer') lancer();
+    else if (m === 'arreter') arreter();
     else if (m === 'cuire') cuire();
+}
+
+// ---- le son : lancer les clips Loom de tout le set, ou tout arrêter ----
+
+function lancer() {
+    var d = new Dict(PROJET);
+    etat.lance = Date.now();
+    d.set('lancer', etat.lance);
+    lanceMonClip();
+    dire('▶ clips Loom lancés');
+}
+
+function lanceMonClip() {
+    if (etat.clipPath) new LiveAPI(etat.clipPath).call('fire');
+}
+
+function arreter() {
+    var set = new LiveAPI('live_set');
+    set.call('stop_all_clips');
+    set.call('stop_playing');
+    dire('■ arrêt');
 }
 
 function surveille() {
     if (!etat.pret) return;
     // un autre device Loom du set a joué du code : on le suit
     var d = new Dict(PROJET), v = d.get('version');
+    var l = d.get('lancer');
+    if (l !== null && l !== undefined && l !== etat.lance) { etat.lance = l; lanceMonClip(); }
     if (v !== null && v !== undefined && v !== etat.projet) {
         etat.projet = v;
         var c = String(d.get('code') || '');
@@ -201,6 +332,7 @@ function cuire() {
         new LiveAPI('live_set').set('tempo', cuit.bar_bpm[0]);
         etat.tempoFait = true;
     }
+    etat.clipPath = String(clip.unquotedpath || '');
     publieVue(cuit, choix.name, longueur, clip);
     dire(choix.name + ' · ' + notes.length + ' notes · ' + cuit.bars + ' mesures · ' + (Date.now() - t0) + ' ms');
 }

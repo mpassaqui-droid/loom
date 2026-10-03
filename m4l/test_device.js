@@ -12,7 +12,8 @@ const ref = JSON.parse(execFileSync('node',
 const dicts = {};
 globalThis.Dict = function (nom) { this.nom = nom; dicts[nom] = dicts[nom] || {}; };
 Dict.prototype.get = function (k) { return k in dicts[this.nom] ? dicts[this.nom][k] : null; };
-Dict.prototype.set = function (k, v) { dicts[this.nom][k] = v; };
+Dict.prototype.set = function (k, ...v) { dicts[this.nom][k] = v.length > 1 ? v : v[0]; };
+Dict.prototype.clear = function () { dicts[this.nom] = {}; };
 Dict.prototype.parse = function (j) { dicts[this.nom] = JSON.parse(j); };
 let echecs = 0;
 const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if (!c) echecs++; };
@@ -141,6 +142,51 @@ for (const k in dicts) delete dicts[k];
     fichier('/Users/x/morceau.loom'); editeur('text', 'kick: x x x x');
   `)(s3, ecrits);
   ok(ecrits.length === 1 && ecrits[0] === '/Users/x/morceau.loom', `chemin hors .loom refusé, seul le .loom est écrit (${JSON.stringify(ecrits)})`);
+}
+// l'IA : clé gardée sur le Mac, requête Claude, réponse validée par le moteur avant d'être jouée
+for (const k in dicts) delete dicts[k];
+{
+  const fichiers = {}, so = [], notes = [];
+  globalThis.patcher = { filepath: 'Macintosh HD:/Users/test/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/Loom.amxd' };
+  const env = {};
+  new Function('env', 'so', 'notes', 'fichiers', `
+    var outlet = function () { so.push(Array.prototype.slice.call(arguments)); };
+    var arrayfromargs = function (a) { return Array.prototype.slice.call(a); };
+    function Task() { this.repeat = function () {}; }
+    function LiveAPI(p) { this.p = p; this.unquotedpath = p; this.id = 0; }
+    LiveAPI.prototype.get = function (k) { return k === 'name' && /canonical_parent$/.test(this.p) ? 'Loom kick' : 0; };
+    LiveAPI.prototype.getcount = function () { return 8; };
+    LiveAPI.prototype.set = function () {};
+    LiveAPI.prototype.call = function (m, a) { if (m === 'add_new_notes') a.notes.forEach(function (n) { notes.push(n); }); };
+    function File(p, mode) { this.p = p; this.mode = mode; this.isopen = mode === 'write' || p in fichiers; this.eof = (fichiers[p] || '').length; this.position = 0; }
+    File.prototype.writestring = function (t) { fichiers[this.p] = t; };
+    File.prototype.readstring = function () { return fichiers[this.p]; };
+    File.prototype.close = function () {};
+    ${fs.readFileSync(tmp, 'utf8')}
+    env.bang = bang; env.cle = cle; env.ia = ia; env.reponseia = reponseia; env.editeur = editeur;
+  `).call(globalThis, env, so, notes, fichiers);
+  env.bang();
+  env.editeur('text', 'kick: x . x .');
+  env.ia('text', 'plus de kick');
+  ok(so.some(o => o[0] === 0 && String(o[2]).includes('clé Claude')), 'IA sans clé : message clair, aucune requête');
+  env.cle('text', 'sk-ant-test');
+  ok(fichiers['/Users/test/.loom_claude_key'] === 'sk-ant-test', 'clé gardée dans ~/.loom_claude_key (jamais dans le set)');
+  env.ia('text', 'plus de kick');
+  const req = so.filter(o => o[0] === 5).pop();
+  const corps = JSON.parse(fichiers['/Users/test/.loom_ia_requete_0.json'] || '{}');
+  ok(req && req[1] === 'dictionary' && dicts.loomia_req_0.headers.length === 3 && dicts.loomia_req_0.headers[1] === 'x-api-key: sk-ant-test' && dicts.loomia_req_0.filename_in === '/Users/test/.loom_ia_requete_0.json' && corps.messages && corps.messages.length === 1 && corps.system.length > 40000 && corps.messages[0].content.includes('kick: x . x .'),
+    `requête : modèle ${corps.model}, consigne SYS ${corps.system && corps.system.length} car., code courant joint`);
+  const avant = notes.length;
+  dicts.loomia_rep_0 = { body: JSON.stringify({ content: [{ type: 'text', text: '\x60\x60\x60\nkick: x x x x\n\x60\x60\x60' }] }) };
+  env.reponseia('dictionary', 'loomia_rep_0');
+  ok(notes.length - avant === 32 && so.some(o => o[0] === 4 && o[2] === 'kick: x x x x'), 'réponse valide : code nettoyé, mis dans l\'éditeur et joué (32 notes)');
+  const avant2 = notes.length;
+  dicts.loomia_rep_0 = { body: JSON.stringify({ content: [{ type: 'text', text: 'désolé, je ne peux pas' }] }) };
+  env.reponseia('dictionary', 'loomia_rep_0');
+  ok(notes.length === avant2 && so.slice(-1)[0][2].includes('refusé'), 'réponse sans code valide : refusée, la musique continue');
+  dicts.loomia_rep_0 = { body: JSON.stringify({ error: { message: 'invalid x-api-key' } }) };
+  env.reponseia('dictionary', 'loomia_rep_0');
+  ok(so.slice(-1)[0][2].includes('invalid x-api-key'), 'erreur de l\'API affichée telle quelle');
 }
 console.log(echecs ? `${echecs} échec(s)` : 'device : tout passe');
 process.exit(echecs ? 1 : 0);
