@@ -16,6 +16,10 @@ pub use codec::{decode_any, EXTENSIONS as SAMPLE_EXTENSIONS};
 
 pub use wav::decode as decode_wav;
 
+mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/embedded_samples.rs"));
+}
+
 use crate::clock::Clock;
 use loom_core::zones::{parse_zone, pick_zone, Zone};
 use crate::dsp::Noise;
@@ -82,8 +86,21 @@ impl SampleBank {
         dirs
     }
 
-    /// Load every sample found in the default folders.
-    pub fn load_default() -> SampleBank { SampleBank::load_dirs(&SampleBank::default_dirs()) }
+    /// Load every sample found in the default folders, then the built-in sounds
+    /// the program carries (a file on disk with the same name wins).
+    pub fn load_default() -> SampleBank {
+        let mut bank = SampleBank::load_dirs(&SampleBank::default_dirs());
+        bank.add_embedded();
+        bank
+    }
+
+    /// The built-in sounds not already in the bank.
+    pub fn add_embedded(&mut self) {
+        for (name, bytes) in embedded::EMBEDDED {
+            if self.samples.contains_key(*name) { continue; }
+            if let Ok(data) = codec::decode_any(bytes, "wav") { self.insert(name, data); }
+        }
+    }
 
     /// Load every `.wav` file directly inside these folders, named by file
     /// stem (`bd.wav` → `bd`). When two folders have the same name, the
@@ -274,7 +291,7 @@ pub fn load_user_sample(path: &Path) -> Result<String, String> {
 /// picked up), keeping the session's user samples.
 pub fn reload_bank() {
     let mut s = session().lock().unwrap();
-    s.fresh = SampleBank::load_dirs(&SampleBank::default_dirs());
+    s.fresh = SampleBank::load_default();
 }
 
 /// How many WAVs the user loaded this session (shown as a hint in the panel).
@@ -884,5 +901,16 @@ mod tests {
             eprintln!("missing sample `{name}` used by {}", songs.join(", "));
         }
         assert_eq!(sample_names_in("a: x | s bd | vocode\n# b: x | sample no\nc: x | sample sd"), ["bd", "vox", "sd"]);
+    }
+
+    #[test]
+    #[cfg(feature = "embed")]
+    fn sons_embarques_sans_dossier() {
+        // installé seul (aucun dossier de sons) : les sons de base sont là quand même
+        let mut bank = SampleBank::empty();
+        bank.add_embedded();
+        assert!(bank.get("bd").is_some(), "bd absent");
+        assert!(embedded::EMBEDDED.len() >= 40, "{}", embedded::EMBEDDED.len());
+        assert_eq!(bank.names().len(), embedded::EMBEDDED.len());
     }
 }

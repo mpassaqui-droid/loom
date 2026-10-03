@@ -842,8 +842,8 @@ Plus de produit Ableton (device Max for Live mis de côté).
 
 A. Un binaire qui marche sans le dépôt
 - [x] A1 Dossiers par système (macOS Application Support, Windows %APPDATA%, Linux XDG), en relisant les anciens dossiers ~/.local
-- [ ] A2 Les 41 sons et les 67 morceaux d'exemple embarqués dans le binaire (plus rien à copier)
-- [ ] A3 Windows : HOME, corbeille, whisper.exe ; aides qui citent TUTORIEL.md et tools/ corrigées
+- [x] A2 Les 41 sons et les 67 morceaux d'exemple embarqués dans le binaire (plus rien à copier)
+- [x] A3 Windows : HOME, corbeille, whisper.exe ; aides qui citent TUTORIEL.md et tools/ corrigées
 - [ ] A4 Premier lancement : morceau d'accueil, dossier de morceaux créé, touches expliquées
 B. Vente
 - [ ] B1 Clé de licence (activation en ligne une fois, puis hors ligne), mode essai à décider avec Munay

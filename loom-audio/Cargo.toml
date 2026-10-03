@@ -18,5 +18,7 @@ symphonia = { version = "0.5", default-features = false, features = ["flac", "mp
 libc = "0.2"
 
 [features]
-default = ["device"]
+default = ["device", "embed"]
 device = ["dep:cpal", "dep:midir"]
+# les sons de base dans le binaire (7 Mo) ; le WASM du web s'en passe
+embed = []

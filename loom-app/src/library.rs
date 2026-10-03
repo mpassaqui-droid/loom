@@ -6,6 +6,10 @@
 
 use std::path::{Path, PathBuf};
 
+mod embedded {
+    include!(concat!(env!("OUT_DIR"), "/examples.rs"));
+}
+
 pub struct Library;
 
 impl Library {
@@ -19,8 +23,26 @@ impl Library {
         loom_audio::paths::data_dir().unwrap_or_default().join("examples")
     }
 
+    /// Écrit les exemples embarqués dans [`Library::examples_dir`] quand ils
+    /// manquent ou viennent d'une autre version de LOOM (le dossier appartient à LOOM).
+    pub fn ensure_examples() {
+        let dir = Self::examples_dir();
+        let stamp = dir.join(".version");
+        let version = env!("CARGO_PKG_VERSION");
+        let n = embedded::EXAMPLES.len().to_string();
+        let want = format!("{version} {n}");
+        if std::fs::read_to_string(&stamp).is_ok_and(|v| v.trim() == want) { return; }
+        if std::fs::create_dir_all(&dir).is_err() { return; }
+        for (name, text) in embedded::EXAMPLES { let _ = std::fs::write(dir.join(name), text); }
+        let _ = std::fs::write(stamp, want);
+    }
+
+    /// Combien d'exemples le programme porte.
+    pub fn embedded_count() -> usize { embedded::EXAMPLES.len() }
+
     /// All `.loom` files, grouped by folder label, each list sorted by name.
     pub fn scan() -> Vec<(String, Vec<PathBuf>)> {
+        Self::ensure_examples();
         let mut groups = Vec::new();
         let mut seen: Vec<PathBuf> = Vec::new();
         let cwd = std::env::current_dir().unwrap_or_default();
