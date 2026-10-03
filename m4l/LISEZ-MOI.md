@@ -1,8 +1,8 @@
 # LOOM pour Live
 
 Écris ta musique en LOOM, Live la joue. Le device embarque le moteur de LOOM
-(le même que l'appli, compilé en WebAssembly) : ce que tu entends dans LOOM,
-Live le joue note pour note, à l'échantillon près.
+(le même que l'appli, compilé en WebAssembly) : Live joue les mêmes notes que
+LOOM, au même moment, à l'échantillon près. Le son, ce sont tes instruments Live.
 
 ## Installer
 
