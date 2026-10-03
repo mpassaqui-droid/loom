@@ -11,6 +11,13 @@
 export function analyze_json(src: string): string[];
 
 /**
+ * The program as MIDI notes per voice (`loom bake`'s JSON): the native
+ * sequencer run offline, so chords, arpeggios and humanize match what you hear.
+ * `bars = 0` means the whole `song:` (or 8 bars). Used by the Max for Live device.
+ */
+export function bake_json(src: string, bars: number): string;
+
+/**
  * Tempo in BPM at a given bar (after any `accel:` ramp / per-section `tempo:`).
  */
 export function bar_bpm(src: string, bar: number): number;

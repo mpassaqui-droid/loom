@@ -1,7 +1,7 @@
 //! « Cuire » un programme LOOM en notes MIDI pour un DAW (Ableton Live d'abord).
 //!
 //! On ne réécrit pas la logique musicale : chaque voix passe par le VRAI
-//! séquenceur, hors ligne, forcée en `| midi`. Accords, arpèges, voicings,
+//! séquenceur, hors ligne, forcée en `| midi`, mesure par mesure sans calcul audio. Accords, arpèges, voicings,
 //! flam, humanize, sections et tempo sortent donc exactement comme à l'écoute.
 //! Les temps sont convertis en temps musicaux (noires) mesure par mesure, pour
 //! que les clips restent justes même quand le tempo change d'une section à l'autre.
@@ -14,7 +14,6 @@ use crate::sample::SampleBank;
 use crate::seq::{MidiEvent, Sequencer};
 
 const SR: f32 = 48_000.0;
-const BLOCK: usize = 512;
 
 /// Une note cuite, en temps musicaux (noires) depuis le début.
 #[derive(Debug, Clone, PartialEq)]
@@ -80,13 +79,9 @@ pub fn bake(src: &str, bars: u32) -> Baked {
         seq.set_stem(Some(name));
         seq.set_program(p);
         seq.play();
-        let mut buf = vec![0.0f32; BLOCK * 2];
         let mut notes = Vec::new();
-        let mut done = 0;
-        while done < total {
-            let n = BLOCK.min(total - done);
-            seq.render(&mut buf[..n * 2], 2);
-            done += n;
+        for bar in 0..bars {
+            if bar > 0 { seq.skip_to_next_bar(); }
             for ev in seq.midi_out.drain(..) {
                 let MidiEvent::Note(m) = ev else { continue };
                 let s = m.at * SR as f64;

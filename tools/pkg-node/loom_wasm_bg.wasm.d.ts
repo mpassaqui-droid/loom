@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const analyze_json: (a: number, b: number) => [number, number];
+export const bake_json: (a: number, b: number, c: number) => [number, number];
 export const bar_bpm: (a: number, b: number, c: number) => number;
 export const bar_seconds: (a: number, b: number, c: number) => number;
 export const mix_json: (a: number, b: number) => [number, number];

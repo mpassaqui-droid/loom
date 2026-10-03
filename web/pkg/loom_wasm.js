@@ -19,6 +19,29 @@ export function analyze_json(src) {
 }
 
 /**
+ * The program as MIDI notes per voice (`loom bake`'s JSON): the native
+ * sequencer run offline, so chords, arpeggios and humanize match what you hear.
+ * `bars = 0` means the whole `song:` (or 8 bars). Used by the Max for Live device.
+ * @param {string} src
+ * @param {number} bars
+ * @returns {string}
+ */
+export function bake_json(src, bars) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.bake_json(ptr0, len0, bars);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Tempo in BPM at a given bar (after any `accel:` ramp / per-section `tempo:`).
  * @param {string} src
  * @param {number} bar

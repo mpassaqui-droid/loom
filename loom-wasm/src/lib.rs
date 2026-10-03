@@ -186,6 +186,15 @@ pub fn schedule_bar_json(src: &str, bar: i32) -> String {
     serde_json::to_string(&js).unwrap_or_else(|_| "[]".to_string())
 }
 
+/// The program as MIDI notes per voice (`loom bake`'s JSON): the native
+/// sequencer run offline, so chords, arpeggios and humanize match what you hear.
+/// `bars = 0` means the whole `song:` (or 8 bars). Used by the Max for Live device.
+#[wasm_bindgen]
+pub fn bake_json(src: &str, bars: u32) -> String {
+    let bars = if bars == 0 { loom_audio::bake::default_bars(&loom_core::Program::parse(src)) } else { bars };
+    loom_audio::bake::bake(src, bars).to_json()
+}
+
 /// Render `bars` bars of `src` into mono f32 PCM samples via the unified
 /// std-only renderer (`loom-core::render`, P6-1) — waveform osc + unison/sub/
 /// double layers, svf filter (static or swept), ADSR×gate, at sample rate `sr`.

@@ -335,6 +335,15 @@ impl Sequencer {
         self.start_bar();
     }
 
+    /// Jump to the next bar line without rendering audio: schedules that bar
+    /// (MIDI notes land in `midi_out`) and drops the audio notes. Offline bake only.
+    pub fn skip_to_next_bar(&mut self) {
+        self.pos = self.bar_start + self.bar_len;
+        self.bar += 1;
+        self.start_bar();
+        self.queue.clear();
+    }
+
     /// Stop the transport. Sounding notes ring out naturally.
     pub fn stop(&mut self) {
         if self.playing && self.midi_clock { self.midi_out.push(MidiEvent::Stop); }
