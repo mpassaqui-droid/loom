@@ -179,8 +179,18 @@ fn draw_editor(f: &mut Frame, app: &mut App, area: Rect) {
     let gutter = 4u16;
     let scroll = app.editor.scroll;
     let lines: Vec<Line> = app.editor.lines.iter().enumerate().skip(scroll).take(height).map(|(i, l)| {
-        let mut spans = vec![Span::styled(format!("{:>3} ", i + 1), Style::new().fg(c(t.dim)))];
-        spans.extend(highlight(l, app));
+        let fautive = app.lints.iter().any(|x| x.line == i);
+        let mut spans = if fautive {
+            vec![Span::styled(format!("{:>3}!", i + 1), Style::new().fg(c(t.error)).add_modifier(Modifier::BOLD))]
+        } else {
+            vec![Span::styled(format!("{:>3} ", i + 1), Style::new().fg(c(t.dim)))]
+        };
+        if fautive {
+            let rouge = Style::new().add_modifier(Modifier::UNDERLINED).underline_color(c(t.error));
+            spans.extend(highlight(l, app).into_iter().map(|sp| sp.patch_style(rouge)));
+        } else {
+            spans.extend(highlight(l, app));
+        }
         let line = Line::from(spans);
         if i == app.editor.row { line.style(Style::new().bg(c(t.panel))) } else { line }
     }).collect();
@@ -197,7 +207,7 @@ fn draw_grid(f: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
     let block = Block::new().borders(Borders::ALL).border_type(BorderType::Rounded)
         .border_style(Style::new().fg(c(t.dim)))
-        .title(Span::styled(" grille · Alt+N coupe ", Style::new().fg(c(t.foreground))));
+        .title(Span::styled(" grille · Alt+1..9 coupe ", Style::new().fg(c(t.foreground))));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -355,6 +365,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         section("IA — VIBE"),
         key("Alt+N / Alt+Z", "morceau suivant / au hasard (comme les presets du web)"),
         key("Ctrl+O puis Suppr", "mettre un de tes morceaux à la corbeille"),
+        key("RUN", "le correcteur souligne en rouge les lignes fautives (n° suivi de !) et explique en bas"),
         key("Alt+F", "partition : la mesure en cours sur une grande portée (clé de sol et de fa)"),
         key("Alt+C", "thème suivant : les 62 thèmes du web, gardé au prochain lancement"),
         key("Alt+K", "lien Live : chaque RUN enregistre le fichier, le device Loom de Live le suit"),

@@ -76,6 +76,8 @@ pub struct App {
     pub metronome: bool,
     /// Lien Live (Alt+K) : chaque RUN enregistre aussi le fichier, qu'un device Loom de Live suit.
     pub lien: bool,
+    /// Les remarques du correcteur au dernier RUN (lignes soulignées dans l'éditeur).
+    pub lints: Vec<loom_app::lint::Lint>,
     /// The SCÈNE's state (scene choice, sound analysis, sparks).
     pub stage: TermStage,
     /// STUDIO: master knobs, mixer, meters, MIDI LEARN, stems, demo…
@@ -108,6 +110,7 @@ impl App {
             midi_follow: false,
             metronome: false,
             lien: false,
+            lints: Vec::new(),
             stage: TermStage::default(),
             studio,
             teacher: Teacher::default(),
@@ -174,6 +177,10 @@ impl App {
         self.program = program;
         self.running_text = Some(text);
         if self.lien && self.path.is_some() { self.save(); }
+        // le correcteur du web : souligne les lignes et explique, sans bloquer la lecture
+        let samples = loom_audio::sample::merged_bank().names();
+        self.lints = loom_app::lint::lint(self.running_text.as_deref().unwrap_or(""), Some(&samples));
+        if let Some(aide) = loom_app::lint::summary(&self.lints) { self.error(aide); return; }
         self.info(if was_playing { format!("▶ {n} voix — change à la prochaine mesure") } else { format!("▶ {n} voix") });
     }
 

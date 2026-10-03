@@ -9,6 +9,7 @@ pub mod hum;
 pub mod lessons;
 pub mod prof;
 pub mod library;
+pub mod lint;
 pub mod share;
 pub mod studio;
 pub mod teacher;
