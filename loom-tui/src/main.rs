@@ -33,8 +33,7 @@ usage :
   loom render morceau.loom sortie.wav [N]      exporter N mesures (.wav .flac .mp3 .m4a .aiff .ogg)
   loom render morceau.loom dossier --stems [N] une piste WAV par voix dans le dossier
   loom render --help                           détails de l'export
-  loom bake morceau.loom sortie.json [N]       cuire en notes MIDI par voix (pour Ableton Live,
-                                               voir tools/bake_live.py)
+  loom bake morceau.loom sortie.json [N]       cuire en notes MIDI par voix (JSON)
   loom bake morceau.loom sortie.mid [N]        fichier MIDI standard (une piste par voix)
   loom bake morceau.loom sortie.musicxml [N]   partition (MuseScore, Sibelius, Dorico ;
                                                .ly pour LilyPond)

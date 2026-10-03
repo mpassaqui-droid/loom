@@ -7,9 +7,7 @@ use std::path::{Path, PathBuf};
 
 /// Le dossier de mes sons (`$XDG_DATA_HOME/loom/samples` ou `~/.local/share/loom/samples`).
 pub fn user_dir() -> Option<PathBuf> {
-    let base = std::env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()).map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
-    Some(base.join("loom/samples"))
+    Some(loom_audio::paths::data_dir()?.join("samples"))
 }
 
 /// Un nom jouable : minuscules, lettres, chiffres, `_` (`Ma Voix-2.WAV` → `ma_voix_2`).
@@ -44,8 +42,8 @@ pub fn split_paths(input: &str) -> Vec<PathBuf> {
 }
 
 fn expand_home(p: &Path) -> PathBuf {
-    match (p.strip_prefix("~"), std::env::var_os("HOME")) {
-        (Ok(rest), Some(h)) => PathBuf::from(h).join(rest),
+    match (p.strip_prefix("~"), loom_audio::paths::home()) {
+        (Ok(rest), Some(h)) => h.join(rest),
         _ => p.to_path_buf(),
     }
 }

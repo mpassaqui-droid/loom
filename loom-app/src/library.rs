@@ -11,17 +11,12 @@ pub struct Library;
 impl Library {
     /// Where new songs are saved by default.
     pub fn user_dir() -> PathBuf {
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-        let music = std::env::var_os("XDG_MUSIC_DIR").map(PathBuf::from).unwrap_or_else(|| home.join("Music"));
-        music.join("loom")
+        loom_audio::paths::songs_dir()
     }
 
     /// Bundled examples installed by `install.sh`.
     pub fn examples_dir() -> PathBuf {
-        let data = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| {
-            std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".local/share")
-        });
-        data.join("loom/examples")
+        loom_audio::paths::data_dir().unwrap_or_default().join("examples")
     }
 
     /// All `.loom` files, grouped by folder label, each list sorted by name.
@@ -60,10 +55,7 @@ impl Library {
     }
 
     fn last_file_record() -> PathBuf {
-        let state = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from).unwrap_or_else(|| {
-            std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default().join(".local/state")
-        });
-        state.join("loom/last")
+        loom_audio::paths::state_dir().unwrap_or_default().join("last")
     }
 
     /// The song opened last time (shared by the TUI and the GUI), if it still exists.
@@ -112,8 +104,11 @@ impl Library {
 
     /// The trash folder of this system (macOS ~/.Trash, else the freedesktop one).
     pub fn trash_dir() -> PathBuf {
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-        if cfg!(target_os = "macos") { home.join(".Trash") } else {
+        let home = loom_audio::paths::home().unwrap_or_default();
+        if cfg!(target_os = "macos") { home.join(".Trash") } else if cfg!(windows) {
+            // Windows : pas de corbeille accessible en fichier ; un dossier à part, récupérable
+            loom_audio::paths::data_dir().unwrap_or_default().join("corbeille")
+        } else {
             std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share")).join("Trash/files")
         }
     }

@@ -171,12 +171,11 @@ impl Studio {
 /// Where the SAMPLER file navigator starts: the user's sample folder, else the
 /// bundled `web/samples`, else the home directory.
 pub fn default_sampler_dir() -> std::path::PathBuf {
-    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
     let candidates = [
-        home.as_ref().map(|h| h.join(".local/share/loom/samples")),
+        loom_audio::paths::data_dir().map(|d| d.join("samples")),
         std::env::var_os("LOOM_SAMPLES").map(std::path::PathBuf::from),
         std::env::current_dir().ok().map(|c| c.join("web/samples")),
-        home,
+        loom_audio::paths::home(),
     ];
     candidates.into_iter().flatten().find(|p| p.is_dir()).unwrap_or_else(|| std::path::PathBuf::from("."))
 }

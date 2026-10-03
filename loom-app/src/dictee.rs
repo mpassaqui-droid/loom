@@ -45,14 +45,14 @@ pub fn wav(samples16k: &[f32]) -> Vec<u8> {
 pub fn whisper_cli() -> Option<PathBuf> {
     let fixed = ["/opt/homebrew/bin/whisper-cli", "/usr/local/bin/whisper-cli", "/usr/bin/whisper-cli"];
     fixed.iter().map(PathBuf::from).find(|p| p.is_file()).or_else(|| {
-        std::env::var_os("PATH").and_then(|path| std::env::split_paths(&path).map(|d| d.join("whisper-cli")).find(|p| p.is_file()))
+        std::env::var_os("PATH").and_then(|path| std::env::split_paths(&path).map(|d| d.join(if cfg!(windows) { "whisper-cli.exe" } else { "whisper-cli" })).find(|p| p.is_file()))
     })
 }
 
 /// Le modèle : `$LOOM_WHISPER_MODEL`, sinon le meilleur trouvé dans `~/.whisper-models`.
 pub fn model() -> Option<PathBuf> {
     if let Some(m) = std::env::var_os("LOOM_WHISPER_MODEL").map(PathBuf::from).filter(|p| p.is_file()) { return Some(m); }
-    let home = PathBuf::from(std::env::var_os("HOME")?);
+    let home = loom_audio::paths::home()?;
     let dirs = [home.join(".whisper-models"), home.join(".local/share/whisper"), home.join(".cache/whisper")];
     let names = ["ggml-large-v3-turbo.bin", "ggml-medium.bin", "ggml-small.bin", "ggml-base.bin", "ggml-tiny.bin"];
     names.iter().flat_map(|n| dirs.iter().map(move |d| d.join(n))).find(|p| p.is_file())

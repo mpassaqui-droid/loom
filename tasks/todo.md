@@ -834,3 +834,26 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif (fait 03/10 : `loom_core::capture`, prise micro rangée mesure par mesure + `| slow N`, parité CAPTURE 502/502)
 - [x] 11. Visuels en code : petit langage de visuel lié aux bandes du son (fait 03/10 : `loom_core::vis`, lignes vis: dessinées en natif et par WASM, 1,4 à 1,8 ms par image en WASM, revue adversariale : 8 défauts corrigés)
 - [x] 12. Synchro et plugins : Ableton Link ; hôte AU/VST3 (fait 03/10 : hôte AU sans dépendance, `loom plugins`, `loom au`, étude docs/plugins-link.md ; Link en attente de la décision de licence)
+
+## 3 octobre (nuit) : LOOM vendable, app terminal autonome
+Décisions de Munay : vente en téléchargement payant (Lemon Squeezy ou Gumroad, clé de licence),
+GitHub Actions pour Windows et Linux, son compte Apple Developer pour signer, polir tout.
+Plus de produit Ableton (device Max for Live mis de côté).
+
+A. Un binaire qui marche sans le dépôt
+- [x] A1 Dossiers par système (macOS Application Support, Windows %APPDATA%, Linux XDG), en relisant les anciens dossiers ~/.local
+- [ ] A2 Les 41 sons et les 67 morceaux d'exemple embarqués dans le binaire (plus rien à copier)
+- [ ] A3 Windows : HOME, corbeille, whisper.exe ; aides qui citent TUTORIEL.md et tools/ corrigées
+- [ ] A4 Premier lancement : morceau d'accueil, dossier de morceaux créé, touches expliquées
+B. Vente
+- [ ] B1 Clé de licence (activation en ligne une fois, puis hors ligne), mode essai à décider avec Munay
+- [ ] B2 Fichier LICENSE (contrat d'utilisation) : texte à valider par Munay
+C. Paquets
+- [ ] C1 Versions et `loom --version`, notes de version
+- [ ] C2 GitHub Actions : macOS (Intel + Apple Silicon), Windows .msi, Linux .deb et .tar.gz
+- [ ] C3 macOS : .pkg signé et notarisé dans un .dmg (compte Apple de Munay)
+- [ ] C4 Homebrew : tap `loom` (formule qui télécharge le binaire)
+- [ ] C5 Où héberger les téléchargements (dépôt privé : releases non publiques) : à décider
+D. Polir pour Munay
+- [ ] D1 Tour complet de l'app (son, latence, choix de la carte son, édition, touches, premier lancement) et liste des défauts
+- [ ] D2 Corriger, avec les chiffres

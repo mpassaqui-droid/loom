@@ -70,10 +70,8 @@ impl SampleBank {
         if let Some(list) = env::var_os("LOOM_SAMPLES") {
             dirs.extend(env::split_paths(&list).filter(|p| !p.as_os_str().is_empty()));
         }
-        let data_home = env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty()).map(PathBuf::from)
-            .or_else(|| env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")));
-        if let Some(d) = data_home {
-            dirs.push(d.join("loom/samples"));
+        if let Some(d) = crate::paths::data_dir() {
+            dirs.push(d.join("samples"));
         }
         if let Ok(exe) = env::current_exe() {
             if let Some(found) = exe.ancestors().skip(1).map(|a| a.join("web/samples")).find(|p| p.is_dir()) {

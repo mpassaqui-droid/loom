@@ -403,7 +403,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         key("bass: c2 eb2", "notes, ou degrés 1 3 5 avec  key: c minor"),
         key("| rev | fast 2", "verbes : rev fast slow every euclid…"),
         Line::from(""),
-        Line::styled("  ↑↓ PgUp PgDn défiler · autre touche : fermer · TUTORIEL.md : le langage", Style::new().fg(c(t.dim))),
+        Line::styled("  ↑↓ PgUp PgDn défiler · autre touche : fermer · Alt+L : leçons et référence du langage", Style::new().fg(c(t.dim))),
     ];
     let total = lines.len();
     let inner = popup(f, app, "LOOM — aide", 80, total as u16 + 2);

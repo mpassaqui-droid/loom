@@ -27,6 +27,8 @@ mod device;
 pub mod midi;
 #[cfg(feature = "device")]
 pub mod input;
+/// Où LOOM range ses affaires, sur chaque système.
+pub mod paths;
 /// Héberger des Audio Units (prototype, macOS seulement).
 #[cfg(target_os = "macos")]
 pub mod au;

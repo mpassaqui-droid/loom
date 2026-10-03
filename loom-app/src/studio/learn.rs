@@ -67,7 +67,10 @@ impl Bindings {
 
     /// Where the bindings are kept.
     pub fn path() -> PathBuf {
-        path_from(std::env::var_os("XDG_STATE_HOME"), std::env::var_os("HOME"))
+        match loom_audio::paths::state_dir() {
+            Some(d) => d.join("midi-learn"),
+            None => path_from(std::env::var_os("XDG_STATE_HOME"), std::env::var_os("HOME")),
+        }
     }
 
     /// The saved bindings (none if the file doesn't exist yet).
