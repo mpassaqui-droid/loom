@@ -844,16 +844,18 @@ A. Un binaire qui marche sans le dépôt
 - [x] A1 Dossiers par système (macOS Application Support, Windows %APPDATA%, Linux XDG), en relisant les anciens dossiers ~/.local
 - [x] A2 Les 41 sons et les 67 morceaux d'exemple embarqués dans le binaire (plus rien à copier)
 - [x] A3 Windows : HOME, corbeille, whisper.exe ; aides qui citent TUTORIEL.md et tools/ corrigées
-- [ ] A4 Premier lancement : morceau d'accueil, dossier de morceaux créé, touches expliquées
+- [x] A4 Premier lancement : morceau d'accueil, dossier de morceaux créé, touches expliquées
 B. Vente
-- [ ] B1 Clé de licence (activation en ligne une fois, puis hors ligne), mode essai à décider avec Munay
+- [x] B1 Clé de licence (activation en ligne une fois, puis hors ligne), mode essai à décider avec Munay
 - [ ] B2 Fichier LICENSE (contrat d'utilisation) : texte à valider par Munay
 C. Paquets
-- [ ] C1 Versions et `loom --version`, notes de version
-- [ ] C2 GitHub Actions : macOS (Intel + Apple Silicon), Windows .msi, Linux .deb et .tar.gz
-- [ ] C3 macOS : .pkg signé et notarisé dans un .dmg (compte Apple de Munay)
-- [ ] C4 Homebrew : tap `loom` (formule qui télécharge le binaire)
-- [ ] C5 Où héberger les téléchargements (dépôt privé : releases non publiques) : à décider
+- [x] C1 Versions et `loom --version`, notes de version
+- [x] C2 GitHub Actions : macOS (Intel + Apple Silicon), Windows .msi, Linux .deb et .tar.gz
+- [~] C3 macOS : DMG signé (LOOM.app + binaire universel) fait ; notarisation en attente du profil notarytool de Munay
+- [x] C4 Homebrew : tap `loom` (formule qui télécharge le binaire)
+- [ ] C5 Téléchargements sur munaypassaqui.com/loom/dl (décidé) : à publier quand Munay dit go
+- [ ] B3 Lemon Squeezy : créer le produit, mettre STORE_ID et PRODUCT_ID dans loom-app/src/licence.rs
+- [ ] E Plus tard : app iPhone (idée de Munay, 03/10)
 D. Polir pour Munay
 - [ ] D1 Tour complet de l'app (son, latence, choix de la carte son, édition, touches, premier lancement) et liste des défauts
 - [ ] D2 Corriger, avec les chiffres
