@@ -488,6 +488,29 @@ for (const k of tu_keys) for (const t of tu_tunes) for (const tok of tu_toks) {
   if (!(c < 0.05)) { tu_bad++; if (tu_bad <= 8) console.log(`  TUNE DIFF [${k} | ${t || 'equal'} | ${tok}]  JS: ${js}  Rust: ${ev && ev.freq}`); }
 }
 L.setTuning('equal');
+// ── RAGA parity : aroha / avaroha (khamaj, desh, mélodique, forme écrite « / »), jeton + hauteur ──
+const rg_pieces = {
+  'khamaj': "key: c khamaj\nl: 5 6 7 1' 7 6 5 4",
+  'desh': "key: d desh\nl: 1 2 4 5 7 1' 7 6 5 4 3 2",
+  'melodic': "key: a melodic\nl: 5 6 7 1' 7 6 5",
+  'écrit /': "key: c 0 2 4 5 7 9 11 / 0 2 4 5 7 9 10\nl: 1' 7 7 7# ; 7 1'",
+  'rythme + pile': "key: c khamaj\nl: [1' 7] [6 5] . 7 | fast 2\nbass: 1, 7, 6, 5,",
+  'sans descente': "key: c major\nl: 1' 7 6 5",
+};
+let rg_total = 0, rg_bad = 0;
+for (const [name, src] of Object.entries(rg_pieces)) {
+  const key = L.parseKey(src);
+  for (let bar = 0; bar < 2; bar++) {
+    const js = notesOf(L.scheduleBar(src, bar), e => jsMidi(e.tok, key, e.drum));
+    const rs = notesOf(JSON.parse(W.schedule_bar_json(src, bar)), rsMidi);
+    for (const v of new Set([...Object.keys(js), ...Object.keys(rs)])) {
+      rg_total++;
+      const a = (js[v] || []).join(' '), b = (rs[v] || []).join(' ');
+      if (a !== b) { rg_bad++; if (rg_bad <= 8) console.log(`  RAGA DIFF [${name} bar${bar} ${v}]\n    JS  : ${a}\n    Rust: ${b}`); }
+    }
+  }
+}
+console.log(`\nRAGA parity (aroha / avaroha, hauteurs): ${rg_total - rg_bad}/${rg_total} voice×bar  ${rg_bad === 0 ? '✅' : '⚠️ ' + rg_bad + ' diffs'}`);
 console.log(`\nTUNE parity (degrés × gammes EDO/Scala/maqâm × accordages, cents): ${tu_total - tu_bad}/${tu_total}  pire ${tu_worst.toFixed(4)} cent  ${tu_bad === 0 ? '✅' : '⚠️ ' + tu_bad + ' diffs'}`);
 console.log(`\nSTEP parity (pas-programmes =(EXPR), onset + jeton): ${sp_total - sp_bad}/${sp_total} voice×bar  ${sp_bad === 0 ? '✅' : '⚠️ ' + sp_bad + ' diffs'}`);
 console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/${sy_total} voice×bar  ${sy_bad === 0 ? '✅' : '⚠️ ' + sy_bad + ' diffs'}`);
@@ -495,4 +518,4 @@ console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/$
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

@@ -28,7 +28,7 @@ pub const KNOWN: &[&str] = &[
     "stretch", "freeze", "adaptive", "begin", "end", "root", "sample", "midi", "viz", "hue", "width", "key", "scale",
     "prog", "tune", "bpm", "tempo", "meter", "accel", "groove", "seed", "song", "duck", "feel", "warmth", "scene", "film",
     "title", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "pentatonic", "harmonic_minor",
-    "melodic_minor", "blues", "chromatic", "hijaz", "bhairav", "bhairavi", "yaman", "pelog", "slendro", "bayati", "rast",
+    "melodic_minor", "melodic", "khamaj", "desh", "blues", "chromatic", "hijaz", "bhairav", "bhairavi", "yaman", "pelog", "slendro", "bayati", "rast",
     "saba", "kurd", "nahawand", "malkauns", "ryukyu", "warm", "rich", "soft", "up", "down", "updown", "downup",
     "converge", "diverge", "thumb", "pinky", "open", "drop2", "wide", "lead", "just", "pyth", "werck", "kirn", "meantone",
     "cutoff", "pitch", "reso", "hall", "plate", "spring", "cathedral", "auto", "bd", "sd", "hh", "cp", "oh", "rim", "cow",

@@ -92,7 +92,7 @@ pub fn roman_chord(tok: &str, key: &Key) -> Option<Vec<i32>> {
         let t = parse_numeral(target)?;
         let root = target_root(&t, key);
         let scale: Vec<f64> = if t.upper { MAJOR.iter().map(|x| *x as f64).collect() } else { NATURAL_MINOR.to_vec() };
-        let sub = Key { tonic: root.rem_euclid(12), scale, octave: key.octave, tuning: key.tuning, edo: None };
+        let sub = Key { tonic: root.rem_euclid(12), scale, octave: key.octave, tuning: key.tuning, edo: None, desc: None };
         // V/ii sounds near the key, not an octave up
         let mut notes = roman_chord(num, &sub)?;
         if notes.first().is_some_and(|n| *n - base_midi >= 12) { for n in &mut notes { *n -= 12; } }

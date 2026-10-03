@@ -1300,6 +1300,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     pentatonic:[0,2,4,7,9],majpent:[0,2,4,7,9],minpent:[0,3,5,7,10],
     harmonic_minor:[0,2,3,5,7,8,11],harmonicminor:[0,2,3,5,7,8,11],
     melodic_minor:[0,2,3,5,7,9,11],melodicminor:[0,2,3,5,7,9,11],
+    melodic:[0,2,3,5,7,9,11],khamaj:[0,2,4,5,7,9,11],desh:[0,2,4,5,7,9,11],  // montée ; descente dans SCALE_DESC
     whole_tone:[0,2,4,6,8,10],wholetone:[0,2,4,6,8,10],
     blues:[0,3,5,6,7,10],chromatic:[0,1,2,3,4,5,6,7,8,9,10,11],
     hijaz:[0,1,4,5,7,8,10],hijazkar:[0,1,4,5,7,8,11],double_harmonic:[0,1,4,5,7,8,11],byzantine:[0,1,4,5,7,8,11],
@@ -1335,11 +1336,30 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(name==="scale"){if(words.length)scaleSpec=words.slice();}}
     if(tonic===null&&scaleSpec===null)return null;
     // custom scale: numeric semitone offsets, e.g. scale: 0 2 3 5 7 9 10  (microtonal ok: 0 1.5 3 5 7 8 10)
-    let scale=null,edo=null;
+    let scale=null,edo=null,desc=null;
     if(scaleSpec&&isSpecialScale(scaleSpec[0])){const sp=specialScale(scaleSpec);if(sp){scale=sp[0];edo=sp[1];}else scale=SCALES.major.slice();}
-    else if(scaleSpec){if(/^-?[\d.]+$/.test(scaleSpec[0])){const arr=scaleSpec.map(parseFloat).filter(x=>!isNaN(x));if(arr.length>=2)scale=arr;}if(!scale)scale=SCALES[scaleSpec[0]];}
+    else if(scaleSpec){if(/^-?[\d.]+$/.test(scaleSpec[0])){
+        // `… / …` : montée / descente (aroha / avaroha)
+        const k=scaleSpec.indexOf("/"),up=k<0?scaleSpec:scaleSpec.slice(0,k);
+        const arr=up.map(parseFloat).filter(x=>!isNaN(x));if(arr.length>=2)scale=arr;
+        if(k>=0){const d=scaleSpec.slice(k+1).map(parseFloat).filter(x=>!isNaN(x));if(d.length)desc=d;}}
+      if(!scale){scale=SCALES[scaleSpec[0]];if(!desc&&SCALE_DESC[scaleSpec[0]])desc=SCALE_DESC[scaleSpec[0]];}}
     scale=scale||SCALES.major;
-    return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE,edo};}
+    return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE,edo,desc};}
+  const SCALE_DESC={khamaj:[0,2,4,5,7,9,10],desh:[0,2,4,5,7,9,10],melodic:[0,2,3,5,7,8,10]};
+  // aroha / avaroha : un degré simple atteint en descendant prend l'altération de la
+  // forme descendante (7 → 7b en khamaj). Miroir de loom-core avaroha_line.
+  function avarohaLine(line,key){const desc=key&&key.desc;if(!desc||!desc.length)return line;const len=key.scale.length;if(!len)return line;
+    let prev=null,down=false;
+    return line.map(tok=>{if(!/^[1-7]/.test(tok))return tok;let acc=0,rest=tok.slice(1);
+      if(tok[1]==="#"){acc=1;rest=tok.slice(2);}else if(tok[1]==="b"){acc=-1;rest=tok.slice(2);}
+      if(!/^[',]*$/.test(rest))return tok;
+      let marks=0;for(const c of rest)marks+=c==="'"?1:-1;
+      const idx=+tok[0]-1,i=((idx%len)+len)%len,pitch=12*(marks+Math.floor(idx/len))+key.scale[i]+acc;
+      if(prev!==null){if(pitch<prev)down=true;else if(pitch>prev)down=false;}
+      prev=pitch;if(!down||acc!==0)return tok;
+      const dv=desc[i%desc.length],delta=(dv!=null?dv:key.scale[i])-key.scale[i];
+      return delta===-1?tok[0]+"b"+rest:delta===1?tok[0]+"#"+rest:tok;});}
   // `19edo [pas…]` (gamme en pas d'EDO ; # et b = un pas) et `scala p1 … période` (miroir de loom-core)
   function isSpecialScale(w){return w==="scala"||w==="scl"||/^\d+edo$/.test(w);}
   function scalaSemitones(w){let v;
@@ -1366,6 +1386,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     blues:"pentatonique mineure + blue note — l'âme du blues et du jazz",
     harmonic_minor:"mineur à 7e majeure — la seconde augmentée orientale, dramatique",
     melodic_minor:"mineur de jazz — sophistiqué, lisse en montant",
+    melodic:"mineur mélodique classique : 6 et 7 hauts en montant, naturels en descendant",
+    khamaj:"râga du soir, léger : Ni naturel en montant (aroha), komal en descendant (avaroha)",
+    desh:"râga de la mousson : la montée et la descente n'ont pas le même 7e degré",
     whole_tone:"6 tons entiers égaux — irréel, suspendu, impressionniste (Debussy)",
     chromatic:"les 12 notes — tension maximale, atonalité, sérialisme",
     hijaz:"maqâm arabe à seconde augmentée — le son du Proche-Orient, du désert",
@@ -1841,7 +1864,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     let out=lines.join("\n");
     for(let i=0;i<4;i++){let ch=false;out=out.replace(/\$([A-Za-z_][\w]*)/g,(s,n)=>{if(defs[n]!=null){ch=true;return defs[n];}return s;});if(!ch)break;}
     return out;}
-  function parse(text){text=noComments(expandMacros(text));const out=[];for(let raw of text.split("\n")){const line=raw.trim();
+  function parse(text){text=noComments(expandMacros(text));const out=[];
+    // aroha / avaroha
+    const avKey=(()=>{const k=parseKey(text);return k&&k.desc?k:null;})();for(let raw of text.split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i===-1)continue;
     const full=line.slice(0,i).trim().toLowerCase();
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
@@ -1857,7 +1882,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
       for(const t of tokenizePat(piece)){const e=(t.startsWith("[")||t.startsWith("{"))?null:expandGen(t);if(e)toks.push(...e);else toks.push(t);}
       if(toks.length)stacks.push(toks);}
-    if(!stacks.length)continue;const tokens=stacks[0];
+    if(!stacks.length)continue;
+    if(avKey&&!DRUMS.has(name))for(let si=0;si<stacks.length;si++)stacks[si]=avarohaLine(stacks[si],avKey);
+    const tokens=stacks[0];
     let wave="square",gain=0.22,oct=null,arp=null,sections=null;
     let syncName=null;
     let cutoff=null,filterType="lowpass",q=1,arpoct=1,env=null,lfo=null,unison=1,detune=null,drive=null,pan=null,over=null,sample=null,root=null,reverb=null,dly=null,ir=null,irmix=null,midi=null,poly=null,fm=null,eq=null,viz=null,hue=null,wt=null,chorus=null,crush=null,jux=null,off=null,gate=null,slide=null,degrade=null,nudge=null,swing=null,ring=null,sub=null,noise=null,vowel=null,pluck=null,bend=null,bell=false,spread=null,fold=null,grain=null,phaser=null,chord=null,am=null,flam=false,orbit=null,humanize=null,strum=null,wow=null,mute=false,solo=false,comp=null,double=null,bow=false,pwm=null,fenv=null,semi=null,chop=null,reed=false,sync=null,vocode=null,redux=null,reson=null,flange=null,width=null,voicing=null,dyn=null,revsamp=false,warp=false,loopAt=null,freeze=false,sbeg=null,sfin=null,autopan=null,haas=null,partials=null,harm2=null,chance=null,tgate=null,lfo2=null,echo=null,vbus=null,sends=[];const verbs=[];
@@ -6178,6 +6205,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Gammes du monde","+ ragas/maqamat","bhairavi malkauns ahirbhairav nikriz athar_kurd ryukyu pelog_selisir istrian tritone harmonic_major lydian_minor hindu"],
     ["Gammes du monde","key: d hijaz","hijaz hijazkar nahawand kurd ajam bhairav yaman todi marwa purvi slendro pelog hirajoshi insen iwato egyptian"],
     ["Microtonal","key: d bayati","maqâm à vrais quarts de ton : bayati rast saba sikah huzam jiharkah"],
+    ["Aroha / avaroha","key: c khamaj","la descente prend la forme descendante : khamaj desh melodic, ou key: c 0 2 4 5 7 9 11 / 0 2 4 5 7 9 10"],
     ["Gammes","scale: 0 2 3 5 7 9 10","gamme PERSONNALISÉE : demi-tons depuis la tonique (microtonal ok : 0 1.5 3 5 7 8 10)"],
     ["Microtonal","3+50   c3-30","bend une note de N cents (+ aigu / - grave)"],
     ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : 5 maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13"],
@@ -6674,6 +6702,7 @@ const THEME_AA={
     "- Live morphing: morph: N (bars) makes live edits CROSSFADE — when a voice's line changes while playing, the old version fades out and the new fades in over N bars (equal-power) instead of switching abruptly. morph: 4 is musical for performance. Omit (or 0) for instant switching.",
     "- Voice-leading: | voicing lead keeps each chord close to the previous one (smooth, no big register jumps) — lovely on a prog: pad. (Also open/drop2/wide for spacing.)",
     "- True N-EDO and Scala: key: c 19edo 0 3 6 8 11 14 17 writes a scale in steps of 19-EDO (degrees land exactly on that grid, and # / b move ONE EDO step, so every one of the 19 pitches is reachable); key: c 24edo alone = all 24 quarter-tone steps. key: d scala 9/8 5/4 4/3 3/2 5/3 15/8 2/1 takes a Scala pitch list (ratios like 5/4, cents with a dot like 386.3, last value = the octave). tune: just|pyth|werck|kirn|meantone|Nedo retunes the degrees of any key. Maqams bayati rast saba sikah huzam jiharkah play their true quarter tones.",
+    "- Aroha / avaroha (a raga or melodic minor that goes up one way and down another): key: c khamaj, key: d desh and key: a melodic flatten the 7th (and the 6th for melodic) automatically when the line descends, natural when it climbs. Write your own with a slash: key: c 0 2 4 5 7 9 11 / 0 2 4 5 7 9 10 (ascending / descending). An explicit # or b always wins.",
     "- Custom scales: scale: 0 2 3 5 7 9 10 defines ANY scale as semitone offsets from the tonic — microtonal allowed (scale: 0 1.5 3 5 7 8 10 for quarter-tones). key: c 0 2 3 5 7 9 10 works too. Lets you invent scales beyond the named ones.",
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
     "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",

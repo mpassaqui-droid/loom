@@ -571,6 +571,8 @@ pub fn parse(src: &str) -> Vec<Voice> {
     let expanded = expand_macros(src);
     let src = expanded.as_str();
     let mut out = Vec::new();
+    // aroha / avaroha : seulement si la tonalité a une forme descendante
+    let avaroha_key = parse_key(src).filter(|k| k.desc.is_some());
     let mut names_sync: Vec<Option<String>> = Vec::new();
     for raw in src.lines() {
         let line = decomment(raw).trim();
@@ -611,6 +613,10 @@ pub fn parse(src: &str) -> Vec<Voice> {
             .filter(|t| !t.is_empty())
             .collect();
         if stacks.is_empty() { continue; }
+        let stacks: Vec<Vec<String>> = match &avaroha_key {
+            Some(k) if !DRUMS.contains(&name.as_str()) => stacks.into_iter().map(|l| avaroha_line(l, k)).collect(),
+            _ => stacks,
+        };
         let tokens = stacks[0].clone();
 
         let is_drum = DRUMS.contains(&name.as_str());
@@ -1771,6 +1777,9 @@ pub struct Key {
     /// `key: c 19edo …` : une gamme écrite en pas de N-EDO ; `#`/`b` montent ou
     /// descendent d'UN pas de l'EDO (toutes les N hauteurs sont joignables).
     pub edo: Option<u32>,
+    /// Avaroha (raga) / forme descendante : la gamme quand la mélodie descend.
+    /// `key: c 0 2 4 5 7 9 11 / 0 2 4 5 7 9 10`, ou `khamaj`, `desh`, `melodic`.
+    pub desc: Option<Vec<f64>>,
 }
 
 /// Default reference octave for degree 1 (C3 region — sits between bass and lead).
@@ -1805,6 +1814,9 @@ pub fn scale_intervals(name: &str) -> Option<Vec<i32>> {
         // extra Western scales
         "harmonic_minor" | "harmonicminor" => vec![0, 2, 3, 5, 7, 8, 11],
         "melodic_minor" | "melodicminor"   => vec![0, 2, 3, 5, 7, 9, 11],
+        // montée seulement : la descente est dans `scale_desc` (aroha / avaroha)
+        "melodic"                          => vec![0, 2, 3, 5, 7, 9, 11],
+        "khamaj" | "desh"                  => vec![0, 2, 4, 5, 7, 9, 11],
         "whole_tone" | "wholetone"         => vec![0, 2, 4, 6, 8, 10],
         "blues"                            => vec![0, 3, 5, 6, 7, 10],
         "chromatic"                        => (0..12).collect(),
@@ -1901,6 +1913,7 @@ pub fn parse_key(src: &str) -> Option<Key> {
     let mut scale_name: Option<String> = None;
     let mut scale_nums: Option<Vec<f64>> = None; // custom numeric (possibly microtonal) scale
     let mut scale_special: Option<Vec<String>> = None; // `19edo …` / `scala …`
+    let mut desc_nums: Option<Vec<f64>> = None; // `… / 0 2 4 5 7 9 10` (avaroha)
 
     for raw in src.lines() {
         let line = raw.trim();
@@ -1916,9 +1929,13 @@ pub fn parse_key(src: &str) -> Option<Key> {
                     scale_special = Some(words.map(str::to_string).collect());
                     scale_nums = None; scale_name = None;
                 }
-                // `key: c 0 2 3.5 5 ...` -> custom numeric scale (microtonal allowed)
+                // `key: c 0 2 3.5 5 ...` -> custom numeric scale (microtonal allowed),
+                // `… / …` -> montée / descente (aroha / avaroha)
                 else if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
-                    scale_nums = Some(words.filter_map(|w| w.parse::<f64>().ok()).collect());
+                    let all: Vec<&str> = words.collect();
+                    let (up, down) = match all.iter().position(|w| *w == "/") { Some(k) => (&all[..k], Some(&all[k + 1..])), None => (&all[..], None) };
+                    scale_nums = Some(up.iter().filter_map(|w| w.parse::<f64>().ok()).collect());
+                    desc_nums = down.map(|d| d.iter().filter_map(|w| w.parse::<f64>().ok()).collect());
                 } else if let Some(s) = words.next() {
                     scale_name = Some(s.to_string());
                 }
@@ -1929,7 +1946,10 @@ pub fn parse_key(src: &str) -> Option<Key> {
                     scale_nums = None; scale_name = None;
                 }
                 else if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
-                    scale_nums = Some(words.filter_map(|w| w.parse::<f64>().ok()).collect());
+                    let all: Vec<&str> = words.collect();
+                    let (up, down) = match all.iter().position(|w| *w == "/") { Some(k) => (&all[..k], Some(&all[k + 1..])), None => (&all[..], None) };
+                    scale_nums = Some(up.iter().filter_map(|w| w.parse::<f64>().ok()).collect());
+                    desc_nums = down.map(|d| d.iter().filter_map(|w| w.parse::<f64>().ok()).collect());
                 } else if let Some(s) = words.next() {
                     scale_name = Some(s.to_string());
                 }
@@ -1948,7 +1968,48 @@ pub fn parse_key(src: &str) -> Option<Key> {
         (None, Some(nums)) if !nums.is_empty() => nums,
         _ => scale_name.as_deref().and_then(scale_steps).unwrap_or_else(major_f64),
     };
-    Some(Key { tonic: tonic.unwrap_or(0), scale, octave: DEFAULT_OCTAVE, tuning: Tuning::of_source(src), edo })
+    // une forme descendante écrite, sinon celle de la gamme nommée
+    let desc = desc_nums.filter(|d| !d.is_empty()).or_else(|| scale_name.as_deref().and_then(scale_desc));
+    Some(Key { tonic: tonic.unwrap_or(0), scale, octave: DEFAULT_OCTAVE, tuning: Tuning::of_source(src), edo, desc })
+}
+
+/// Les gammes qui ne descendent pas comme elles montent.
+pub fn scale_desc(name: &str) -> Option<Vec<f64>> {
+    Some(match name {
+        // ragas : Ni naturel en montant, komal (b7) en descendant
+        "khamaj" | "desh" => vec![0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 10.0],
+        // mineur mélodique classique : 6 et 7 hauts en montant, naturels en descendant
+        "melodic" => vec![0.0, 2.0, 3.0, 5.0, 7.0, 8.0, 10.0],
+        _ => return None,
+    })
+}
+
+/// Aroha / avaroha : dans une ligne, un degré simple atteint en DESCENDANT prend
+/// l'altération de la forme descendante (`7` → `7b` en khamaj). Le premier degré
+/// d'une ligne compte comme montant ; une note répétée garde le sens d'avant.
+/// Seuls les écarts d'un demi-ton s'écrivent ainsi. Miroir du web (`avarohaLine`).
+pub fn avaroha_line(line: Vec<String>, key: &Key) -> Vec<String> {
+    let Some(desc) = key.desc.as_ref().filter(|d| !d.is_empty()) else { return line };
+    let len = key.scale.len() as i32;
+    if len == 0 { return line; }
+    let mut prev: Option<f64> = None;
+    let mut down = false;
+    line.into_iter().map(|tok| {
+        let b = tok.as_bytes();
+        if b.is_empty() || !(b'1'..=b'7').contains(&b[0]) { return tok; }
+        let (acc, rest) = match b.get(1) { Some(b'#') => (1.0, &tok[2..]), Some(b'b') => (-1.0, &tok[2..]), _ => (0.0, &tok[1..]) };
+        if !rest.chars().all(|c| c == '\'' || c == ',') { return tok; }
+        let marks: i32 = rest.chars().map(|c| if c == '\'' { 1 } else { -1 }).sum();
+        let idx = (b[0] - b'1') as i32;
+        let i = idx.rem_euclid(len) as usize;
+        let pitch = 12.0 * (marks + idx.div_euclid(len)) as f64 + key.scale[i] + acc;
+        if let Some(p) = prev { if pitch < p { down = true } else if pitch > p { down = false } }
+        prev = Some(pitch);
+        if !down || acc != 0.0 { return tok; }
+        let delta = desc.get(i % desc.len()).copied().unwrap_or(key.scale[i]) - key.scale[i];
+        let mark = if delta == -1.0 { "b" } else if delta == 1.0 { "#" } else { return tok };
+        format!("{}{mark}{rest}", &tok[..1])
+    }).collect()
 }
 
 fn major_f64() -> Vec<f64> { vec![0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 11.0] }
@@ -4041,5 +4102,19 @@ mod tests {
         let scl = "! meantone.scl\n!\nQuarter-comma meantone\n 3\n!\n 193.157\n 5/4\n 2/1\n";
         assert_eq!(scala_to_key_line(scl, "c").unwrap(), "key: c scala 193.157 5/4 2/1  # Quarter-comma meantone");
         assert!(scala_to_key_line("x\n3\n1/1\n", "c").is_err());
+    }
+
+    #[test]
+    fn aroha_avaroha() {
+        let toks = |src: &str| parse(src).into_iter().find(|v| v.name == "l").unwrap().stacks;
+        // khamaj : 7 naturel en montant, b7 en descendant
+        assert_eq!(toks("key: c khamaj\nl: 5 6 7 1' 7 6 5")[0], ["5", "6", "7", "1'", "7b", "6", "5"]);
+        // mineur mélodique classique : 6 et 7 hauts en montant, naturels en descendant
+        assert_eq!(toks("key: a melodic\nl: 5 6 7 1' 7 6 5")[0], ["5", "6", "7", "1'", "7b", "6b", "5"]);
+        // forme écrite, altération explicite respectée, note répétée garde le sens, chaque pile à part
+        assert_eq!(toks("key: c 0 2 4 5 7 9 11 / 0 2 4 5 7 9 10\nl: 1' 7 7 7# ; 7 1'")[..], [vec!["1'", "7b", "7b", "7#"], vec!["7", "1'"]]);
+        // sans forme descendante, rien ne change ; les batteries jamais
+        assert_eq!(toks("key: c major\nl: 1' 7 6")[0], ["1'", "7", "6"]);
+        assert_eq!(parse_key("key: c khamaj").unwrap().desc.unwrap()[6], 10.0);
     }
 }
