@@ -339,6 +339,11 @@ impl LoomApp {
         self.forget_demo(); // the song takes the engine back from a teacher's example
         let program = Program::parse(&self.text);
         let voice_count = program.voices.len();
+        if voice_count == 0 {
+            // live-coding rule: broken or empty code never silences what is playing
+            self.warn("Aucune voix trouvée : la musique en cours continue. Une ligne ressemble à  kick: x . x .");
+            return;
+        }
         let Some(engine) = &self.engine else {
             self.set_program(program);
             self.warn("Pas de sortie audio : impossible de jouer (l'export WAV reste possible).");
