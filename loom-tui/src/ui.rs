@@ -469,3 +469,21 @@ fn draw_confirm(f: &mut Frame, app: &App, question: &str) {
         Line::styled(" o / Entrée = oui    autre touche = annuler", Style::new().fg(c(app.theme.dim))),
     ]), inner);
 }
+
+#[cfg(test)]
+mod tests {
+    /// L'écran du premier lancement, en texte (ouvre la carte son sans jouer) :
+    /// `cargo test -p loom-tui premier_ecran -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn premier_ecran() {
+        let mut app = crate::app::App::new(None);
+        let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 36)).unwrap();
+        term.draw(|f| super::draw(f, &mut app)).unwrap();
+        let buf = term.backend().buffer().clone();
+        for y in 0..buf.area.height {
+            let line: String = (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect();
+            println!("{}", line.trim_end());
+        }
+    }
+}

@@ -133,6 +133,9 @@ impl App {
             teacher: Teacher::default(),
         };
         match &app.engine {
+            // un casque Bluetooth en mode micro (16 kHz) sonne mal : le dire tout de suite
+            Ok(e) if e.sample_rate() < 44_100 => app.error(format!("son dégradé : {} à {} Hz (Bluetooth en mode micro). Change de sortie ou coupe le micro du casque.",
+                e.device_name(), e.sample_rate())),
             Ok(e) => app.info(format!("son : {} · {} Hz · {} samples · {} — Ctrl+R pour jouer, F1 pour l'aide",
                 e.device_name(), e.sample_rate(), e.sample_count(), e.midi_description())),
             Err(err) => app.error(format!("pas de son : {err}")),

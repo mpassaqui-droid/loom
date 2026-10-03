@@ -80,7 +80,16 @@ impl Engine {
             None => host.default_output_device().ok_or("aucune sortie audio trouvée")?,
         };
         let device_name = device.description().map(|d| d.to_string()).unwrap_or_else(|_| "sortie audio".into());
-        let supported = device.default_output_config().map_err(|e| e.to_string())?;
+        let mut supported = device.default_output_config().map_err(|e| e.to_string())?;
+        // un casque Bluetooth en mode micro tombe à 16 kHz : demander 48 ou 44,1 kHz s'il sait
+        if supported.sample_rate() < 44_100 {
+            if let Ok(all) = device.supported_output_configs() {
+                let better = all.filter(|c| c.sample_format() == supported.sample_format() && c.channels() >= 2)
+                    .filter_map(|c| [48_000, 44_100].into_iter().find(|r| c.min_sample_rate() <= *r && *r <= c.max_sample_rate()).map(|r| c.with_sample_rate(r)))
+                    .max_by_key(|c| c.sample_rate());
+                if let Some(b) = better { supported = b; }
+            }
+        }
         let format = supported.sample_format();
         let config: StreamConfig = supported.into();
         let (tx, rx) = channel();
