@@ -294,7 +294,25 @@ fn prog_roman(key: &Key, prog: &[String]) -> Option<String> {
         for (i, &step) in key.scale.iter().enumerate() {
             if (key.tonic + step.round() as i32).rem_euclid(12) == pc { deg = i as i32; break; }
         }
-        if deg < 0 { out.push(chord.to_string()); continue; }
+        if deg < 0 {
+            let (minor, dim, seventh) = chord_quality(chord);
+            out.push(crate::harmony::analyze_chord(pc, minor, dim, seventh, key));
+            continue;
+        }
+        // a diatonic root with a foreign quality (D7 in C) is a secondary or borrowed chord
+        if key.scale.len() == 7 {
+            let st = |i: usize| key.scale[(deg as usize + i) % 7].round() as i32;
+            let (minor, dim, seventh) = chord_quality(chord);
+            let third = (st(2) - st(0)).rem_euclid(12);
+            let fifth = (st(4) - st(0)).rem_euclid(12);
+            let sev = (st(6) - st(0)).rem_euclid(12);
+            let fits = (third == 3) == (minor || dim) && (third == 3 && fifth == 6) == dim
+                && seventh.is_none_or(|x| x == sev || (dim && x == 9 && sev == 10));
+            if !fits {
+                out.push(crate::harmony::analyze_chord(pc, minor, dim, seventh, key));
+                continue;
+            }
+        }
         let lower = chord.to_lowercase();
         let minor = lower.contains("dim") || (lower.contains('m') && !lower.contains("maj"));
         let mut r = RN[deg.rem_euclid(7) as usize].to_string();
@@ -304,9 +322,79 @@ fn prog_roman(key: &Key, prog: &[String]) -> Option<String> {
     if out.is_empty() { None } else { Some(out.join(" ")) }
 }
 
+/// Quality of a chord symbol after its root: (minor, diminished, seventh above the root).
+fn chord_quality(chord: &str) -> (bool, bool, Option<i32>) {
+    let lower = chord.to_lowercase();
+    let half = lower.contains("m7b5") || lower.contains('ø');
+    let dim = half || lower.contains("dim") || lower.contains('°');
+    let minor = !dim && lower.contains('m') && !lower.contains("maj");
+    let seventh = if lower.contains("maj7") { Some(11) }
+        else if dim && !half && lower.contains('7') { Some(9) }
+        else if lower.contains('7') { Some(10) }
+        else { None };
+    (minor, dim, seventh)
+}
+
+/// What an altered chord of the progression does (borrowed, secondary, Neapolitan).
+fn chord_colour(roman: &str, key: &Key) -> Option<String> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut parts: Vec<String> = Vec::new();
+    for r in roman.split_whitespace() {
+        if seen.contains(&r) { continue; }
+        seen.push(r);
+        let what = if let Some((_, t)) = r.split_once('/') {
+            if r.starts_with("vii") { format!("{r} sensible secondaire, elle tire vers {t}") }
+            else { format!("{r} dominante secondaire, elle fait briller {t} comme une tonique d'un instant") }
+        } else if r == "N" || r == "N6" {
+            format!("{r} sixte napolitaine, le IIe abaissé, sombre et dramatique")
+        } else if r.starts_with('b') || r.starts_with('#') || (!is_minor(key) && (r == "iv" || r == "v")) {
+            format!("{r} emprunté au mode parallèle (mixture), une ombre passe")
+        } else { continue };
+        parts.push(what);
+    }
+    (!parts.is_empty()).then(|| format!("[ couleur ] {}", parts.join(" · ")))
+}
+
+const FLAT_NAMES: [&str; 12] = ["do", "réb", "ré", "mib", "mi", "fa", "solb", "sol", "lab", "la", "sib", "si"];
+
+fn is_minor(k: &Key) -> bool { k.scale.len() >= 3 && k.scale[2].round() as i32 == 3 }
+
+/// How the ear hears a move from key `a` to key `b`.
+fn key_relation(a: &Key, b: &Key) -> String {
+    let d = (b.tonic - a.tonic).rem_euclid(12);
+    let (ma, mb) = (is_minor(a), is_minor(b));
+    if d == 0 && ma != mb { return "homonyme : même tonique, le mode change de lumière".into(); }
+    if d == 0 { return "même tonalité".into(); }
+    if (!ma && mb && d == 9) || (ma && !mb && d == 3) { return "relatif : mêmes notes, autre centre de gravité".into(); }
+    if d == 7 { return "à la dominante : la voisine la plus proche, ça monte en énergie".into(); }
+    if d == 5 { return "à la sous-dominante : une détente, on s'assoit".into(); }
+    if d == 1 || d == 2 { return format!("montée d'un {} : le coup classique du dernier refrain", if d == 1 { "demi-ton" } else { "ton" }); }
+    format!("éloignée (+{d} demi-tons) : changement de couleur franc")
+}
+
+/// `[ modulation ]` for every `key@section`, measured from the main key.
+fn modulation_line(src: &str, key: &Key) -> Option<String> {
+    let mut map: Vec<(String, Key)> = Vec::new();
+    for (sec, k) in crate::parse_key_map(src) {
+        match map.iter_mut().find(|(n, _)| *n == sec) { Some(e) => e.1 = k, None => map.push((sec, k)) }
+    }
+    let parts: Vec<String> = map.iter().map(|(sec, k)| {
+        let mode = if is_minor(k) { "mineur" } else { "majeur" };
+        format!("{sec} en {} {mode}, {}", FLAT_NAMES[k.tonic.rem_euclid(12) as usize], key_relation(key, k))
+    }).collect();
+    (!parts.is_empty()).then(|| format!("[ modulation ] {}", parts.join(" · ")))
+}
+
+/// Uppercase function names for cadence reading: a borrowed `V7` still acts as `V`.
+fn roman_functions(roman: &str) -> String {
+    roman.to_uppercase().split_whitespace()
+        .map(|t| if t.contains('/') { t } else { t.strip_suffix('7').unwrap_or(t) })
+        .collect::<Vec<_>>().join(" ")
+}
+
 /// The web's `cadenceOf`: name a resolution inside the roman-numeral chain.
 fn cadence_of(roman: &str) -> Option<&'static str> {
-    let upper = roman.to_uppercase();
+    let upper = roman_functions(roman);
     let t: Vec<&str> = upper.split_whitespace().collect();
     for i in 0..t.len().saturating_sub(2) {
         if t[i] == "II" && t[i + 1] == "V" && t[i + 2] == "I" {
@@ -324,7 +412,7 @@ fn cadence_of(roman: &str) -> Option<&'static str> {
 
 /// Tension/release summary of a roman chain: where does the ear end up?
 fn tension_summary(roman: &str) -> &'static str {
-    let up: Vec<String> = roman.to_uppercase().split_whitespace().map(str::to_string).collect();
+    let up: Vec<String> = roman_functions(roman).split_whitespace().map(str::to_string).collect();
     match up.last().map(String::as_str) {
         Some("I") => "l'oreille retombe sur le I : repos, conclusion",
         Some("V") => "l'oreille reste en suspens sur le V : tension non résolue",
@@ -574,8 +662,10 @@ pub fn analyze(text: &str) -> Vec<String> {
         }
         out.push(line);
         out.push(format!("[ tension ] {}", tension_summary(r)));
+        if let Some(c) = key.as_ref().and_then(|k| chord_colour(r, k)) { out.push(c); }
         why.push("la progression enchaîne tension (dominante) → détente (tonique)".into());
     }
+    if let Some(m) = key.as_ref().and_then(|k| modulation_line(&src, k)) { out.push(m); }
     // ATTENTE — a melodic line that stops on the leading tone (a half step below
     // the tonic) begs for resolution; 7→1 is the textbook perfect close.
     if let Some(k) = &key {
@@ -622,7 +712,7 @@ pub fn analyze(text: &str) -> Vec<String> {
             advice.push("pose une dominante (V) juste avant le retour sur la tonique : la tension appelle le repos, ta phrase gagne une direction".into());
         }
     }
-    if roman.as_deref().is_some_and(|r| r.to_uppercase().split_whitespace().last() == Some("V")) {
+    if roman.as_deref().is_some_and(|r| roman_functions(r).split_whitespace().last() == Some("V")) {
         advice.push("ta progression reste en suspens sur la dominante — conclus sur la tonique (I) pour fermer la phrase".into());
     }
     for a in advice {
@@ -840,5 +930,27 @@ mod tests {
         let maj = analyze("key: c major\nlead: 1 3 5");
         assert!(maj.iter().any(|l| l.contains("humeur : la joie franche")), "{maj:?}");
         assert!(!maj.iter().any(|l| l.contains("c'est un mode")), "{maj:?}");
+    }
+
+    #[test]
+    fn couleur_et_modulation() {
+        let lines = analyze("key: c major\nprog: C D7 G Bb Fm C\nlead: 1 3 5 1");
+        let h = lines.iter().find(|l| l.starts_with("[ harmonie ]")).unwrap();
+        assert!(h.contains("V7/V") && h.contains("bVII") && h.contains("iv"), "{h}");
+        let c = lines.iter().find(|l| l.starts_with("[ couleur ]")).unwrap();
+        assert!(c.contains("V7/V dominante secondaire") && c.contains("bVII emprunté") && c.contains("iv emprunté"), "{c}");
+        // en mineur, iv est chez lui : pas de couleur
+        let m = analyze("key: a minor\nprog: Am Dm E Am\nlead: 1 3 5 1");
+        assert!(!m.iter().any(|l| l.starts_with("[ couleur ]")), "{m:?}");
+        let md = analyze("key: a minor\nkey@chorus: c major\nkey@bridge: a major\nkey@last: bb minor\nsong: verse chorus bridge last\nlead: 1 3 5 1");
+        let l = md.iter().find(|l| l.starts_with("[ modulation ]")).unwrap();
+        assert!(l.contains("chorus en do majeur, relatif") && l.contains("bridge en la majeur, homonyme") && l.contains("last en sib mineur, montée d'un demi-ton"), "{l}");
+    }
+
+    #[test]
+    fn dominante_empruntee_en_mineur_cadence_quand_meme() {
+        let lines = analyze("key: a minor\nprog: Dm E7 Am\nlead: 1 3 5 1");
+        let h = lines.iter().find(|l| l.starts_with("[ harmonie ]")).unwrap();
+        assert!(h.contains("V7") && h.contains("cadence parfaite"), "{h}");
     }
 }

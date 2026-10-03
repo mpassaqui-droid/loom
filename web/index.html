@@ -1383,6 +1383,45 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const k=l.slice(0,i).trim().toLowerCase(),w=l.slice(i+1).trim().toLowerCase().split(/\s+/).filter(Boolean);
     if(k==="key"&&w[1]&&!/^-?[\d.]/.test(w[1]))nm=w[1];else if(k==="scale"&&w[0]&&!/^-?[\d.]/.test(w[0]))nm=w[0];}
     return nm;}
+  // (miroir de prof/analyze.rs) qualité d'un symbole d'accord : [mineur, diminué, septième]
+  function chordQuality(ch){const l=ch.toLowerCase(),half=l.includes("m7b5")||l.includes("ø"),dim=half||l.includes("dim")||l.includes("°");
+    const minor=!dim&&l.includes("m")&&!l.includes("maj");
+    const sev=l.includes("maj7")?11:(dim&&!half&&l.includes("7"))?9:l.includes("7")?10:null;return [minor,dim,sev];}
+  // (miroir de harmony::analyze_chord) nom de fonction : diatonique, V7/x, N, emprunt
+  function analyzeChord(root,minor,dim,seventh,k){const RN=["I","II","III","IV","V","VI","VII"],MAJ=[0,2,4,5,7,9,11],md=x=>((x%12)+12)%12;
+    const rel=md(root-k.tonic),cs=x=>(minor||dim)?x.toLowerCase():x;
+    const suf=dim?(seventh===9?"°7":seventh===10?"ø7":"°"):(seventh===11?"maj7":seventh!=null?"7":"");
+    const sc=k.scale.map(x=>Math.round(x));
+    if(sc.length===7){const d=sc.indexOf(rel);if(d>=0){const th=md(sc[(d+2)%7]-sc[d]),fi=md(sc[(d+4)%7]-sc[d]);
+      if((th===3)===(minor||dim)&&(th===3&&fi===6)===dim)return cs(RN[d])+suf;}}
+    if(!minor&&!dim&&seventh!==11){const tg=md(rel+5);if(tg!==0){const d=sc.indexOf(tg);
+      if(d>=0){const th=md(sc[(d+2)%7]-sc[d]);return "V"+suf+"/"+(th===3?RN[d].toLowerCase():RN[d]);}}}
+    if(dim){const tg=md(rel+1);if(tg!==0){const d=sc.indexOf(tg);
+      if(d>=0){const th=md(sc[(d+2)%7]-sc[d]);return "vii"+suf+"/"+(th===3?RN[d].toLowerCase():RN[d]);}}}
+    if(rel===1&&!minor&&!dim)return "N";
+    let num="?",acc="";const d0=MAJ.indexOf(rel);if(d0>=0)num=RN[d0];else{const d1=MAJ.indexOf(rel+1);if(d1>=0){num=RN[d1];acc="b";}}
+    return acc+cs(num)+suf;}
+  function keyIsMinor(k){return k.scale.length>=3&&Math.round(k.scale[2])===3;}
+  // ce que fait un accord altéré de la progression
+  function chordColour(roman,k){const seen=[],parts=[];for(const r of roman.split(/\s+/)){if(!r||seen.includes(r))continue;seen.push(r);
+      const sl=r.indexOf("/");let w=null;
+      if(sl>=0)w=r.startsWith("vii")?r+" sensible secondaire, elle tire vers "+r.slice(sl+1):r+" dominante secondaire, elle fait briller "+r.slice(sl+1)+" comme une tonique d'un instant";
+      else if(r==="N"||r==="N6")w=r+" sixte napolitaine, le IIe abaissé, sombre et dramatique";
+      else if(r[0]==="b"||r[0]==="#"||(!keyIsMinor(k)&&(r==="iv"||r==="v")))w=r+" emprunté au mode parallèle (mixture), une ombre passe";
+      if(w)parts.push(w);}
+    return parts.length?"[ couleur ] "+parts.join(" · "):null;}
+  function keyRelation(a,b){const d=((b.tonic-a.tonic)%12+12)%12,ma=keyIsMinor(a),mb=keyIsMinor(b);
+    if(d===0&&ma!==mb)return "homonyme : même tonique, le mode change de lumière";if(d===0)return "même tonalité";
+    if((!ma&&mb&&d===9)||(ma&&!mb&&d===3))return "relatif : mêmes notes, autre centre de gravité";
+    if(d===7)return "à la dominante : la voisine la plus proche, ça monte en énergie";
+    if(d===5)return "à la sous-dominante : une détente, on s'assoit";
+    if(d===1||d===2)return "montée d'un "+(d===1?"demi-ton":"ton")+" : le coup classique du dernier refrain";
+    return "éloignée (+"+d+" demi-tons) : changement de couleur franc";}
+  function modulationLine(text,k){const FN=["do","réb","ré","mib","mi","fa","solb","sol","lab","la","sib","si"],m=parseKeyMap(text);
+    const parts=Object.keys(m).map(sec=>sec+" en "+FN[((m[sec].tonic%12)+12)%12]+" "+(keyIsMinor(m[sec])?"mineur":"majeur")+", "+keyRelation(k,m[sec]));
+    return parts.length?"[ modulation ] "+parts.join(" · "):null;}
+  // un V7 emprunté agit toujours comme un V pour lire la cadence
+  function romanFunctions(r){return r.toUpperCase().split(/\s+/).map(t=>t.includes("/")?t:t.replace(/7$/,"")).join(" ");}
   // roman-numeral analysis of the current chord progression against the key (theory feedback)
   function progRoman(){if(!prog.length||!key)return null;const RN=["I","II","III","IV","V","VI","VII"];
     const seen=[],out=[];for(const ch of prog){if(seen.includes(ch))continue;seen.push(ch);
@@ -1390,7 +1429,12 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       const m=/^([A-G])([#b]?)/.exec(ch);if(!m){out.push(ch);continue;}
       let pc=({C:0,D:2,E:4,F:5,G:7,A:9,B:11})[m[1]];if(m[2]==="#")pc++;if(m[2]==="b")pc--;pc=((pc%12)+12)%12;
       let deg=-1;for(let i=0;i<key.scale.length;i++)if((((key.tonic+Math.round(key.scale[i]))%12)+12)%12===pc){deg=i;break;}
-      if(deg<0){out.push(ch);continue;}let r=RN[deg%7];const minor=/m(?!aj)/.test(ch)||/dim/.test(ch);out.push(minor?r.toLowerCase():r);}
+      if(deg<0){const q=chordQuality(ch);out.push(analyzeChord(pc,q[0],q[1],q[2],key));continue;}
+      if(key.scale.length===7){const st=i=>Math.round(key.scale[(deg+i)%7]),md=x=>((x%12)+12)%12,q=chordQuality(ch);
+        const third=md(st(2)-st(0)),fifth=md(st(4)-st(0)),sev=md(st(6)-st(0));
+        const fits=(third===3)===(q[0]||q[1])&&(third===3&&fifth===6)===q[1]&&(q[2]==null||q[2]===sev||(q[1]&&q[2]===9&&sev===10));
+        if(!fits){out.push(analyzeChord(pc,q[0],q[1],q[2],key));continue;}}
+      let r=RN[deg%7];const minor=/m(?!aj)/.test(ch)||/dim/.test(ch);out.push(minor?r.toLowerCase():r);}
     return out.length?out.join(" "):null;}
   function isDegree(tok){return /^[1-7][#b]?[',]*$/.test(tok);}
   // microtuning: cents deviation from equal temperament for each semitone interval from the tonic
@@ -7071,7 +7115,7 @@ const THEME_AA={
     $("vibeIn").value=b.getAttribute("data-ai");vibe();});}
   // AI music teacher: explain the current piece in plain words (uses the free brain; prose, not code)
   // name the cadence from a roman-numeral progression (the harmonic "punctuation")
-  function cadenceOf(pr){const t=pr.toUpperCase().split(/\s+/);
+  function cadenceOf(pr){const t=romanFunctions(pr).split(/\s+/);
     for(let i=0;i<t.length-2;i++)if(t[i]==="II"&&t[i+1]==="V"&&t[i+2]==="I")return "ii–V–I, la cadence reine du jazz (double tension qui résout)";
     for(let i=0;i<t.length-1;i++){
       if(t[i]==="V"&&t[i+1]==="I")return "cadence parfaite (V→I) : la résolution la plus forte, conclusive";
@@ -7147,7 +7191,7 @@ const THEME_AA={
     const idx=((d-1)%s.length+s.length)%s.length;
     return ((Math.round(s[idx]||0)%12)+12)%12;}
   // where does the ear end up on this roman chain?
-  function tensionSummary(roman){const up=roman.toUpperCase().split(/\s+/),last=up[up.length-1];
+  function tensionSummary(roman){const up=romanFunctions(roman).split(/\s+/),last=up[up.length-1];
     return last==="I"?"l'oreille retombe sur le I : repos, conclusion":
       last==="V"?"l'oreille reste en suspens sur le V : tension non résolue":
       last==="IV"||last==="II"||last==="VI"?"l'oreille circule (mouvement) sans conclure":
@@ -7192,7 +7236,9 @@ const THEME_AA={
     const pr=(()=>{const sk=key,sp=prog;key=parseKey(text);prog=parseProg(text);const r=progRoman();key=sk;prog=sp;return r;})();
     if(pr){out.push("[ harmonie ] progression : "+pr+(cadenceOf(pr)?" — "+cadenceOf(pr):""));
       out.push("[ tension ] "+tensionSummary(pr));
+      {const kk=parseKey(text),c=kk&&chordColour(pr,kk);if(c)out.push(c);}
       why.push("la progression enchaîne tension (dominante) → détente (tonique)");}
+    {const kk=parseKey(text),ml=kk&&modulationLine(text,kk);if(ml)out.push(ml);}
     // ATTENTE — a melody stopping on the leading tone begs for resolution; 7→1 is the perfect close.
     const degs=lastVoiceDegrees(text);
     if(k&&degs.length){const la=degs[degs.length-1];
@@ -7210,7 +7256,7 @@ const THEME_AA={
     if(k&&degs.length>=3){const mn=Math.min(...degs),mx=Math.max(...degs);
       if(mx-mn<=2)out.push("[ conseil ] ta mélodie tourne dans "+(mx-mn+1)+" notes (degrés "+mn+"→"+mx+") — élargis l'ambitus vers l'octave pour plus de relief");}
     if(k&&!pr&&degs.length>=2)out.push("[ conseil ] pose une dominante (V) juste avant le retour sur la tonique : la tension appelle le repos, ta phrase gagne une direction");
-    if(pr&&pr.toUpperCase().split(/\s+/).pop()==="V")out.push("[ conseil ] ta progression reste en suspens sur la dominante — conclus sur la tonique (I) pour fermer la phrase");
+    if(pr&&romanFunctions(pr).split(/\s+/).pop()==="V")out.push("[ conseil ] ta progression reste en suspens sur la dominante — conclus sur la tonique (I) pour fermer la phrase");
     const song=parseSong(text); if(song&&song.length) out.push("[ forme ] "+song.map(s=>s[0]).join(" → "));
     try{noveltyReport(text).forEach(l=>out.push(l));}catch(_){}
     if(!out.length) out.push("[ analyse ] morceau libre (pas de tonalité déclarée) — les notes sont absolues.");

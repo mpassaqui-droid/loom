@@ -196,6 +196,17 @@ pub fn analyze_chord(root: i32, minor: bool, dim: bool, seventh: Option<i32>, ke
             }
         }
     }
+    // secondary leading-tone chord: diminished, a half step under a diatonic degree
+    if dim {
+        let target = (rel + 1).rem_euclid(12);
+        if target != 0 {
+            if let Some(d) = scale.iter().position(|s| *s == target) {
+                let third = (scale[(d + 2) % 7] - scale[d]).rem_euclid(12);
+                let t = if third == 3 { RN[d].to_lowercase() } else { RN[d].to_string() };
+                return format!("vii{suffix}/{t}");
+            }
+        }
+    }
     if rel == 1 && !minor && !dim { return "N".into(); }
     // borrowed / chromatic: measured from the major scale
     let (num, acc) = match MAJOR.iter().position(|m| *m == rel) {
@@ -222,6 +233,13 @@ mod tests {
         let a = key("a minor");
         assert_eq!(pcs(&roman_chord("i", &a).unwrap()), vec![9, 0, 4]);
         assert_eq!(pcs(&roman_chord("VI", &a).unwrap()), vec![5, 9, 0]);
+    }
+
+    #[test]
+    fn sensible_secondaire() {
+        let c = key("c major");
+        assert_eq!(analyze_chord(1, false, true, Some(9), &c), "vii°7/ii");
+        assert_eq!(analyze_chord(6, false, true, Some(10), &c), "viiø7/V");
     }
 
     #[test]
