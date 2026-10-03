@@ -198,6 +198,14 @@ impl Undo {
 mod tests {
     use super::*;
 
+    #[test]
+    fn laisse_les_lignes_vis() {
+        let src = "vis: osc 14 0.05 0.9 | kaleid 6\nvis: shape 6 0.2\nlead: c4 e4 g4 c5\n";
+        let d = develop(src, 1).unwrap();
+        assert!(d.code.contains("vis: osc 14 0.05 0.9 | kaleid 6\n") && d.code.contains("vis: shape 6 0.2\n"), "{}", d.code);
+        assert_eq!(loom_core::Program::parse(&d.code).vis.layers.len(), 2);
+    }
+
     const SONG: &str = "# mon morceau — ne pas toucher\n\
 title: Essai\n\
 bpm: 120\n\

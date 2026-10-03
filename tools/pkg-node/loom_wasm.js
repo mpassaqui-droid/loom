@@ -459,6 +459,51 @@ function stretch_pv(left, right, out_len) {
     return v3;
 }
 exports.stretch_pv = stretch_pv;
+
+/**
+ * Les erreurs des lignes `vis:` de `code`, une par ligne (vide si tout est lisible).
+ * @param {string} code
+ * @returns {string}
+ */
+function vis_errors(code) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(code, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.vis_errors(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+exports.vis_errors = vis_errors;
+
+/**
+ * Les lignes `vis:` de `code` dessinées en `w × h` RGBA (vide s'il n'y en a pas).
+ * @param {string} code
+ * @param {number} w
+ * @param {number} h
+ * @param {number} t
+ * @param {number} low
+ * @param {number} mid
+ * @param {number} high
+ * @param {number} level
+ * @param {number} beat
+ * @param {number} bar
+ * @returns {Uint8Array}
+ */
+function vis_render(code, w, h, t, low, mid, high, level, beat, bar) {
+    const ptr0 = passStringToWasm0(code, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.vis_render(ptr0, len0, w, h, t, low, mid, high, level, beat, bar);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+exports.vis_render = vis_render;
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,

@@ -137,6 +137,11 @@ pub fn lint(src: &str, samples: Option<&[String]>) -> Vec<Lint> {
     // faute de frappe : un verbe inconnu proche d'un connu
     let mut seen: Vec<String> = Vec::new();
     for (i, raw) in src.lines().enumerate() {
+        // une ligne vis: a sa propre langue : ses erreurs viennent de son parseur
+        if let Some(res) = loom_core::vis::check_line(raw) {
+            if let Err(e) = res { out.push(Lint { line: i, msg: format!("vis: {e}") }); }
+            continue;
+        }
         for seg in code(raw).split('|').skip(1) {
             let w = seg.split_whitespace().next().unwrap_or("").to_lowercase();
             if w.chars().count() < 3 || KNOWN.contains(&w.as_str()) || seen.contains(&w)
@@ -218,6 +223,15 @@ mod tests {
         assert!(lint("lead: c4 | send rev 0.4 | glide 0.1 | widen 1.2\n", None).is_empty());
         let auto = "send: rev reverb hall\npad: c4 | lp 200..4000@exp..800 | over 8\nauto: master 0..1@smooth..0 over 8\nauto: send rev 0..0.8\n";
         assert!(lint(auto, None).is_empty(), "{:?}", lint(auto, None));
+    }
+
+    #[test]
+    fn lignes_vis() {
+        assert!(lint("vis: osc 10 | kaleid 4 | rotate t*0.2\nkick: x . . .", None).is_empty());
+        assert!(lint("vis: osc 4 // note\nvis: osc 4#x\nkick: x . . .", None).is_empty());
+        let l = lint("kick: x . . .\nvis: osc | kaleidd 4", None);
+        assert_eq!((l.len(), l[0].line), (1, 1));
+        assert!(l[0].msg.contains("kaleidd"), "{:?}", l);
     }
 
     #[test]

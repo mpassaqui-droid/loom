@@ -21,6 +21,7 @@ pub mod harmony;
 pub mod zones;
 pub mod stretch;
 pub mod capture;
+pub mod vis;
 pub use expr::Expr;
 
 use std::sync::Arc;
@@ -251,9 +252,9 @@ pub struct Event {
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 24] = [
+const DIRECTIVES: [&str; 25] = [
     "key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune",
-    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "send", "morph", "auto",
+    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "send", "morph", "auto", "vis",
 ];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`
@@ -2540,6 +2541,8 @@ pub struct Program {
     pub prog: Vec<String>,
     /// Mix-wide settings: `duck`, `feel`, `warmth`, `room`, `bus`, `morph`, `loop`, `tune`.
     pub mix: MixSettings,
+    /// Les lignes `vis:` (visuels en code).
+    pub vis: vis::Vis,
 }
 
 impl Program {
@@ -2559,6 +2562,7 @@ impl Program {
             groove: parse_groove(src),
             prog: parse_prog(src),
             mix: MixSettings::parse(src),
+            vis: vis::Vis::parse(src),
         }
     }
 

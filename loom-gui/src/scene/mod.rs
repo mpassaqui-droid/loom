@@ -87,6 +87,14 @@ pub struct Stage {
     /// When the scene last changed (for the corner name).
     shown_at: Instant,
     shown: Scene,
+    /// Les lignes `vis:` du morceau : quand il y en a, elles remplacent la scène.
+    vis: loom_core::vis::Vis,
+    vis_tex: Option<eframe::egui::TextureHandle>,
+    vis_buf: Vec<u8>,
+    /// Position du morceau (mesures) et temps par mesure, pour `beat` et `bar`.
+    pos: f64,
+    beats: f64,
+    born: Instant,
 }
 
 impl Default for Stage {
@@ -105,6 +113,12 @@ impl Default for Stage {
             pen: Pen::default(),
             last_paint: None,
             shown_at: Instant::now(),
+            vis: Default::default(),
+            vis_tex: None,
+            vis_buf: Vec::new(),
+            pos: 0.0,
+            beats: 4.0,
+            born: Instant::now(),
         }
     }
 }
@@ -115,6 +129,8 @@ impl Stage {
         self.director.load(src);
         self.voices = logic::voice_looks(program);
         self.pulses = vec![0.0; self.voices.len()];
+        self.vis = program.vis.clone();
+        self.beats = program.meter_beats;
     }
 
     pub fn scene(&self) -> Scene {
@@ -142,6 +158,7 @@ impl Stage {
                 if self.hits.len() > MAX_PENDING_HITS {
                     self.hits.drain(..self.hits.len() - MAX_PENDING_HITS);
                 }
+                self.pos = if status.playing() { status.position() } else { 0.0 };
                 let playing = status.playing();
                 let section = program.section_at(status.song_bar());
                 self.director.follow(playing, status.bar(), section);
@@ -179,8 +196,13 @@ impl Stage {
         // into the displaced frame), the halo and the flash go on top after.
         self.post.update(k, self.analyser.levels.bass, self.analyser.levels.level);
         let scene_rect = self.post.shaken(rect);
+        if !self.vis.is_empty() {
+            // vis: l'image calculée par loom-core, petite et lissée, sous les éclats de notes
+            self.pen.flush(&painter);
+            self.paint_vis(&painter, scene_rect);
+        }
         let mut frame = scenes::Frame::new(&mut self.pen, &painter, scene_rect, k, &self.analyser, look, &self.voices, &self.pulses, &self.hits);
-        scenes::draw(self.director.scene, &mut self.state, &mut frame);
+        if self.vis.is_empty() { scenes::draw(self.director.scene, &mut self.state, &mut frame); }
         self.effects.draw(&mut frame, &self.voices);
         self.hits.clear();
         self.post.draw_bloom(&mut self.pen, rect, look);
@@ -194,9 +216,35 @@ impl Stage {
             Some(overlay) => self.paint_overlay(&painter, rect, look, overlay, now),
             None => {
                 // thumbnail: just the scene's name
-                let name = format!("scène : {}", self.director.scene.name());
+                let name = if self.vis.is_empty() { format!("scène : {}", self.director.scene.name()) } else { "scène : vis:".to_string() };
                 painter.text(rect.left_bottom() + eframe::egui::vec2(6.0, -4.0), Align2::LEFT_BOTTOM, name, FontId::proportional(11.0), alpha(look.text, 0.8));
             }
+        }
+    }
+
+    fn paint_vis(&mut self, painter: &Painter, rect: Rect) {
+        use eframe::egui::{pos2, ColorImage, TextureOptions};
+        let w = 160usize;
+        let h = ((w as f32 * rect.height() / rect.width().max(1.0)).round() as usize).clamp(24, 160);
+        let l = &self.analyser.levels;
+        let pos = self.pos as f32;
+        let inp = loom_core::vis::Inputs {
+            t: self.born.elapsed().as_secs_f32(),
+            low: l.bass,
+            mid: l.mid,
+            high: l.treble,
+            level: l.level,
+            beat: (pos * self.beats as f32).rem_euclid(1.0),
+            bar: pos.floor(),
+        };
+        self.vis.render(w, h, &inp, &mut self.vis_buf);
+        let img = ColorImage::from_rgba_unmultiplied([w, h], &self.vis_buf);
+        match &mut self.vis_tex {
+            Some(t) if t.size() == [w, h] => t.set(img, TextureOptions::LINEAR),
+            _ => self.vis_tex = Some(painter.ctx().load_texture("loom-vis", img, TextureOptions::LINEAR)),
+        }
+        if let Some(t) = &self.vis_tex {
+            painter.image(t.id(), rect, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
         }
     }
 

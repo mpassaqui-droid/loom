@@ -138,6 +138,16 @@ export function schedule_bar_json(src: string, bar: number): string;
  */
 export function stretch_pv(left: Float32Array, right: Float32Array, out_len: number): Float32Array;
 
+/**
+ * Les erreurs des lignes `vis:` de `code`, une par ligne (vide si tout est lisible).
+ */
+export function vis_errors(code: string): string;
+
+/**
+ * Les lignes `vis:` de `code` dessinées en `w × h` RGBA (vide s'il n'y en a pas).
+ */
+export function vis_render(code: string, w: number, h: number, t: number, low: number, mid: number, high: number, level: number, beat: number, bar: number): Uint8Array;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -163,6 +173,8 @@ export interface InitOutput {
     readonly scala_key_line: (a: number, b: number, c: number, d: number) => [number, number];
     readonly schedule_bar_json: (a: number, b: number, c: number) => [number, number];
     readonly stretch_pv: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+    readonly vis_errors: (a: number, b: number) => [number, number];
+    readonly vis_render: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

@@ -137,3 +137,13 @@ export function schedule_bar_json(src: string, bar: number): string;
  * gardée. Rend les canaux bout à bout (`out_len` trames chacun).
  */
 export function stretch_pv(left: Float32Array, right: Float32Array, out_len: number): Float32Array;
+
+/**
+ * Les erreurs des lignes `vis:` de `code`, une par ligne (vide si tout est lisible).
+ */
+export function vis_errors(code: string): string;
+
+/**
+ * Les lignes `vis:` de `code` dessinées en `w × h` RGBA (vide s'il n'y en a pas).
+ */
+export function vis_render(code: string, w: number, h: number, t: number, low: number, mid: number, high: number, level: number, beat: number, bar: number): Uint8Array;

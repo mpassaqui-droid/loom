@@ -96,15 +96,44 @@ without extra scope). Gates: `cargo test --workspace`, `cargo clippy
 tools/check_web.js`, `node tools/parity_test.js`. `cargo fmt --check` is not a
 gate yet: part of the codebase has never been rustfmt-ed (hardening in progress).
 
+## October 2026: the twelve gaps of the audit
+Each one has its own commit and tests, native and web unless noted.
+- **Export**: WAV 24-bit by default (`--16` with TPDF dither, `--32f`, `--sr`), plus
+  `.flac .mp3 .m4a .aiff .ogg` through afconvert/ffmpeg.
+- **Loudness**: BS.1770 integrated LUFS, LRA and true peak; `--target spotify|apple|…`;
+  `loom loudness file.wav`.
+- **Sheet music**: `loom bake song.loom out.musicxml` (or `.ly`).
+- **Harmony**: secondary dominants, borrowed chords, inversions and augmented sixths.
+  `loom reharm` gives a jazz or tritone reharmonisation.
+- **Counterpoint**: parallel fifths and octaves, ranges, voice crossings
+  (`loom contrepoint`).
+- **Automation**: curves with points, e.g. `lp 200..4000@exp..800`, `auto: master …`.
+- **Microtones and traditions**: true N-EDO, Scala `.scl` import (`loom scala`),
+  maqam ajnas and sayr, raga aroha/avaroha.
+- **Sampler**: AIFF, FLAC and MP3; key zones, velocity layers and round robin taken
+  from file names (`piano_c3_v2`, `snare_rr2`).
+- **Time-stretch**: `| stretch`, a phase vocoder that keeps the attacks;
+  `| loopAt N` follows the tempo.
+- **Recording**:
+  - the MIDI keyboard becomes a LOOM line (chords, holds `_`, several bars);
+  - a mic take is locked to the bar and loops at the tempo;
+  - right-click overdubs.
+- **Visuals as code**: `vis: osc 12 0.1 0.8 | kaleid 5 | rotate t*0.2 | scale 1+low | hue mid`.
+  - Sources, space and colour stages; every number can follow the sound bands.
+  - Drawn by `loom-core` in the window and, through WASM, in the browser.
+- **Plug-ins** (macOS): `loom plugins` lists the Audio Units installed.
+  `loom au "Name" song.loom out.wav` plays the melodic voices through an AU instrument.
+  See `docs/plugins-link.md` for VST3 and Ableton Link (Link waits for a licence decision).
+
 ## Status
 This is a repo in transition, not a finished product. The browser prototype
 (`web/index.html`) runs its own hand-written JS engine, built before
 `loom-core` existed. `loom-core` is the Rust rewrite of that same language:
 parser, pattern verbs, generator tokens, and per-bar scheduler, with tests
-(113 of them). The two engines are kept **bit-identical**: `tools/parity_test.js`
+(222 of them, 523 in the whole workspace). The two engines are kept **bit-identical**: `tools/parity_test.js`
 compares every voice×bar onsets of the JS engine against the Rust engine run
 through WASM (`web/pkg` / `tools/pkg-node`, rebuilt by `./build-wasm.sh`) and
-must pass 238/238 (incl. composed meter `2+2+3/8` and `poly m:n`). Since the
+must pass 498/498 (incl. composed meter `2+2+3/8` and `poly m:n`). Since the
 2026-09-25 wave, the **Rust engine drives the web's scheduling by default**: the
 WASM core decides which notes play and when, while JS keeps every voice's
 synthesis + FX. A visible 🦀 badge in the top bar shows the active engine and
@@ -116,7 +145,7 @@ harmony + cadence, form, novelty score) and is re-exported by the native apps
 (`loom_app::prof::analyze`) and wrapped for WASM (`analyze_json`), so the prof
 runs through the same std-only code in the browser **and** natively. `analyzePiece`
 prefers the Rust analyser with its silent JS fallback, and the parity test now
-also checks the analyser line-for-line (14/14).
+also checks the analyser line-for-line (32/32).
 
 `web/` is also a **PWA**: the manifest + service worker let it be installed as
 an app and keep playing offline (shell precached, samples cached on first

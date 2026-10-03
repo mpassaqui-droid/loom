@@ -403,3 +403,27 @@ pub fn layout_take(new: &[f32], new_bars: u32, first_bar: f64, old: &[f32]) -> V
     out.push(l as f32);
     out
 }
+
+thread_local! {
+    /// Le dernier code `vis:` lu et son image : on ne relit pas le code à chaque image.
+    static VIS: std::cell::RefCell<(String, loom_core::vis::Vis, Vec<u8>)> = Default::default();
+}
+
+/// Les lignes `vis:` de `code` dessinées en `w × h` RGBA (vide s'il n'y en a pas).
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn vis_render(code: &str, w: u32, h: u32, t: f32, low: f32, mid: f32, high: f32, level: f32, beat: f32, bar: f32) -> Vec<u8> {
+    VIS.with(|c| {
+        let mut c = c.borrow_mut();
+        if c.0 != code { *c = (code.to_string(), loom_core::vis::Vis::parse(code), Vec::new()); }
+        let (_, vis, buf) = &mut *c;
+        if vis.is_empty() { return Vec::new(); }
+        let inp = loom_core::vis::Inputs { t, low, mid, high, level, beat, bar };
+        vis.render(w.min(512) as usize, h.min(512) as usize, &inp, buf);
+        buf.clone()
+    })
+}
+
+/// Les erreurs des lignes `vis:` de `code`, une par ligne (vide si tout est lisible).
+#[wasm_bindgen]
+pub fn vis_errors(code: &str) -> String { loom_core::vis::Vis::parse(code).errors.join("\n") }

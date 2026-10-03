@@ -832,5 +832,5 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
 - [x] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo
 - [x] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif (fait 03/10 : `loom_core::capture`, prise micro rangée mesure par mesure + `| slow N`, parité CAPTURE 502/502)
-- [ ] 11. Visuels en code : petit langage de visuel lié aux bandes du son
+- [x] 11. Visuels en code : petit langage de visuel lié aux bandes du son (fait 03/10 : `loom_core::vis`, lignes vis: dessinées en natif et par WASM, 1,4 à 1,8 ms par image en WASM, revue adversariale : 8 défauts corrigés)
 - [x] 12. Synchro et plugins : Ableton Link ; hôte AU/VST3 (fait 03/10 : hôte AU sans dépendance, `loom plugins`, `loom au`, étude docs/plugins-link.md ; Link en attente de la décision de licence)

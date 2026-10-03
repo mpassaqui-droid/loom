@@ -438,7 +438,7 @@ fn tension_summary(roman: &str) -> &'static str {
 const CONFIG_HEADS: &[&str] = &[
     "bpm", "key", "scale", "prog", "song", "meter", "tune", "accel", "groove",
     "tempo", "seed", "chance", "def", "swing", "title", "scene", "feel", "warmth",
-    "room", "mix", "duck", "echo", "pan", "humanize", "degrade",
+    "room", "mix", "duck", "echo", "pan", "humanize", "degrade", "vis",
 ];
 
 /// Raw degree numbers (1..=7, optional `'` octave up) of the LAST melodic voice

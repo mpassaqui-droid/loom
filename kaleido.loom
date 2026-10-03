@@ -1,0 +1,19 @@
+# ================================================================
+#  LOOM : « KALEIDO »
+#  Les visuels en code : deux lignes vis: qui suivent le son.
+#  > Clique RUN, puis SCÈNE. Change un nombre d'une ligne vis:,
+#    RUN : l'image change, la musique continue.
+# ================================================================
+
+bpm: 122
+key: d dorian
+
+# rayures qui tournent, plus serrées quand les basses tapent
+vis: osc 14 0.05 0.9 | kaleid 6 | rotate t*0.15 | scale 1+low*0.6 | hue mid*0.5 | contrast 1.4
+# un hexagone qui respire sur le kick, ajouté par-dessus
+vis: shape 6 0.12+low*0.35 0.06 | rotate t*-0.4 | color 1 0.5 0.2 | gain 0.4+level
+
+kick: x . . . x . . . x . . . x . . .
+hat: . . x . . . x . . . x . . . x . | gain 0.4
+bass: 1 . . 1 . . 5, . 1 . . 1 . . 4, . | saw | lp 600 | gain 0.6
+lead: 5 . 7 . 8 . . . 7 . 5 . 4 . . . | tri | delay 0.3 | gain 0.35

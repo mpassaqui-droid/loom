@@ -22,6 +22,8 @@ export const sample_zone: (a: number, b: number, c: number, d: number, e: number
 export const scala_key_line: (a: number, b: number, c: number, d: number) => [number, number];
 export const schedule_bar_json: (a: number, b: number, c: number) => [number, number];
 export const stretch_pv: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const vis_errors: (a: number, b: number) => [number, number];
+export const vis_render: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number];
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

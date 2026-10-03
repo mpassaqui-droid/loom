@@ -1918,7 +1918,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   let morphBars=0,morphState=null;
   function parseMorph(text){for(const raw of text.split("\n")){const line=raw.trim(),i=line.indexOf(":");if(i<0)continue;
     if(line.slice(0,i).trim().toLowerCase()==="morph"){const n=parseInt(line.slice(i+1),10);return isNaN(n)?0:Math.max(0,Math.min(32,n));}}return 0;}
-  const MORPH_DIRS=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph","auto"];
+  const MORPH_DIRS=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph","auto","vis"];
   function srcMapOf(text){const m={};for(const raw of noComments(expandMacros(text)).split("\n")){const line=raw.trim();
     if(!line||line.startsWith("#"))continue;const i=line.indexOf(":");if(i<0)continue;
     const full=line.slice(0,i).trim().toLowerCase();if(MORPH_DIRS.includes(full.split("@")[0]))continue;m[full]=line;}return m;}
@@ -2052,7 +2052,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const at=full.indexOf("@"),name=at<0?full:full.slice(0,at),section=at<0?null:full.slice(at+1);
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
-    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph","auto"].includes(name))continue;
+    if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph","auto","vis"].includes(name))continue;
     if(name==="go"||full.startsWith("@"))continue;  // lien Live : go: scène, @voix.Param: automation
     // voix bytebeat `nom: t: EXPR | verbes` (voir bytebeatSplit) ; expression invalide = voix ignorée
     let rest=line.slice(i+1),bytebeat=null;const tb=/^\s*t:/.exec(rest);
@@ -2918,7 +2918,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else{if(start<0)start=i;cur+=ch;}}
     push();return out;}
   // snapshot the source into lines; voice lines carry their tokens (with columns) + hue.
-  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth","film","title","bus","room","send"];
+  function buildCodeView(text){const arr=[],DIR=["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","warmth","film","title","bus","room","send","vis"];
     const lines=text.split("\n");
     for(let li=0;li<lines.length;li++){const raw=lines[li],t=raw.trim(),ci=raw.indexOf(":");
       let voice=false,name="",pat="",post="";
@@ -3158,11 +3158,27 @@ void main(){
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);
     return true;}
   let lastScene="";
+  // VISUELS EN CODE : les lignes vis: dessinées par loom-core (WASM), la même image qu'en natif
+  let visCode="",visCv=null,visT0=0,visW=160;
+  function visLines(text){return text.split("\n").filter(l=>/^\s*vis\s*:/i.test(l)).join("\n");}
+  function drawVis(c,W,H,fb,tb,bass){const M=window.__loomRustMod,w=Math.min(W<760?100:160,visW),h=Math.max(24,Math.min(160,Math.round(w*H/Math.max(1,W))));
+    let mid=0,treb=0,peak=0;for(let i=10;i<48;i++)mid+=fb[i];for(let i=48;i<128;i++)treb+=fb[i];
+    for(let i=0;i<tb.length;i++)peak=Math.max(peak,Math.abs(tb[i]-128)/128);
+    const pos=(playing&&ctx)?songPos(ctx.currentTime):0,beats=(typeof meterBeats==="number"&&meterBeats>0)?meterBeats:4;
+    if(!visT0)visT0=performance.now();
+    const t1=performance.now();let px;try{px=M.vis_render(visCode,w,h,(performance.now()-visT0)/1000,bass,Math.min(1,mid/(38*255)*1.5),Math.min(1,treb/(80*255)*2),peak,((pos*beats)%1+1)%1,Math.floor(pos));}catch(_){return;}
+    // résolution qui s'adapte : l'image ne doit jamais faire ramer la musique
+    const dt=performance.now()-t1;if(dt>8)visW=Math.max(48,Math.round(w*0.75));else if(dt<3&&visW<160)visW=Math.min(160,visW+8);
+    if(!px||!px.length)return;
+    if(!visCv)visCv=document.createElement("canvas");if(visCv.width!==w||visCv.height!==h){visCv.width=w;visCv.height=h;}
+    const vc=visCv.getContext("2d");vc.putImageData(new ImageData(new Uint8ClampedArray(px.buffer,px.byteOffset,px.length),w,h),0,0);
+    c.imageSmoothingEnabled=true;c.drawImage(visCv,0,0,W,H);}
   function drawStage(){const cv=$("stage");if(!cv||!cv.getContext||!analyser)return;
     if(sceneMode!==lastScene){lastScene=sceneMode;  // smooth crossfade on scene change (2D + GPU)
       [cv,$("glstage")].forEach(c=>{if(c&&c.style){c.style.transition="opacity .45s ease";c.style.opacity="0";}});
       setTimeout(()=>{[$("stage"),$("glstage")].forEach(c=>{if(c&&c.style)c.style.opacity="1";});},40);}
-    if(GLSCENES.has(sceneMode)){const g=$("glstage");
+    const useVis=!!(visCode&&window.__loomRustMod&&window.__loomRustMod.vis_render);
+    if(!useVis&&GLSCENES.has(sceneMode)){const g=$("glstage");
       if(drawGL(sceneMode)){if(g)g.style.display="block";cv.width=window.innerWidth;cv.height=window.innerHeight;
         cv.getContext("2d").clearRect(0,0,cv.width,cv.height);return;}
       if(g)g.style.display="none";}  // GL failed -> fall through to Canvas2D
@@ -3187,7 +3203,8 @@ void main(){
     const R=Math.min(W,H)*0.2,maxR=Math.hypot(W,H)/2;c.lineCap="round";
 
     // ---- background visualizer (depends on the chosen scene) ----
-    if(sceneMode==="tunnel"){sceneTime+=0.008+bass*0.05;const N=16;
+    if(useVis)drawVis(c,W,H,fb,tb,bass);
+    else if(sceneMode==="tunnel"){sceneTime+=0.008+bass*0.05;const N=16;
       for(let k=0;k<N;k++){const ph=((sceneTime+k/N)%1),r=ph*maxR*1.05,al=(1-ph)*0.6;
         c.strokeStyle=hexA(k%2?fg:cyn,al);c.lineWidth=2+bass*10;c.shadowBlur=10;c.shadowColor=fg;c.beginPath();c.arc(cx,cy,r,0,7);c.stroke();}c.shadowBlur=0;}
     else if(sceneMode==="bars"){const nb=72,step=Math.max(1,Math.floor(n*0.6/nb)),bw=(W/2)/nb;c.shadowBlur=12;
@@ -3955,12 +3972,14 @@ void main(){
       for(const t of (v.tokens||[])){if(/^[1-7][#b]?[',]*([?*!].*)?$/.test(t))usesDeg=true;else if(t&&t[0]==="^")usesProg=true;}}
     if(usesDeg&&!key)w.push("des degrés (1-7) sont utilisés sans « key: » — ajoute p.ex. key: a minor");
     if(usesProg&&!prog.length)w.push("le token ^ est utilisé sans « prog: » — ajoute p.ex. prog: Am F C G");
+    // vis: a sa propre langue, lue par loom-core (WASM)
+    try{const vl=visLines(editor.value);if(vl&&window.__loomRustMod&&window.__loomRustMod.vis_errors){const e=window.__loomRustMod.vis_errors(vl);if(e)e.split("\n").forEach(x=>w.push(x));}}catch(_){}
     // typo bienveillante (leçon Sonic Pi) : verbe inconnu proche d'un connu → suggestion
     try{
       const known=new Set(((typeof KEYWORDS!=="undefined")?KEYWORDS:[]).concat(["in","lp","hp","bp","notch","q","mute","solo","over","chord","s","morph","poly"]));
       const lev=(a,b)=>{if(Math.abs(a.length-b.length)>2)return 9;const m=[];for(let i=0;i<=a.length;i++){m[i]=[i];for(let j=1;j<=b.length;j++)m[i][j]=i===0?j:Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));}return m[a.length][b.length];};
       const seen=new Set();
-      for(const raw of editor.value.split("\n")){const line=raw.split("#")[0];if(line.indexOf("|")<0)continue;
+      for(const raw of editor.value.split("\n")){const line=raw.split("#")[0];if(line.indexOf("|")<0||/^\s*vis\s*:/i.test(line))continue;
         for(const seg of line.split("|").slice(1)){const wd=(seg.trim().split(/\s+/)[0]||"").toLowerCase();
           if(!wd||wd.length<3||known.has(wd)||seen.has(wd)||/^[\d.]/.test(wd))continue;seen.add(wd);
           let best=null,bd=3;for(const k of known){const d=lev(wd,k);if(d<bd){bd=d;best=k;}}
@@ -3968,7 +3987,7 @@ void main(){
     }catch(_){}
     if(!w.length)return null;
     return "[ aide ] "+w.slice(0,4).join("  ·  ")+(w.length>4?"  …(+"+(w.length-4)+")":"");}
-  function run(){liveLinkWrite();liveEnvoie();initAudio();if(ctx.state==="suspended")ctx.resume();
+  function run(){visCode=visLines(noComments(editor.value));try{const M=window.__loomRustMod;if(visCode&&!(M&&M.vis_render&&M.vis_render(visCode,1,1,0,0,0,0,0,0,0).length))visCode="";}catch(_){visCode="";}liveLinkWrite();liveEnvoie();initAudio();if(ctx.state==="suspended")ctx.resume();
     morphState=null;try{window.__loomSrcMap=srcMapOf(editor.value);}catch(_){window.__loomSrcMap=null;}  // base du diff morph
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
@@ -6561,6 +6580,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Live","| mute  /  | solo","coupe une voix / isole une voix (mixage en direct)"],
     ["Visuel (SCÈNE)","scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp|gtorus|gkaleid|gaurora|gcells|gwater|gmandel|gbloom|gglitch|gfeedback|g3d|gneon|gstar|nebula|scan|rings|checker","choisit le visualiseur plein écran (touche N pour changer)"],
     ["Visuel (SCÈNE)","| viz burst|ring|beam|flash|shape · | hue N","apparence/couleur d'une voix dans la scène"],
+    ["Visuels en code","vis: osc 12 0.1 0.8 | kaleid 5 | rotate t*0.2 | scale 1+low | hue mid","une image écrite en code, qui suit le son : sources osc noise shape rings grad solid ; espace rotate scale kaleid scroll pixel repeat warp ; couleur hue bright contrast gain color invert thresh posterize ; nombres avec t low mid high level beat bar. Plusieurs vis: s'additionnent"],
     ["Mes morceaux","SAVE / LOAD / DEL","bibliothèque locale + code de partage LOOM1:"]
   ];
   // --- unified APPRENDRE panel: lessons + reference, one search box ---
@@ -6970,6 +6990,7 @@ const THEME_AA={
     "- True polymeter / phasing: add | poly N to a voice so it runs its OWN loop at N steps per bar and keeps looping across bar lines — if its pattern length differs from N it slowly drifts against the grid (Steve Reich style), realigning after a while. e.g. a: 1 2 3 4 5 | poly 16 against b: 1 2 3 4 | poly 16. Two near-identical patterns at | poly with different lengths phase against each other.",
     "- Polyrhythm: give voices different step counts and they subdivide the same bar differently (3-against-4 etc), e.g. a: x x x  vs  b: x x x x. (Note: true cross-bar polymeter where patterns drift isn't supported yet — all voices realign each bar.)",
     "- Song structure (for long tracks): add song: intro*4 verse*8 chorus*8 verse*8 chorus*8 outro*4 to lay out sections by bar count (name*bars, bare name = 4 bars; the arrangement loops). Then tag each voice with the sections it plays in using | in <sections>, e.g. lead: ... | in chorus , bass: ... | in verse chorus. Untagged voices play in every section. Build energy by adding voices in later sections (drops/build-ups). Without a song: line, every voice always plays. For LONG evolving tracks, give a voice a DIFFERENT pattern per section with name@section: e.g. bass: 1 . . . then bass@drop: 1 1 1 1 — during 'drop' the @drop version plays, elsewhere the base. Make the arrangement long (intro*8 verse*16 chorus*16 …) for multi-minute pieces.",
+    "- Visuals as code: a line vis: SOURCE | stage | stage draws the stage picture and every number can follow the sound. Sources: osc FREQ SPEED OFFSET, noise SCALE SPEED, shape SIDES RADIUS BLUR (0 sides = circle), rings FREQ SPEED, grad SPEED, solid R G B. Space: rotate ANGLE SPEED, scale K, kaleid N, scroll X Y, pixel N, repeat N, warp AMOUNT FREQ. Colour: hue TURNS, bright B, contrast C, gain G, color R G B, invert, thresh T, posterize N. Numbers are expressions without spaces (or in parentheses) using t (seconds), low mid high (sound bands 0-1), level, beat (0-1 in the beat), bar, pi, sin cos abs floor fract sqrt min max. Several vis: lines add up. e.g. vis: osc 12 0.1 0.8 | kaleid 5 | rotate t*0.2 | scale 1+low | hue mid ; vis: shape 0 0.2+low*0.5 0.05 | color 1 0.3 0.1. When the user asks for visuals that react to the music, write vis: lines.",
     "- Visuals (for the SCÈNE fullscreen mode): add scene: radial|tunnel|bars|starfield|kaleido|terrain|spiral|aurora|metaballs|flow|julia|plasma|mandelbrot|network|lissajous|waterfall|torus|fountain|helix|moire|fire|sunburst|matrix|orbits|globe|wave|harmono|clifford|cymatic|lorenz|dejong|rossler|superf|hopalong|rose|spiro|gumowski|tinker|ikeda|phyllo|reaction|truchet|warp|ship|julia4|maurer|epicycle|lissa3d|flower|honeycomb|cube|tesseract|knot|wormhole|mobius|pendulum|radialbars|henon|thomas|aizawa|fern|chen|voronoi|sierpinski|dadras|halvorsen|guilloche|lightning|metatron|tracker|chladni|string|spectro|scope|faraday|ripple|grid|petals|dna|mandala|spectrum3d|ribbon|fireworks|vortex|lattice|tiles|starsphere|bubbles|comet|shader|gtunnel|gfractal|gwarp|gtorus|gkaleid|gaurora|gcells|gwater|gmandel|nebula|scan|rings|checker to pick the visualizer; give a voice | viz STYLE (burst|ring|beam|flash) and | hue N (0-360) so each instrument has its own colour and shape in the visuals. e.g. kick: ... | viz flash | hue 0 , lead: ... | viz beam | hue 200. When the user describes a MOOD or VISUAL (dark, neon, red, hypnotic, spacey, energetic...), ALSO set a fitting scene: and give each voice a viz + hue that matches (e.g. spacey -> scene: starfield; hypnotic -> scene: tunnel/spiral; dreamy/ambient/ethereal -> scene: aurora; liquid/organic/psychedelic -> scene: metaballs; flowing/wind/generative -> scene: flow; trippy/fractal/mathematical -> scene: julia/mandelbrot; retro/rave/colourful -> scene: plasma; digital/tech/data -> scene: network; oscilloscope/retro-tech/scientific -> scene: lissajous; spectral/scientific/heat -> scene: waterfall; 3d/geometric/demoscene -> scene: torus; joyful/celebratory/fireworks -> scene: fountain; organic/biology/dna -> scene: helix; hypnotic/optical/interference -> scene: moire; hot/intense/fire -> scene: fire; radiant/solar/burst -> scene: sunburst; hacker/digital-rain/cyber -> scene: matrix; cosmic/planetary/space -> scene: orbits; world/earth/global -> scene: globe; waveform/oscillo/landscape -> scene: wave; mathematical/geometric/elegant -> scene: harmono; chaos/organic/smoke -> scene: clifford; resonance/standing-waves/sacred -> scene: cymatic; chaotic/butterfly/scientific -> scene: lorenz; intricate/lacework/web -> scene: dejong; spiral/chaotic/funnel -> scene: rossler; flower/symmetry/morphing -> scene: superf; alien/dense/orbital -> scene: hopalong; floral/petals/delicate -> scene: rose; geometric/gears/spirograph -> scene: spiro; organic/cellular/blob -> scene: gumowski; sparkly/dust/nebula -> scene: tinker; glitch/scatter/digital -> scene: ikeda; natural/sunflower/golden -> scene: phyllo; cellular/biological/coral -> scene: reaction; maze/woven/tile -> scene: truchet; speed/hyperspace/launch -> scene: warp; fractal/fire/ship -> scene: ship; psychedelic/quartic/bloom -> scene: julia4; star/rosette/intricate -> scene: maurer; clockwork/fourier/drawing -> scene: epicycle; knot/3d-curve/ribbon -> scene: lissa3d; sacred/geometry/meditative -> scene: flower; cells/hive/grid -> scene: honeycomb; 3d/geometric/rotating -> scene: cube; 4d/hypercube/mind-bending -> scene: tesseract; topology/knot/looping -> scene: knot; vortex/wormhole/portal -> scene: wormhole; mathematical/twist/infinite -> scene: mobius; chaos/physics/swing -> scene: pendulum; eq/circular/audio -> scene: radialbars; fractal/dust/curve -> scene: henon; flowing/symmetric/3d -> scene: thomas; orbital/wing/3d -> scene: aizawa; nature/plant/fractal -> scene: fern; chaotic/3d/scroll -> scene: chen; cells/mosaic/territory -> scene: voronoi; fractal/triangle/recursive -> scene: sierpinski; 3d/swirl/exotic -> scene: dadras/halvorsen; ornate/banknote/rosette -> scene: guilloche; storm/electric/aggressive -> scene: lightning; sacred/cube/geometry -> scene: metatron; sequencer/tracker/columns -> scene: tracker; retro/synthwave -> scene: terrain; red/aggressive -> low hues on the drums). Make the visuals part of the answer, not just the music.",
     "- Comments start with #.",
     "Make it MUSICAL: coherent key, sensible rhythm, 8-16 steps, 3-5 voices for a simple loop.",
@@ -7494,7 +7515,7 @@ const THEME_AA={
   // config/directive line heads that never hold melody notes (mirror of the Rust
   // analyser's last_voice_degree_tokens, so both engines read the same "last voice") —
   // returns the raw degree numbers (1..7, optional ') of the LAST melodic voice line.
-  function lastVoiceDegrees(text){const CONFIG_HEADS=["bpm","key","scale","prog","song","meter","tune","accel","groove","tempo","seed","chance","def","swing","title","scene","feel","warmth","room","mix","duck","echo","pan","humanize","degrade"];
+  function lastVoiceDegrees(text){const CONFIG_HEADS=["bpm","key","scale","prog","song","meter","tune","accel","groove","tempo","seed","chance","def","swing","title","scene","feel","warmth","room","mix","duck","echo","pan","humanize","degrade","vis"];
     let last=[];const re=/^([1-7]'?)$/;
     for(const raw of text.split("\n")){const line=raw.trim();if(!line||line.startsWith("#"))continue;
       const i=line.indexOf(":");if(i<0)continue;
@@ -7616,7 +7637,7 @@ const THEME_AA={
   // vary the drums, bump the seed — instant novelty without writing code. Undoable.
   function developAll(){
     if(!editor.value.trim()){log("[ ✨ ] écris ou charge d'abord un morceau","err");return;}
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","vis"]);
     const hasVar=s=>/\|\s*(develop|mutate|shuffle|every|iter|markov|stutter)\b/.test(s)||/\b(walk|drunk|ca|logistic|perlin|lsys|recaman|cantor)\s*\(/.test(s);
     let nMel=0,nDr=0;
     const out=editor.value.split("\n").map(line=>{
@@ -7647,7 +7668,7 @@ const THEME_AA={
     const GENS=["walk","drunk","pink","perlin","gendy","logistic","solve"];
     const RHY=["tresillo","cinquillo","son","rumba","bossa","bembe","baiao","maqsum","ayoub","samba","montuno","shiko"];
     const VERBS=["| develop","| rev","| every 2 rot 3","| mutate 30","| shuffle","| jux rev","| palindrome"];
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","vis"]);
     const R=Math.random,pick=a=>a[Math.floor(R()*a.length)];
     const mutLine=(code,head)=>{let L=code;
       L=L.replace(/\b(walk|drunk|pink|perlin|gendy|logistic)\(/g,m=>R()<0.5?pick(GENS)+"(":m);   // swap a generator
@@ -7670,12 +7691,12 @@ const THEME_AA={
   // 🧬× CROISER : enfant = ce morceau (parent A) × un autre (parent B), voix/réglages piochés chez l'un ou l'autre
   function crossPiece(){
     if(!editor.value.trim()){log("[ 🧬× ] écris ou charge d'abord un morceau","err");return;}
-    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room"]);
+    const DIR=new Set(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","vis"]);
     const keys=Object.keys(PRESETS||{});if(!keys.length){log("[ 🧬× ] aucun second parent disponible","err");return;}
     const Bname=keys[Math.floor(Math.random()*keys.length)];
-    const split=txt=>{const dirs={},voices={};for(const raw of txt.split("\n")){const t=raw.trim();if(!t||t.startsWith("#"))continue;
+    const split=txt=>{const dirs={},voices={};let nv=0;for(const raw of txt.split("\n")){const t=raw.trim();if(!t||t.startsWith("#"))continue;
       const i=t.indexOf(":");if(i<0)continue;const full=t.slice(0,i).trim().toLowerCase(),head=full.split("@")[0];
-      (DIR.has(head)?dirs:voices)[full]=raw;}return{dirs,voices};};
+      (DIR.has(head)?dirs:voices)[head==="vis"?"vis#"+(nv++):full]=raw;}return{dirs,voices};};
     const a=split(editor.value),b=split(PRESETS[Bname]),R=Math.random,out=[];
     const merge=(ma,mb)=>{for(const k of new Set([...Object.keys(ma),...Object.keys(mb)])){
       const x=ma[k],y=mb[k],ch=(x&&y)?(R()<0.5?x:y):(x||y);if(ch)out.push(ch);}};
