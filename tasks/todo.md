@@ -796,4 +796,4 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [ ] B5 · `| sync voix` (une voix repart avec le cycle d'une autre).
 - [ ] B2 · pas-programmes (syntaxe libre, pas `{}`).
 - [x] MIDI natif : le « décalage d'un pas » était un artefact du récepteur Python (rtmidi horodate à la réception ; sous charge 6 à 23 il voit 123 trous en 30 s quand l'émetteur en a 0 : 239/240 intervalles à 125 ± 0,1 ms, hauteurs intactes). Gain réel : fil MIDI en QoS « user interactive » + rotation 5 ms avant échéance, retard à l'envoi P50 0,001 ms, P95 0,045 ms, P99 0,65 ms (avant P95 2,0 ms), un pic de 21 ms sur 237 sous charge 8. `LOOM_MIDI_HW=0` : port virtuel seul, pour tester avec Live ouvert sans rien envoyer sur le bus IAC. 414 tests, clippy propre.
-- [ ] Set de démo `.als` dans le paquet.
+- [x] Set de démo `m4l/demo/Loom demo Project/` : `m4l/demo_live.py` construit odyssey (7 pistes, instrument Live + device Loom devant chacune, 6 scènes, 34 clips, 316/316 notes relues), enregistré dans Live par Munay (le panneau d'enregistrement est hors de portée de l'agent). Paquet `dist/Loom.zip` 918 Ko.
