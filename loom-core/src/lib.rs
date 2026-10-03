@@ -17,6 +17,7 @@ pub mod prof;
 /// Expressions entières pures (bytebeat `t:` et pas-programmes `=(…)`).
 pub mod expr;
 pub mod live;
+pub mod harmony;
 pub use expr::Expr;
 
 use std::sync::Arc;
@@ -2437,19 +2438,6 @@ impl Program {
     }
 }
 
-/// Parse a roman-numeral chord token: `I`..`VII` / `i`..`vii`, optional trailing
-/// `7` for a diatonic seventh. Returns (degree 1..7, seventh?). Case is allowed
-/// either way — the chord quality comes from the scale, not the casing.
-fn parse_roman(tok: &str) -> Option<(i32, bool)> {
-    let (body, seventh) = match tok.strip_suffix('7') { Some(b) => (b, true), None => (tok, false) };
-    let deg = match body {
-        "I" | "i" => 1, "II" | "ii" => 2, "III" | "iii" => 3, "IV" | "iv" => 4,
-        "V" | "v" => 5, "VI" | "vi" => 6, "VII" | "vii" => 7,
-        _ => return None,
-    };
-    Some((deg, seventh))
-}
-
 /// Parse a chord progression directive (`prog: Am*2 F C`) -> one chord per bar
 /// (cycling), expanding `*N` durations. Keeps original case (chords are case-sensitive).
 pub fn parse_prog(src: &str) -> Vec<String> {
@@ -2482,7 +2470,7 @@ fn resolve_prog(tok: &str, prog: &[String], bar: i64, key: Option<&Key>, octave:
     let marks = &rest[digits.len()..];
     let Ok(nn) = digits.parse::<i32>() else { return cs.clone() };
     let notes: Vec<i32> = key
-        .and_then(|k| parse_roman(cs).map(|(d, s)| diatonic_chord(k, d, s)))
+        .and_then(|k| harmony::roman_chord(cs, k))
         .or_else(|| parse_chord(cs, octave))
         .unwrap_or_default();
     if notes.is_empty() { return ".".to_string(); }
@@ -2491,23 +2479,6 @@ fn resolve_prog(tok: &str, prog: &[String], bar: i64, key: Option<&Key>, octave:
     let mut midi = notes[idx.rem_euclid(len) as usize] + 12 * idx.div_euclid(len);
     for c in marks.chars() { if c == '\'' { midi += 12; } else if c == ',' { midi -= 12; } }
     midi_to_name(midi)
-}
-
-/// MIDI note for a 0-based scale index, wrapping up an octave past the scale end.
-fn scale_note_midi(key: &Key, idx: i32) -> i32 {
-    let len = key.scale.len() as i32;
-    let wrap = idx.div_euclid(len);
-    let step = key.scale[idx.rem_euclid(len) as usize].round() as i32; // chords snap to 12-TET
-    12 * (key.octave + wrap + 1) + key.tonic + step
-}
-
-/// Build a diatonic chord on a scale degree by stacking scale-thirds, so the
-/// quality (maj/min/dim…) is whatever the scale gives — works in any scale.
-fn diatonic_chord(key: &Key, degree: i32, seventh: bool) -> Vec<i32> {
-    let i0 = degree - 1;
-    let mut n = vec![scale_note_midi(key, i0), scale_note_midi(key, i0 + 2), scale_note_midi(key, i0 + 4)];
-    if seventh { n.push(scale_note_midi(key, i0 + 6)); }
-    n
 }
 
 /// Resolve one melodic/drum token into the note-name string(s) it sounds.
@@ -2519,8 +2490,8 @@ fn resolve_token(tok: &str, is_drum: bool, octave: i32, key: Option<&Key>) -> Ve
         if is_degree(tok) {
             return vec![degree_to_midi(tok, k).map(|m| midi_to_name(m.round() as i32)).unwrap_or_else(|| tok.to_string())];
         }
-        if let Some((deg, seventh)) = parse_roman(tok) {
-            return diatonic_chord(k, deg, seventh).into_iter().map(midi_to_name).collect();
+        if let Some(notes) = harmony::roman_chord(tok, k) {
+            return notes.into_iter().map(midi_to_name).collect();
         }
     }
     if let Some(notes) = parse_chord(tok, octave) {
@@ -3408,6 +3379,23 @@ mod tests {
         // vi = A C E (minor, straight from the scale)
         let vi = schedule_bar_seeded(&parse("key: c major\nx: vi"), k.as_ref(), 0, 0);
         assert_eq!(vi.iter().map(|e| e.token.clone()).collect::<Vec<_>>(), ["a3","c4","e4"]);
+    }
+
+    #[test]
+    fn roman_numerals_like_a_theory_class() {
+        let k = parse_key("key: c major");
+        let toks = |src: &str| schedule_bar_seeded(&parse(&format!("key: c major\nx: {src}")), k.as_ref(), 0, 0)
+            .iter().map(|e| e.token.clone()).collect::<Vec<_>>();
+        assert_eq!(toks("V7/V"), ["d3", "gb3", "a3", "c4"]);
+        assert_eq!(toks("bVII"), ["bb3", "d4", "f4"]);
+        assert_eq!(toks("iv"), ["f3", "ab3", "c4"]);
+        assert_eq!(toks("N6"), ["f3", "ab3", "db4"]);
+        // prog: with a secondary dominant, played with ^
+        let src = "key: c major\nprog: I V7/ii ii V7\nx: ^";
+        let p = parse(src);
+        let prog = parse_prog(src);
+        let bar1 = schedule_bar_prog(&p, k.as_ref(), &prog, 1, 0).iter().map(|e| e.token.clone()).collect::<Vec<_>>();
+        assert_eq!(bar1, ["a3", "db4", "e4", "g4"]);
     }
 
     #[test]

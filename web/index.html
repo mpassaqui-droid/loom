@@ -423,7 +423,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <b>key</b>: <i>key: c minor</i> &middot; then melody can use degrees 1-7 (1=tonic) &middot; octave marks ' and , &middot; alter with suffix: 7# 3b 5b<br>
     <b>chords</b>: UPPERCASE root = accord (plusieurs notes) &mdash; Cm7 F G7 Am Dsus4 &middot; minuscule = note simple<br>
     <b>arp</b>: <i>| arp up</i> (down/updown/downup) sur une voix d'accords &mdash; égrène chaque accord<br>
-    <b>roman</b>: <i>I ii iii IV V vi vii</i> (+<i>7</i>) accords diatoniques sur la gamme (nécessite key)<br>
+    <b>roman</b>: <i>I ii iii IV V vi vii</i> (+<i>7</i>) diatoniques (nécessite key) · <i>iv</i> en majeur, <i>V</i> en mineur = emprunt · <i>bVII bVI ♯iv°</i> (<i>♯</i>, car « #» ouvre un commentaire) · <i>V7/V vii°7/ii</i> dominantes secondaires · <i>I6 I64 V65 V43 V42</i> renversements · <i>viiø7 IVmaj7 III+</i> · <i>N6 It6 Fr6 Ger6</i><br>
     <b>song</b>: <i>song: intro*4 verse*8 chorus*8</i> &middot; tag les voix avec <i>| in verse chorus</i><br>
     <b>long</b>: <i>nom@section:</i> = pattern différent d'une voix par section (ex. <i>bass@drop: 1 1 1 1</i>) &mdash; morceaux longs qui évoluent<br>
     <b>son</b> (après |): <i>lp N</i> / <i>hp N</i> filtre (+ <i>q R</i> résonance) &middot; <i>env A D S R</i> enveloppe ADSR<br>
@@ -1476,12 +1476,36 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const map={C:0,D:2,E:4,F:5,G:7,A:9,B:11};let root=map[m[1]];if(m[2]==="#")root++;if(m[2]==="b")root--;
     const iv=CHORDS[m[3]];if(!iv)return null;const rm=12*(oct+1)+root;const notes=iv.map(i=>rm+i);
     if(bass!=null)notes.unshift(12*oct+bass);return notes;}
-  // roman-numeral chords against the key: I ii iii IV V vi vii (+7). Diatonic.
+  // roman-numeral chords like a theory class (miroir de loom-core/src/harmony.rs) :
+  // I ii V7 diatoniques ; casse contre la gamme = emprunt (iv en majeur, V en mineur) ;
+  // bVII #iv° ; ° ø + maj7 ; figures 6 64 7 65 43 42 ; V7/V ; N N6 It6 Fr6 Ger6
+  function romanNumeral(tok){const m=/^([b#♭♯](?=[IViv]))?(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)(maj7|°|o|dim|ø|\+|aug)?(7|6|64|65|43|42|2)?$/.exec(tok);
+    if(!m)return null;const map={i:1,ii:2,iii:3,iv:4,v:5,vi:6,vii:7};
+    const acc=(m[1]==="b"||m[1]==="♭")?-1:(m[1]==="#"||m[1]==="♯")?1:0,upper=m[2]===m[2].toUpperCase(),mk=m[3]||"",fig=m[4]||"";
+    const maj7=mk==="maj7",half=mk==="ø",q=(mk==="°"||mk==="o"||mk==="dim"||half)?"dim":(mk==="+"||mk==="aug")?"aug":null;
+    const FIG={"":[maj7||half,0],"7":[true,0],"6":[maj7,1],"64":[false,2],"65":[true,1],"43":[true,2],"42":[true,3],"2":[true,3]};
+    return {acc,deg:map[m[2].toLowerCase()],upper,q,half,maj7,sev:FIG[fig][0],inv:FIG[fig][1]};}
   function romanToChord(tok,k){if(!k)return null;
-    const m=/^(VII|VI|IV|V|III|II|I|vii|vi|iv|v|iii|ii|i)(7?)$/.exec(tok);if(!m)return null;
-    const map={i:1,ii:2,iii:3,iv:4,v:5,vi:6,vii:7},d=map[m[1].toLowerCase()],sev=m[2]==="7";
-    const sc=k.scale,len=sc.length,sn=idx=>{const w=Math.floor(idx/len);return 12*(k.octave+w+1)+k.tonic+sc[((idx%len)+len)%len];};
-    const i0=d-1,n=[sn(i0),sn(i0+2),sn(i0+4)];if(sev)n.push(sn(i0+6));return n;}
+    const MAJ=[0,2,4,5,7,9,11],base=12*(k.octave+1),tonic=base+k.tonic;
+    const sl=tok.indexOf("/");
+    if(sl>0){const t=romanNumeral(tok.slice(sl+1));if(!t)return null;
+      const root=(t.acc!==0||k.scale.length!==7)?k.tonic+MAJ[t.deg-1]+t.acc:k.tonic+Math.round(k.scale[t.deg-1]);
+      const sub={tonic:((root%12)+12)%12,scale:t.upper?[0,2,4,5,7,9,11]:[0,2,3,5,7,8,10],octave:k.octave};
+      const n=romanToChord(tok.slice(0,sl),sub);if(!n)return null;if(n[0]-base>=12)return n.map(x=>x-12);return n;}
+    const SP={"N":[1,5,8],"N6":[5,8,13],"It6":[-4,0,6],"Fr6":[-4,0,2,6],"Ger6":[-4,0,3,6]};
+    if(SP[tok])return SP[tok].map(x=>tonic+x);
+    const r=romanNumeral(tok);if(!r)return null;
+    const len=k.scale.length||1,sa=idx=>{const w=Math.floor(idx/len);return 12*(k.octave+w+1)+k.tonic+Math.round(k.scale[((idx%len)+len)%len]);};
+    let n;
+    if(r.acc!==0||len!==7||r.q){const root=tonic+MAJ[r.deg-1]+r.acc,q=r.q||(r.upper?"maj":"min");
+      const tf={maj:[4,7],min:[3,7],dim:[3,6],aug:[4,8]}[q];n=[root,root+tf[0],root+tf[1]];
+      if(r.sev)n.push(root+(r.maj7?11:(q==="dim"&&!r.half)?9:10));}
+    else{const i0=r.deg-1;n=[sa(i0),sa(i0+2),sa(i0+4)];const third=n[1]-n[0];
+      if(r.upper&&third===3){n[1]++;if(n[2]-n[0]===6)n[2]++;}
+      if(!r.upper&&third===4){n[1]--;if(n[2]-n[0]===8)n[2]--;}
+      if(r.sev)n.push(r.maj7?n[0]+11:sa(i0+6));}
+    for(let i=0;i<Math.min(r.inv,n.length-1);i++)n.push(n.shift()+12);
+    return n;}
   // probability suffix (x? ~50%, x?70 =70%) + deterministic seeded RNG
   function fnv(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
   function rng(seed,bar,vname,step){let h=Math.imul((seed>>>0)^0x9e3779b1,2654435761)>>>0;
@@ -6063,6 +6087,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Accords","Cm7 F G7 Am","MAJUSCULE = accord. Qualités : 5 maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13"],
     ["Accords","Cm7/G   C/E","renversement / slash : la note après / passe à la basse"],
     ["Accords","I ii iii IV V vi vii (+7)","chiffres romains = accords diatoniques de la key"],
+    ["Accords (théorie)","iv bVII ♯iv° V7/V I6 V65 N6 Ger6","emprunts, altérés (♯ et non #), dominantes secondaires, renversements, napolitaine, sixtes augmentées"],
     ["Accords","| arp up","arpège : up / down / updown / downup / converge / diverge / thumb / pinky"],
     ["Accords","| voicing open|drop2|drop3|shell|quartal|wide|lead","ré-harmonise un accord : open/drop2/wide = aéré ; lead = voice-leading (proche de l'accord précédent)"],
     ["Verbes","| rev","inverse le motif"],
@@ -6555,7 +6580,7 @@ const THEME_AA={
     "- SAVANT extras (use sparingly, when the user wants something advanced): tonnetz(n,root,moves) = a neo-Riemannian chord progression that walks the Tonnetz by P/L/R transforms (P=major<->minor, L=leading-tone exchange, R=relative) with smooth voice-leading — post-tonal harmony à la Schubert/Radiohead/film, e.g. harm: tonnetz(8,C,PLR) | saw or pad: tonnetz(6,Am,LR). | hocket = the COMPLEMENT rhythm (hits<->rests): put it on a copy of a drum/perc line so the two voices INTERLOCK and tile the bar (every step hit exactly once) — a tiling canon/hocket, e.g. a: x . . x . . x . / b: x . . x . . x . | hocket. tune: adaptive = adaptive just intonation (chord notes retuned to pure 5-limit ratios) for maximally consonant chords. DAW BUSES: | bus NAME routes a voice into a shared submix bus (e.g. put | bus drums on kick/snare/hat to group them) — one fader controls the group in the MIX panel. Great for balancing drums vs synths. Configure a bus with a bus: directive: bus: drums gain 0.8 lp 1500 reverb 0.3 (gain, lp/hp shared filter +q, reverb send) — persisted in the code. SPACE REVERB ENGINE: add room: fdn 0.85 4200 for a lush Feedback-Delay-Network hall (Jot — smoother/denser than the default Schroeder); decay 0-0.97, damp in Hz. The SPACE knob and per-voice | reverb sends feed it.",
     "- Chords: a token with an UPPERCASE root plays a full chord (several notes at once), e.g. Cm7 F G7 Am Dsus4 Gmaj7. Lowercase stays a single note (c3) so there is no clash. Qualities: 5(power) maj m dim aug sus2 sus4 6 m6 6/9 7 maj7 m7 mmaj7 m7b5 dim7 7b5 7#5 7b9 7#9 7#11 add9 add11 9 maj9 m9 11 m11 13 maj13 m13. Inversions / slash chords with /bass: Cm7/G, C/E, F/A. Use on a pad/keys voice for jazzy harmony.",
     "- Arpeggios: add | arp up (or down, updown, downup) to a chord voice so each chord is played one note at a time across its step, e.g. arp: Am . F . C . G . | arp up | saw. Classic for techno/synthwave sequences.",
-    "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up.",
+    "- Roman-numeral chords (need a key): I ii iii IV V vi vii play the diatonic chord on that scale degree, auto-fitting the key's quality (in a minor key i is minor, etc). Add 7 for a diatonic seventh: I7 ii7 V7. Great for progressions, e.g. with key: c major -> keys: I . . . vi . . . IV . . . V7 . . . | sine. Also arpeggiate them with | arp up. Full theory-class grammar: case against the scale = mode mixture (iv in major, V in minor); chromatic roots bVII bVI bIII and ♯iv° (write ♯ not #, because \" #\" starts a comment); qualities ° ø + maj7 (vii°7 viiø7 III+ IVmaj7); inversions I6 I64 V65 V43 V42; secondary chords V7/V V7/ii vii°7/V; special chords N N6 It6 Fr6 Ger6. Example: key: c major -> pad: I . vi . ii65 . V7/V . V64 . V7 . I . . . | sine.",
     "- Probability: add ? to a token to make it fire only sometimes. x? ~50%, x?70 = 70%, c3?25 = 25%. Works on any token (drums, notes, degrees, chords). Use it for humanized hats, ghost notes, evolving patterns.",
     "- Microtiming / groove: | shift N nudges a whole voice in time by N steps (-0.5..0.5). Positive lays it BACK (late/relaxed, e.g. snare: ... | shift 0.06 for a laid-back backbeat), negative PUSHES it (early/urgent). Tiny values (0.03-0.1) add human feel; this is how real drummers/players sit a part in the pocket. Try a hat slightly late or a bass slightly early.",
     "- Per-voice swing: | swing N (0-100) delays the off-beat (odd) steps of THAT voice only, independent of the global SWING knob. The classic move is straight kick + swung hats: hat: x x x x x x x x | swing 58 over kick: x . . . x . . . . Use 54-62 for a subtle shuffle, higher for heavy triplet feel. Great on hats, shakers, rides.",

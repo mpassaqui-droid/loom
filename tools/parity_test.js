@@ -453,6 +453,19 @@ for (const [name, src] of Object.entries(step_pieces)) {
     }
   }
 }
+// ── ROMAN parity : chiffrage romain complet (harmony.rs <-> romanToChord), hauteurs exactes ──
+const rn_toks = ['I','ii','iii','IV','V','vi','vii','V7','ii7','IVmaj7','iv','V','bVII','bVI','bIII','♯iv°','V7/#iv','♭VI','vii°7','viiø7','III+',
+  'I6','I64','V65','V43','V42','ii65','V7/V','V7/ii','vii°7/V','V/vi','V7/IV','N','N6','It6','Fr6','Ger6','i','VII','v7','Imaj7','IV6'];
+const rn_keys = ['c major','a minor','eb major','d dorian','f# minor','c pentatonic'];
+let rn_total = 0, rn_bad = 0;
+for (const k of rn_keys) for (const tok of rn_toks) {
+  const src = 'key: ' + k + '\npad: ' + tok;
+  rn_total++;
+  const js = (L.romanToChord(tok, L.parseKey(src)) || []).slice().sort((a, b) => a - b).join(' ');
+  const rs = JSON.parse(W.schedule_bar_json(src, 0)).filter(e => e.voice === 'pad').map(rsMidi).sort((a, b) => a - b).join(' ');
+  if (js !== rs) { rn_bad++; if (rn_bad <= 8) console.log(`  ROMAN DIFF [${k} ${tok}]  JS: ${js}  Rust: ${rs}`); }
+}
+console.log(`\nROMAN parity (chiffrage romain, hauteurs): ${rn_total - rn_bad}/${rn_total}  ${rn_bad === 0 ? '✅' : '⚠️ ' + rn_bad + ' diffs'}`);
 console.log(`\nSTEP parity (pas-programmes =(EXPR), onset + jeton): ${sp_total - sp_bad}/${sp_total} voice×bar  ${sp_bad === 0 ? '✅' : '⚠️ ' + sp_bad + ' diffs'}`);
 console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/${sy_total} voice×bar  ${sy_bad === 0 ? '✅' : '⚠️ ' + sy_bad + ' diffs'}`);
 
