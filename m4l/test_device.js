@@ -75,7 +75,7 @@ function device(piste, sorties, notes) {
     LiveAPI.prototype.set = function () {};
     LiveAPI.prototype.call = function (m, a) { if (m === 'add_new_notes') a.notes.forEach(function (n) { notes.push(n); }); };
     ${fs.readFileSync(tmp, 'utf8')}
-    env.bang = bang; env.editeur = editeur; env.surveille = surveille; env.restaurecode = restaurecode;
+    env.bang = bang; env.editeur = editeur; env.surveille = surveille; env.restaurecode = restaurecode; env.pret = pret;
   `)(fs, env, sorties, notes, piste);
   return env;
 }
@@ -95,6 +95,8 @@ const sc = [], nc = [];
 const C = device('kick', sc, nc);
 C.restaurecode(0); C.restaurecode(morceau); C.bang();
 ok(nc.length === 16 && sc.some(o => o[0] === 4 && o[2] === morceau), 'code restauré avec le set : éditeur rempli, clip recuit au chargement');
+sc.length = 0; C.pret();
+ok(sc.length === 1 && sc[0][0] === 4 && sc[0][1] === 'set' && sc[0][2] === morceau, 'la fenêtre Loom s\'ouvre (pret) : elle reçoit le code du morceau');
 // piste pleine : le device ajoute une scène et y écrit son clip
 for (const k in dicts) delete dicts[k];
 {
@@ -170,11 +172,11 @@ for (const k in dicts) delete dicts[k];
   env.ia('text', 'plus de kick');
   ok(so.some(o => o[0] === 0 && String(o[2]).includes('clé Claude')), 'IA sans clé : message clair, aucune requête');
   env.cle('text', 'sk-ant-test');
-  ok(fichiers['/Users/test/.loom_claude_key'] === 'sk-ant-test', 'clé gardée dans ~/.loom_claude_key (jamais dans le set)');
+  ok(fichiers['/Users/test/Library/Preferences/loom_claude_key'] === 'sk-ant-test', 'clé gardée dans ~/Library/Preferences (jamais dans le set)');
   env.ia('text', 'plus de kick');
   const req = so.filter(o => o[0] === 5).pop();
-  const corps = JSON.parse(fichiers['/Users/test/.loom_ia_requete_0.json'] || '{}');
-  ok(req && req[1] === 'dictionary' && dicts.loomia_req_0.headers.length === 3 && dicts.loomia_req_0.headers[1] === 'x-api-key: sk-ant-test' && dicts.loomia_req_0.filename_in === '/Users/test/.loom_ia_requete_0.json' && corps.messages && corps.messages.length === 1 && corps.system.length > 40000 && corps.messages[0].content.includes('kick: x . x .'),
+  const corps = JSON.parse(fichiers['/Users/test/Library/Caches/loom_ia_requete_0.json'] || '{}');
+  ok(req && req[1] === 'dictionary' && dicts.loomia_req_0.headers.length === 3 && dicts.loomia_req_0.headers[1] === 'x-api-key: sk-ant-test' && dicts.loomia_req_0.filename_in === '/Users/test/Library/Caches/loom_ia_requete_0.json' && corps.messages && corps.messages.length === 1 && corps.system.length > 40000 && corps.messages[0].content.includes('kick: x . x .'),
     `requête : modèle ${corps.model}, consigne SYS ${corps.system && corps.system.length} car., code courant joint`);
   const avant = notes.length;
   dicts.loomia_rep_0 = { body: JSON.stringify({ content: [{ type: 'text', text: '\x60\x60\x60\nkick: x x x x\n\x60\x60\x60' }] }) };

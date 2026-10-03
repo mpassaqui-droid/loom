@@ -579,7 +579,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     preLim.connect(limiter);let last=limiter;
     // true lookahead brick-wall limiter (worklet) as the final stage, when available
     if(ctx._satReady&&ctx.audioWorklet){try{const wl=new AudioWorkletNode(ctx,"loom-lim");limiter.connect(wl);last=wl;masterWLim=wl;}catch(_){}}
-    last.connect(ctx.destination);masterOut=last;
+    last.connect(sortieSon());masterOut=last;
     analyser=ctx.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=0.7;last.connect(analyser);
     const len=Math.floor(ctx.sampleRate*0.4);noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);
     const d=noiseBuf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;}
@@ -647,7 +647,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     ensureWorklet(ctx).then(()=>{if(!ctx._satReady||!masterShelf||!ctx.audioWorklet)return;
       try{
         if(!masterSat){const sat=new AudioWorkletNode(ctx,"loom-sat",{parameterData:{drive:warmth}});masterShelf.disconnect();masterShelf.connect(sat);sat.connect(masterLimiter);masterSat=sat;}
-        if(!masterWLim&&masterLimiter){const wl=new AudioWorkletNode(ctx,"loom-lim");masterLimiter.disconnect();masterLimiter.connect(wl);wl.connect(ctx.destination);if(analyser)wl.connect(analyser);masterWLim=wl;}
+        if(!masterWLim&&masterLimiter){const wl=new AudioWorkletNode(ctx,"loom-lim");masterLimiter.disconnect();masterLimiter.connect(wl);wl.connect(sortieSon());if(analyser)wl.connect(analyser);masterWLim=wl;}
         log("[ audio ] mastering worklet (saturateur + limiteur lookahead) activé","ai");
       }catch(_){}});}
   function noise(){const s=ctx.createBufferSource();s.buffer=noiseBuf;return s;}
@@ -3634,7 +3634,7 @@ void main(){
     }catch(_){}
     if(!w.length)return null;
     return "[ aide ] "+w.slice(0,4).join("  ·  ")+(w.length>4?"  …(+"+(w.length-4)+")":"");}
-  function run(){liveLinkWrite();initAudio();if(ctx.state==="suspended")ctx.resume();
+  function run(){liveLinkWrite();liveEnvoie();initAudio();if(ctx.state==="suspended")ctx.resume();
     morphState=null;try{window.__loomSrcMap=srcMapOf(editor.value);}catch(_){window.__loomSrcMap=null;}  // base du diff morph
     const parsed=parse(editor.value);if(!parsed.length){log("[ error ] no valid voices","err");return;}
     voices=parsed;key=parseKey(editor.value);seed=parseSeed(editor.value);song=parseSong(editor.value);prog=parseProg(editor.value);tuning=parseTune(editor.value);warmth=parseWarmth(editor.value);applyWarmth();duckAmt=parseDuck(editor.value);feelAmt=parseFeel(editor.value);{const sc=parseScene(editor.value);if(sc)sceneMode=sc;}sceneMap=parseSceneMap(editor.value);filmFormat=parseFilm(editor.value);{const tt=parseTitle(editor.value);filmTitle=tt||curProject||"LOOM";}
@@ -5914,6 +5914,36 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   // Lien Ableton Live : un fichier .loom choisi une fois, réécrit à chaque RUN.
   // Le device Max for Live « Loom » le surveille et recuit le clip de sa piste.
   let liveHandle=null;
+  // ---- mode Live : ce même Loom, dans la fenêtre du device Max for Live (jweb) ----
+  // RUN envoie le code aux devices Loom du set (chaque piste cuit sa voix, Live joue
+  // ses instruments). Le son de Loom est coupé par défaut, mais l'analyseur suit :
+  // les visuels tournent. « son Loom » le rallume (sortie du Mac, hors mixeur Live).
+  const MODE_LIVE=!!window.max||(typeof location!=="undefined"&&/[?&]live=1/.test(location.search));
+  let sonLoom=false,sonNode=null;
+  function sortieSon(){
+    if(!sonNode||sonNode.context!==ctx){sonNode=ctx.createGain();sonNode.gain.value=(MODE_LIVE&&!sonLoom)?0:1;sonNode.connect(ctx.destination);}
+    return sonNode;}
+  function liveEnvoie(){if(MODE_LIVE&&window.max&&window.max.outlet)window.max.outlet("editeur",editor.value);}
+  function liveBarre(){if(!MODE_LIVE)return;
+    const b=document.createElement("div");b.id="liveBarre";
+    b.style.cssText="position:fixed;right:10px;bottom:10px;z-index:9999;display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--dim,#2b6b22);border-radius:6px;background:var(--bg,#0b0f0b);font:12px ui-monospace,monospace";
+    const bt=(t,f,titre)=>{const x=document.createElement("button");x.className="tiny";x.textContent=t;x.title=titre;x.onclick=f;b.appendChild(x);return x;};
+    bt("▶ Live",()=>{liveEnvoie();window.max&&window.max.outlet("lancer");},"envoie le code et lance les clips Loom de toutes les pistes");
+    bt("■ Live",()=>{window.max&&window.max.outlet("arreter");},"arrête Live");
+    const s=bt("son Loom : non",()=>{sonLoom=!sonLoom;s.textContent="son Loom : "+(sonLoom?"oui":"non");if(sonNode)sonNode.gain.value=sonLoom?1:0;},"entendre aussi le son de Loom (sortie du Mac, pas le mixeur Live)");
+    document.body.appendChild(b);
+    // un autre device Loom, ou le fichier lié, a changé le code : l'éditeur suit
+    if(window.max&&window.max.bindInlet)window.max.bindInlet("code",function(){const t=Array.prototype.slice.call(arguments).join(" ");
+      if(t&&t!==editor.value){editor.value=t;try{editor.dispatchEvent(new Event("input"));}catch(_){}}});
+    if(window.max)window.max.outlet("pret");}
+  // VIBE dans Live : par le pont local (claude -p, l'abonnement), si aucune clé n'est saisie
+  async function vibePont(SYStxt,userMsg){
+    const j=await (await fetch("/jeton")).json();
+    const res=await fetch("/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","X-Loom-Jeton":j.jeton},
+      body:JSON.stringify({model:"claude-fable-5-1",max_tokens:4000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
+    const data=await res.json();if(data.error)throw new Error(data.error.message||"pont");
+    return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");}
+  if(document.body)setTimeout(liveBarre,0);else document.addEventListener("DOMContentLoaded",liveBarre);
   async function liveLinkWrite(){if(!liveHandle)return;
     try{const w=await liveHandle.createWritable();await w.write(editor.value);await w.close();log("[ live ] "+liveHandle.name+" écrit, Live recuit ses clips","ai");}
     catch(e){log("[ live ] écriture impossible : "+e.message,"err");}}
@@ -6750,6 +6780,8 @@ const THEME_AA={
           body:JSON.stringify({model:"claude-sonnet-5",max_tokens:4000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
         clearTimeout(to);const data=await res.json();if(data.error)throw new Error(data.error.message||"api error");
         text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");
+      }else if(MODE_LIVE&&typeof location!=="undefined"&&location.port==="7410"){
+        text=await vibePont(SYStxt,userMsg);
       }else{
         text=await callFree(prompt);
       }

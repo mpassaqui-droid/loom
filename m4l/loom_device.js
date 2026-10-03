@@ -13,7 +13,8 @@
 //
 // L'IA (la même consigne SYS que l'éditeur web) : on décrit la musique, Claude
 // écrit le code, le moteur le vérifie AVANT de l'appliquer (jamais de code cassé).
-// La clé Claude reste sur ce Mac (~/.loom_claude_key), jamais dans le set.
+// La clé Claude reste sur ce Mac (~/Library/Preferences/loom_claude_key, dossier fermé aux
+// autres comptes), jamais dans le set.
 //
 // Messages : fichier <chemin> · code <texte> · editeur <texte> · ia <demande> · cle <clé>
 //            reponseia dictionary <nom> · lancer · arreter · voix <nom> · cuire · bang (init)
@@ -122,7 +123,7 @@ function maison() {
     return m ? m[1] : '';
 }
 
-function fichierCle() { var h = maison(); return h ? h + '/.loom_claude_key' : ''; }
+function fichierCle() { var h = maison(); return h ? h + '/Library/Preferences/loom_claude_key' : ''; }
 
 var cleMemoire = '';
 
@@ -169,7 +170,7 @@ function ia() {
             '\n\nReturn the full updated LOOM program. Code only.' }],
     });
     // le corps part d'un fichier : un Dict Max changerait un tableau d'un élément en valeur seule
-    var h = maison(), requete = h + '/.loom_ia_requete_' + id + '.json';
+    var h = maison(), requete = h + '/Library/Caches/loom_ia_requete_' + id + '.json';
     var f = new File(requete, 'write', 'TEXT');
     if (!f.isopen) { dire('IA : écriture impossible de la requête'); return; }
     f.eof = 0; f.writestring(corps); f.close();
@@ -221,6 +222,11 @@ function voix() {
     cuire();
 }
 
+// la fenêtre Loom (la page web) vient de s'ouvrir : on lui donne le code du morceau
+function pret() {
+    if (etat.source) outlet(4, 'set', etat.source);
+}
+
 function anything() {
     // commandes OSC venues de udpreceive (build de test) : /loom/code, /loom/fichier, /loom/voix, /loom/editeur, /loom/cuire
     var m = messagename.replace(/^\/loom\//, '');
@@ -233,6 +239,7 @@ function anything() {
     else if (m === 'lancer') lancer();
     else if (m === 'arreter') arreter();
     else if (m === 'cuire') cuire();
+    else if (m === 'pret') pret();
 }
 
 // ---- le son : lancer les clips Loom de tout le set, ou tout arrêter ----

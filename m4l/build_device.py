@@ -87,14 +87,6 @@ def boite(id, classe, rect, texte=None, ins=1, outs=0, types=None, **attrs):
     return b
 
 
-VERT, FOND = [0.616, 1.0, 0.541, 1.0], [0.043, 0.059, 0.043, 1.0]
-
-
-def editeur_texte(id, rect, wordwrap=0, **attrs):
-    return boite(id, 'textedit', rect, None, 1, 4, ['', 'int', '', ''],
-                 presentation=1, presentation_rect=rect, outputmode=1, wordwrap=wordwrap, lines=0, autoscroll=1,
-                 fontname='Menlo', fontface=0, border=1.0, bordercolor=[0.169, 0.42, 0.133, 1.0], rounded=4.0,
-                 bgcolor=FOND, textcolor=VERT, parameter_enable=0, **attrs)
 
 
 def bouton(id, rect, texte, nom):
@@ -106,53 +98,45 @@ def bouton(id, rect, texte, nom):
                                                          'parameter_mmax': 1}})
 
 
-def etiquette(id, rect, texte, taille=10.0, couleur=None):
-    return boite(id, 'comment', rect, texte, 1, 0, None, presentation=1, presentation_rect=rect,
-                 fontsize=taille, linecount=1, textcolor=couleur or [0.75, 0.85, 0.75, 1.0])
+URL_LOOM = 'http://127.0.0.1:7410/?live=1'
 
 
 def fenetre():
-    """La fenêtre Loom, comme l'interface d'un plugin : l'éditeur, la scène, l'IA, le son.
-    Elle parle au moteur par send/receive propres au device (« --- » devient l'id du device)."""
-    W, H = 1180.0, 680.0
+    """La fenêtre Loom, comme l'interface d'un plugin : le VRAI Loom (web/index.html), le même
+    que sur le web, servi par le pont local (tools/loom_pont_ia.py) dans le navigateur de Max.
+    Elle parle au moteur par send/receive propres au device (« --- » devient l'id du device) :
+    la page envoie « editeur <code> », « lancer », « arreter », « pret » ; le moteur lui renvoie
+    le code du morceau par « code <texte> »."""
+    W, H = 1280.0, 800.0
     bx = [
-        boite('w-1', 'inlet', [1300, 10, 30, 30], None, 0, 1, ['']),
-        etiquette('w-2', [12, 8, 400, 20], 'LOOM · Tab joue le code · le code est celui de tout le morceau', 11.0, VERT),
-        editeur_texte('w-3', [10, 32, 640, 590], keymode=0, tabmode=1, fontsize=13.0),
-        boite('w-4', 'newobj', [1300, 60, 100, 22], 'prepend editeur', 1, 1, ['']),
-        boite('w-5', 'newobj', [1300, 90, 90, 22], 's ---loomin', 1, 0),
-        boite('w-6', 'newobj', [1300, 120, 90, 22], 'r ---editeur', 0, 1, ['']),
-        bouton('w-7', [10, 630, 110, 30], '▶ jouer (Tab)', 'jouer'),
-        boite('w-8', 'newobj', [1300, 150, 30, 22], 't b', 1, 1, ['bang']),
-        bouton('w-9', [128, 630, 110, 30], '▶ lancer Live', 'lancer'),
-        boite('w-10', 'message', [1300, 180, 50, 22], 'lancer', 2, 1, ['']),
-        bouton('w-11', [246, 630, 80, 30], '■ stop', 'arreter'),
-        boite('w-12', 'message', [1300, 210, 50, 22], 'arreter', 2, 1, ['']),
-        boite('w-13', 'comment', [334, 636, 316, 20], 'Loom', 1, 0, None, presentation=1,
-              presentation_rect=[334, 636, 316, 20], fontsize=10.0, linecount=1, textcolor=VERT),
-        boite('w-14', 'newobj', [1300, 240, 80, 22], 'r ---etat', 0, 1, ['']),
-        v8ui('w-15', [660, 32, 510, 360], 'scene', [660, 32, 510, 360]),
-        etiquette('w-16', [660, 400, 510, 20], 'VIBE · décris ta musique, Retour : l\'IA écrit le code, Loom le vérifie et le joue', 10.0, VERT),
-        editeur_texte('w-17', [660, 422, 510, 150], keymode=1, tabmode=0, fontsize=12.0, wordwrap=1),
-        boite('w-18', 'newobj', [1300, 270, 70, 22], 'prepend ia', 1, 1, ['']),
-        etiquette('w-19', [660, 580, 510, 18], 'clé Claude (gardée sur ce Mac, jamais dans le set) puis Retour', 9.0),
-        editeur_texte('w-20', [660, 600, 510, 24], keymode=1, tabmode=0, fontsize=10.0),
-        boite('w-21', 'newobj', [1300, 300, 70, 22], 'prepend cle', 1, 1, ['']),
-        boite('w-22', 'newobj', [1300, 330, 80, 22], 'r ---cle', 0, 1, ['']),
+        boite('w-1', 'inlet', [1400, 10, 30, 30], None, 0, 1, ['']),
+        boite('w-2', 'jweb', [0, 0, W, H], None, 1, 1, [''], presentation=1, presentation_rect=[0, 0, W, H],
+              url=URL_LOOM, rendermode=0),
+        boite('w-3', 'newobj', [1400, 60, 200, 22], 'route editeur lancer arreter pret', 1, 5, ['', '', '', '', '']),
+        boite('w-4', 'newobj', [1400, 90, 100, 22], 'prepend editeur', 1, 1, ['']),
+        boite('w-5', 'newobj', [1400, 120, 90, 22], 's ---loomin', 1, 0),
+        boite('w-6', 'message', [1500, 90, 50, 22], 'lancer', 2, 1, ['']),
+        boite('w-7', 'message', [1560, 90, 50, 22], 'arreter', 2, 1, ['']),
+        boite('w-8', 'message', [1620, 90, 40, 22], 'pret', 2, 1, ['']),
+        boite('w-9', 'newobj', [1400, 160, 90, 22], 'r ---editeur', 0, 1, ['']),
+        boite('w-10', 'newobj', [1400, 190, 70, 22], 'route set', 1, 2, ['', '']),
+        boite('w-11', 'newobj', [1400, 220, 90, 22], 'prepend code', 1, 1, ['']),
+        # le pont pas lancé : on recharge la page à chaque ouverture de la fenêtre
+        boite('w-12', 'message', [1500, 220, 200, 22], 'url ' + URL_LOOM, 2, 1, ['']),
+        boite('w-13', 'newobj', [1400, 40, 30, 22], 't b', 1, 1, ['bang']),
     ]
     li = [
-        ('w-3', 0, 'w-4', 0), ('w-4', 0, 'w-5', 0), ('w-6', 0, 'w-3', 0),
-        ('w-7', 0, 'w-8', 0), ('w-8', 0, 'w-3', 0),
-        ('w-9', 0, 'w-10', 0), ('w-10', 0, 'w-5', 0),
-        ('w-11', 0, 'w-12', 0), ('w-12', 0, 'w-5', 0),
-        ('w-14', 0, 'w-13', 0),
-        ('w-17', 0, 'w-18', 0), ('w-18', 0, 'w-5', 0),
-        ('w-20', 0, 'w-21', 0), ('w-21', 0, 'w-5', 0), ('w-22', 0, 'w-20', 0),
+        ('w-2', 0, 'w-3', 0), ('w-3', 0, 'w-4', 0), ('w-4', 0, 'w-5', 0),
+        ('w-3', 1, 'w-6', 0), ('w-6', 0, 'w-5', 0),
+        ('w-3', 2, 'w-7', 0), ('w-7', 0, 'w-5', 0),
+        ('w-3', 3, 'w-8', 0), ('w-8', 0, 'w-5', 0),
+        ('w-9', 0, 'w-10', 0), ('w-10', 0, 'w-11', 0), ('w-11', 0, 'w-2', 0),
+        ('w-1', 0, 'w-13', 0), ('w-13', 0, 'w-12', 0), ('w-12', 0, 'w-2', 0),
     ]
     p = amxd.patcher(bx, li, 'Loom', largeur=W)
-    p.update(rect=[80.0, 80.0, W, H], openrect=[0.0, 0.0, W, H], toolbarvisible=0, statusbarvisible=0,
-             enablehscroll=0, enablevscroll=0, devicewidth=0.0, bgcolor=[0.03, 0.04, 0.03, 1.0],
-             editing_bgcolor=[0.03, 0.04, 0.03, 1.0])
+    p.update(rect=[60.0, 60.0, W, H], openrect=[0.0, 0.0, W, H], toolbarvisible=0, statusbarvisible=0,
+             enablehscroll=0, enablevscroll=0, devicewidth=0.0, openinpresentation=1,
+             bgcolor=[0.03, 0.04, 0.03, 1.0], editing_bgcolor=[0.03, 0.04, 0.03, 1.0])
     return p
 
 
@@ -217,7 +201,7 @@ def patch(test=False):
         ('obj-9', 0, 'obj-10', 0),
         ('obj-2', 2, 'obj-11', 0), ('obj-11', 0, 'obj-12', 0), ('obj-12', 0, 'obj-2', 0),
         ('obj-19', 0, 'obj-20', 0), ('obj-20', 0, 'obj-23', 0), ('obj-23', 0, 'obj-14', 0),
-        ('obj-13', 0, 'obj-14', 0), ('obj-14', 0, 'obj-15', 0),
+        ('obj-13', 0, 'obj-14', 0), ('obj-14', 0, 'obj-15', 0), ('obj-23', 0, 'obj-15', 0),
         ('obj-2', 3, 'obj-21', 0), ('obj-21', 0, 'obj-22', 0), ('obj-22', 0, 'obj-2', 0),
         ('obj-2', 4, 'obj-25', 0),
         ('obj-26', 0, 'obj-2', 0),
