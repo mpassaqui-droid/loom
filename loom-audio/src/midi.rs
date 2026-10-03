@@ -10,6 +10,8 @@
 //! sleeps until then and sends it, so MIDI never blocks the sound.
 
 use crate::seq::MidiEvent;
+// les ports virtuels n'existent que sur macOS et Linux (pas sous Windows)
+#[cfg(unix)]
 use midir::os::unix::{VirtualInput, VirtualOutput};
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
@@ -87,10 +89,13 @@ impl MidiIo {
         let mut outputs: Vec<MidiOutputConnection> = Vec::new();
         let mut parts: Vec<String> = Vec::new();
 
-        let virt = MidiOutput::new("LOOM").map_err(|e| e.to_string())?;
-        if let Ok(conn) = virt.create_virtual("LOOM") {
-            outputs.push(conn);
-            parts.push("port virtuel « LOOM »".into());
+        #[cfg(unix)]
+        {
+            let virt = MidiOutput::new("LOOM").map_err(|e| e.to_string())?;
+            if let Ok(conn) = virt.create_virtual("LOOM") {
+                outputs.push(conn);
+                parts.push("port virtuel « LOOM »".into());
+            }
         }
         let hw = MidiOutput::new("LOOM").map_err(|e| e.to_string())?;
         // LOOM_MIDI_HW=0 : port virtuel seul (tests avec Live ouvert, rien sur le bus IAC)
@@ -122,6 +127,7 @@ impl MidiIo {
                 parts.push(format!("entrée {name}"));
             }
         }
+        #[cfg(unix)]
         if let Ok(mut input) = MidiInput::new("LOOM") {
             input.ignore(midir::Ignore::Sysex | midir::Ignore::ActiveSense);
             let cb = on_input.clone();
