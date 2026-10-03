@@ -819,3 +819,18 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] 10. Dictée VIBE : Alt+V (ou Ctrl+D dans VIBE), micro puis whisper-cli en local (large-v3-turbo, français), le texte arrive dans VIBE ; test bout en bout avec say : « basse » relu en 4,5 s. Micro réel à essayer par Munay
 
 Review (3 octobre, 17h) : les 10 faits, poussés sur frankenstein (41e09db → 97a360f). Portes : 455 tests Rust (5 ignorés), clippy --all-targets propre, check_web ok, parité 490/490. `loom` réinstallé. Laissés de côté (faible valeur) : export film, traduction de l'interface. Le terminal a 24 scènes, le web 56 (les 32 en plus sont des shaders WebGL).
+
+## 3 octobre (soir) : les 12 manques de l'audit, tous (Munay : « K for all »)
+Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point, tests à chaque fois.
+- [x] 4. Export : WAV 24 bits par défaut, --16 (dither TPDF), --32f, --sr ; .flac .mp3 .m4a .aiff .ogg par afconvert/ffmpeg ; REC et stems suivent ; relus par afinfo
+- [ ] 5. Loudness : LUFS intégré BS.1770 (pondération K, portes), LRA, true-peak ; limiteur true-peak ; cibles streaming
+- [ ] 1. Partition : export MusicXML (et LilyPond) depuis le morceau
+- [ ] 2. Harmonie : V/V, emprunts (bVII, iv), renversements, napolitaine ; modulations détectées ; réharmonisation
+- [ ] 8. Contrepoint : quintes et octaves parallèles, tessitures, croisements ; dans le prof
+- [ ] 6. Automation : courbes à points (`0 .2 1@exp`) et automation du master et des envois
+- [ ] 7. Micro-tons et traditions : vrai N-EDO, import Scala (.scl), ajnas/sayr maqam, aroha/avaroha raga
+- [ ] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
+- [ ] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo
+- [ ] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif
+- [ ] 11. Visuels en code : petit langage de visuel lié aux bandes du son
+- [ ] 12. Synchro et plugins : Ableton Link ; hôte AU/VST3 (au moins étude + prototype)

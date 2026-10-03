@@ -30,7 +30,7 @@ LOOM — un langage de live-coding musical
 usage :
   loom [morceau.loom]                          éditeur live avec son natif
   loom play morceau.loom                       jouer sans l'éditeur (Ctrl+C pour arrêter)
-  loom render morceau.loom sortie.wav [N]      exporter N mesures en WAV
+  loom render morceau.loom sortie.wav [N]      exporter N mesures (.wav .flac .mp3 .m4a .aiff .ogg)
   loom render morceau.loom dossier --stems [N] une piste WAV par voix dans le dossier
   loom render --help                           détails de l'export
   loom bake morceau.loom sortie.json [N]       cuire en notes MIDI par voix (pour Ableton Live,
@@ -47,6 +47,9 @@ usage :
   loom render morceau.loom dossier --stems [N]
 
   N         nombre de mesures (par défaut : tout le song:, sinon 8)
+  --24      WAV 24 bits (par défaut) · --16 : 16 bits avec dither · --32f : flottant
+  sortie    l'extension choisit le format : .wav .flac .mp3 .m4a .aiff .ogg
+  --sr HZ   fréquence d'échantillonnage (par défaut 48000 ; 44100, 96000…)
   --stems   une piste WAV par voix (kick.wav, bass.wav…) dans le dossier,
             chacune passée par la même chaîne master que le morceau entier
             (pour mixer dans un logiciel audio)
@@ -60,7 +63,7 @@ enum Command {
     Version,
     Play(String),
     /// Bounce to `out` (a WAV, or a folder of stems), `bars` bars or the whole song.
-    Render { file: String, out: String, bars: Option<u32>, stems: bool },
+    Render { file: String, out: String, bars: Option<u32>, stems: bool, format: Option<loom_audio::WavFormat>, sr: u32 },
     /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
     Bake { file: String, out: String, bars: Option<u32> },
     Tui(Option<PathBuf>),
@@ -77,7 +80,20 @@ fn parse(args: &[&str]) -> Result<Command, String> {
                 return Ok(Command::RenderHelp);
             }
             let stems = rest.contains(&"--stems");
-            let positional: Vec<&str> = rest.iter().copied().filter(|a| *a != "--stems").collect();
+            let format = rest.iter().find_map(|a| a.strip_prefix("--").and_then(loom_audio::WavFormat::from_name));
+            let mut sr = 48_000;
+            let mut positional: Vec<&str> = Vec::new();
+            let mut it = rest.iter().copied();
+            while let Some(a) = it.next() {
+                if a == "--sr" {
+                    sr = match it.next().and_then(|v| v.parse::<u32>().ok()) {
+                        Some(v) if (8_000..=384_000).contains(&v) => v,
+                        _ => return Err("--sr attend une fréquence entre 8000 et 384000".into()),
+                    };
+                } else if a != "--stems" && !(a.starts_with("--") && loom_audio::WavFormat::from_name(a).is_some()) {
+                    positional.push(a);
+                }
+            }
             if let Some(flag) = positional.iter().find(|a| a.starts_with('-')) {
                 return Err(format!("option inconnue : {flag}\n\n{RENDER_USAGE}"));
             }
@@ -89,7 +105,7 @@ fn parse(args: &[&str]) -> Result<Command, String> {
                 },
                 _ => return Err(format!("il faut un morceau et une sortie\n\n{RENDER_USAGE}")),
             };
-            Command::Render { file: file.to_string(), out: out.to_string(), bars, stems }
+            Command::Render { file: file.to_string(), out: out.to_string(), bars, stems, format, sr }
         }
         ["bake", file, out] => Command::Bake { file: file.to_string(), out: out.to_string(), bars: None },
         ["bake", file, out, bars] => match bars.parse::<u32>() {
@@ -111,8 +127,10 @@ fn main() -> ExitCode {
         Command::RenderHelp => { print!("{RENDER_USAGE}"); Ok(()) }
         Command::Version => { println!("loom {}", env!("CARGO_PKG_VERSION")); Ok(()) }
         Command::Play(file) => play(&file),
-        Command::Render { file, out, bars, stems: false } => render(&file, &out, bars),
-        Command::Render { file, out, bars, stems: true } => render_stems(&file, &out, bars),
+        Command::Render { file, out, bars, stems, format, sr } => {
+            if let Some(f) = format { loom_audio::WavFormat::set_default(f); }
+            if stems { render_stems(&file, &out, bars, sr) } else { render(&file, &out, bars, sr) }
+        }
         Command::Bake { file, out, bars } => bake(&file, &out, bars),
         Command::Tui(path) => tui(path),
     });
@@ -171,14 +189,14 @@ fn play(file: &str) -> Result<(), String> {
     }
 }
 
-fn render(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
+fn render(file: &str, out: &str, bars: Option<u32>, sr: u32) -> Result<(), String> {
     let src = read(file)?;
     let program = loom_core::Program::parse(&src);
     let bars = bars.unwrap_or_else(|| loom_app::studio::stems::bars_to_render(&program));
-    let samples = loom_audio::render(&src, bars, 48000);
-    loom_audio::write_wav(std::path::Path::new(out), &samples, 48000).map_err(|e| e.to_string())?;
+    let samples = loom_audio::render(&src, bars, sr);
+    let format = loom_app::export::write_audio(std::path::Path::new(out), &samples, sr)?;
     let peak = samples.iter().fold(0.0f32, |m, x| m.max(x.abs()));
-    println!("{bars} mesures → {out} ({:.1} s, crête {:.2})", samples.len() as f32 / 2.0 / 48000.0, peak);
+    println!("{bars} mesures → {out} ({:.1} s, crête {:.2}, {format}, {sr} Hz)", samples.len() as f32 / 2.0 / sr as f32, peak);
     Ok(())
 }
 
@@ -199,21 +217,21 @@ fn bake(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
 }
 
 /// `--stems`: every voice to its own WAV in `dir` (the STUDIO's STEMS, from the command line).
-fn render_stems(file: &str, dir: &str, bars: Option<u32>) -> Result<(), String> {
+fn render_stems(file: &str, dir: &str, bars: Option<u32>, sr: u32) -> Result<(), String> {
     let src = read(file)?;
     let program = loom_core::Program::parse(&src);
     if program.voices.is_empty() { return Err(format!("{file} ne contient aucune voix")); }
     let bars = bars.unwrap_or_else(|| loom_app::studio::stems::bars_to_render(&program));
     let dir = std::path::Path::new(dir);
     std::fs::create_dir_all(dir).map_err(|e| format!("impossible de créer le dossier {} : {e}", dir.display()))?;
-    let stems = loom_audio::render_stems(&src, bars, 48000);
+    let stems = loom_audio::render_stems(&src, bars, sr);
     for (voice, samples) in &stems {
         let path = loom_app::studio::stems::stem_path(dir, voice);
-        loom_audio::write_wav(&path, samples, 48000).map_err(|e| format!("{} : {e}", path.display()))?;
+        loom_audio::write_wav(&path, samples, sr).map_err(|e| format!("{} : {e}", path.display()))?;
         let peak = samples.iter().fold(0.0f32, |m, x| m.max(x.abs()));
         println!("  {voice:<12} → {} (crête {peak:.2})", path.display());
     }
-    let seconds = stems.first().map_or(0.0, |(_, s)| s.len() as f32 / 2.0 / 48000.0);
+    let seconds = stems.first().map_or(0.0, |(_, s)| s.len() as f32 / 2.0 / sr as f32);
     println!("{bars} mesures · {} pistes → {} ({seconds:.1} s chacune)", stems.len(), dir.display());
     Ok(())
 }
@@ -240,13 +258,16 @@ mod tests {
 
     #[test]
     fn render_and_stems() {
-        let render = |out: &str, bars, stems| Ok(Command::Render { file: "a.loom".into(), out: out.into(), bars, stems });
+        let render = |out: &str, bars, stems| Ok(Command::Render { file: "a.loom".into(), out: out.into(), bars, stems, format: None, sr: 48_000 });
         assert_eq!(render_args(&["a.loom", "a.wav"]), render("a.wav", None, false));
         assert_eq!(render_args(&["a.loom", "a.wav", "16"]), render("a.wav", Some(16), false));
         assert_eq!(render_args(&["a.loom", "pistes", "--stems"]), render("pistes", None, true));
         assert_eq!(render_args(&["a.loom", "pistes", "--stems", "4"]), render("pistes", Some(4), true));
         assert_eq!(render_args(&["--stems", "a.loom", "pistes", "4"]), render("pistes", Some(4), true));
         assert_eq!(render_args(&["--help"]), Ok(Command::RenderHelp));
+        assert_eq!(render_args(&["a.loom", "a.wav", "16", "--32f", "--sr", "96000"]),
+            Ok(Command::Render { file: "a.loom".into(), out: "a.wav".into(), bars: Some(16), stems: false, format: Some(loom_audio::WavFormat::Float32), sr: 96_000 }));
+        assert!(render_args(&["a.loom", "a.wav", "--sr", "12"]).is_err());
         assert_eq!(parse(&["bake", "a.loom", "a.json"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: None }));
         assert_eq!(parse(&["bake", "a.loom", "a.json", "16"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: Some(16) }));
         assert!(parse(&["bake", "a.loom", "a.json", "0"]).is_err());

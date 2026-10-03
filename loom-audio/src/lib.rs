@@ -19,6 +19,7 @@ pub mod note;
 pub mod sample;
 pub mod seq;
 pub mod tone;
+pub mod wavout;
 #[cfg(feature = "device")]
 mod device;
 #[cfg(feature = "device")]
@@ -28,6 +29,7 @@ pub mod input;
 
 #[cfg(feature = "device")]
 pub use device::Engine;
+pub use wavout::{write_wav_as, WavFormat};
 pub use sample::{load_user_sample, merged_bank, reload_bank, session_sample_count, SampleBank};
 pub use seq::{Channel, Hit, MidiEvent, MidiNote, Sequencer, Status, SCOPE_LEN};
 
@@ -78,26 +80,10 @@ fn render_voice(src: &str, bars: u32, sample_rate: u32, stem: Option<&str>) -> V
     out
 }
 
-/// Write interleaved stereo f32 samples as a 16-bit PCM WAV file.
+/// Write interleaved stereo f32 samples as a WAV file in the current export
+/// format ([`WavFormat::current`]: 24 bits unless chosen otherwise).
 pub fn write_wav(path: &std::path::Path, samples: &[f32], sample_rate: u32) -> std::io::Result<()> {
-    let data_len = (samples.len() * 2) as u32;
-    let mut b = Vec::with_capacity(44 + data_len as usize);
-    b.extend_from_slice(b"RIFF");
-    b.extend_from_slice(&(36 + data_len).to_le_bytes());
-    b.extend_from_slice(b"WAVEfmt ");
-    b.extend_from_slice(&16u32.to_le_bytes());
-    b.extend_from_slice(&1u16.to_le_bytes()); // PCM
-    b.extend_from_slice(&2u16.to_le_bytes()); // stereo
-    b.extend_from_slice(&sample_rate.to_le_bytes());
-    b.extend_from_slice(&(sample_rate * 4).to_le_bytes()); // byte rate
-    b.extend_from_slice(&4u16.to_le_bytes()); // block align
-    b.extend_from_slice(&16u16.to_le_bytes()); // bits
-    b.extend_from_slice(b"data");
-    b.extend_from_slice(&data_len.to_le_bytes());
-    for s in samples {
-        b.extend_from_slice(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
-    }
-    std::fs::write(path, b)
+    wavout::write_wav_as(path, samples, sample_rate, WavFormat::current())
 }
 
 #[cfg(test)]

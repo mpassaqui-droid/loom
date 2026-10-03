@@ -4,6 +4,7 @@
 pub mod develop;
 pub mod dictee;
 pub mod ear;
+pub mod export;
 pub mod generate;
 pub mod grid;
 pub mod hum;

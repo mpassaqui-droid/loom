@@ -300,35 +300,22 @@ where
         .map_err(|e| e.to_string())
 }
 
-/// Stream stereo f32 blocks into a 16-bit WAV, fixing the header sizes at the end.
+/// Stream stereo f32 blocks into a WAV (the current export format), fixing
+/// the header sizes at the end.
 fn write_wav_stream(file: std::fs::File, sample_rate: u32, rx: Receiver<Vec<f32>>) -> std::io::Result<()> {
     use std::io::{BufWriter, Seek, SeekFrom, Write};
+    let mut enc = crate::wavout::Encoder::new(crate::WavFormat::current());
     let mut w = BufWriter::new(file);
-    let header = |data_len: u32| {
-        let mut h = Vec::with_capacity(44);
-        h.extend_from_slice(b"RIFF");
-        h.extend_from_slice(&(36 + data_len).to_le_bytes());
-        h.extend_from_slice(b"WAVEfmt ");
-        h.extend_from_slice(&16u32.to_le_bytes());
-        h.extend_from_slice(&1u16.to_le_bytes());
-        h.extend_from_slice(&2u16.to_le_bytes());
-        h.extend_from_slice(&sample_rate.to_le_bytes());
-        h.extend_from_slice(&(sample_rate * 4).to_le_bytes());
-        h.extend_from_slice(&4u16.to_le_bytes());
-        h.extend_from_slice(&16u16.to_le_bytes());
-        h.extend_from_slice(b"data");
-        h.extend_from_slice(&data_len.to_le_bytes());
-        h
-    };
-    w.write_all(&header(0))?;
+    w.write_all(&enc.format.header(sample_rate, 0))?;
     let mut data_len: u32 = 0;
+    let mut bytes = Vec::new();
     for block in rx {
-        for s in &block {
-            w.write_all(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes())?;
-        }
-        data_len = data_len.saturating_add(block.len() as u32 * 2);
+        bytes.clear();
+        for s in &block { enc.push(*s, &mut bytes); }
+        w.write_all(&bytes)?;
+        data_len = data_len.saturating_add(bytes.len() as u32);
     }
     w.seek(SeekFrom::Start(0))?;
-    w.write_all(&header(data_len))?;
+    w.write_all(&enc.format.header(sample_rate, data_len))?;
     w.flush()
 }
