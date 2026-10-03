@@ -94,6 +94,7 @@ fn fichiers() -> (Option<PathBuf>, Option<PathBuf>) {
 pub fn charger() -> Etat {
     let (principal, double) = fichiers();
     let mut e = principal.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).map(|t| Etat::lire(&t)).unwrap_or_default();
+    if let Some(p) = principal.as_ref().filter(|p| p.is_file()) { proteger(p); }
     let autre = double.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| t.trim().parse::<u64>().ok());
     let debut = [e.essai, autre].into_iter().flatten().min().unwrap_or_else(maintenant);
     if e.essai != Some(debut) || autre != Some(debut) {
@@ -103,17 +104,23 @@ pub fn charger() -> Etat {
     e
 }
 
+/// La clé : lisible par son propriétaire seulement.
+fn proteger(p: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = p;
+}
+
 fn enregistrer(e: &Etat) -> std::io::Result<()> {
     let (principal, double) = fichiers();
     if let Some(p) = principal {
         if let Some(d) = p.parent() { std::fs::create_dir_all(d)?; }
         std::fs::write(&p, e.ecrire())?;
-        // la clé : lisible par son propriétaire seulement
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600))?;
-        }
+        proteger(&p);
     }
     if let (Some(p), Some(t)) = (double, e.essai) {
         if let Some(d) = p.parent() { std::fs::create_dir_all(d)?; }
