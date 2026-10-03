@@ -690,7 +690,7 @@ diff --check clean. WAV natif rejoué par ffprobe (pcm_s16le mono 44,1 kHz,
 > corpus de parité. Rust = autorité (algorithme exact défini ici), JS = repli.
 > Ordre d'effort croissant, chaque pierre committée/poussée seule.
 
-### Pierre A — sources riches (niveau oscillateur + couches) + inserts note
+### [x] Pierre A — sources riches (niveau oscillateur + couches) + inserts note ✅ (03/10/2026)
 Remplacé le noyau `wave(w,p)`+sub/double par un **générateur riche** dans
 `note_sample` (Rust autorité, miroir JS op-pour-op `Math.fround`) :
 - `| fm RATIO INDEX FB` — FM : modulateur `fm_ph` à `ratio·f0`, feedback
@@ -717,6 +717,9 @@ Remplacé le noyau `wave(w,p)`+sub/double par un **générateur riche** dans
 - `| pluck` (Karplus-Strong, tampon par note) reporté en Pierre B (taille).
 - Sérialisation `SynthV1` étendue : fm/partials/wt/pwm/sync/bell/noise/am/ring/
   drive/fold/crush/redux. Parité : corpus RENDER2" (9+ pièces, une par source).
+- Review (03/10/2026) : miroir JS `noteSample` étendu op-pour-op (renderPCM et
+  renderFX partagent `richSt`/`noteCtx`), wasm régénéré (wasm-bindgen 0.2.128),
+  6 pièces RENDER2 couvrant les 13 sources/inserts. RENDER2 16/16, WAV 16/16.
 
 ### Pierre B — drums synthétisés (déterministes, mono)
 - `Event.is_drum` + `voice` (kick/bd, snare/sd, hat/hh, clap/cp) → rendu :

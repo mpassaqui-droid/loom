@@ -255,6 +255,13 @@ const rf_pieces = {
   'warmth 0.9 sur saw fort': 'warmth: 0.9\nkey: c minor\nlead: 1 3 1 5 3 | saw | gain 1.6 | env 0.01 0.1 0.9 0.05',
   'pile complète: fdn+room+echo+phaser+duck+warmth': 'duck: 0.6\nwarmth: 0.5\nroom: fdn 0.84 4200\nkick: x . x .\nkey: e minor\nlead: 1 3 5 1 | saw | reverb 0.4 | delay 0.3 | echo 2 0.3 | phaser 0.4 | unison 2 | detune 12',
   'drums seuls (silence attendu)': 'kick: x . x .\nhat: x x x x',
+  // P6-3A sources riches + inserts de note (sans drums)
+  'fm ratio 2 index 3 feedback': 'key: c major\nlead: 1 3 5 1 | saw | fm 2 3 0.5 | env 0.01 0.05 0.9 0.02',
+  'wt organ + partials': 'key: c major\nlead: 1 3 | wt organ | env 0.01 0.05 0.9 0.02\npad: 5 1 | sine | partials 1 0.5 0.3 0.2 | env 0.01 0.05 0.9 0.02',
+  'pwm + sync en unison': 'key: a minor\nlead: 1 5 3 1 | square | pwm 0.6 | unison 3 | detune 10 | env 0.01 0.05 0.8 0.02\nbass: 1 . 5 . | saw | sync 3 | env 0.01 0.05 0.8 0.02',
+  'noise air + am + ring': 'key: c major\nlead: 1 3 5 1 | saw | noise 0.4 | am 6 | env 0.01 0.05 0.9 0.02\npad: 5 . 3 . | sine | ring 220 | env 0.01 0.05 0.9 0.02',
+  'drive fold crush redux': 'key: e minor\nlead: 1 3 5 1 | saw | drive 0.7 | fold 0.5 | crush 6 | redux 0.3 | lp 2400 q 2 | env 0.01 0.05 0.9 0.02',
+  'bell modal + echo': 'key: c major\nlead: 1 5 3 1 | sine | bell | echo 2 0.3 | env 0.001 0.2 0.6 0.3',
 };
 let rd2_total = 0, rd2_bad = 0, rd2_worst = 0, wav_bad = 0;
 for (const [name, src] of Object.entries(rf_pieces)) {

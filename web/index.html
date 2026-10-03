@@ -7210,25 +7210,167 @@ const THEME_AA={
     return F(F(v2)-F(high));  // notch
   };
   const undenormal=x=>Math.abs(x)<1e-18?0:x;
-  // One sample of the note: oscillators+layers into the SVF. `c` is the note
-  // ctx {nUni,uni[],subPh,dubPh,ic1,ic2}; `st` the resolved params
-  // {ft,q,c0,c1,det,sub,dub}. Advances c. Returns the (unscaled) fout.
+  // P6-3A rich sources & note inserts: op-for-op mirror of render.rs
+  // (noise_value / bell_value / partials_value / wt_value / unison_fk /
+  // osc_value / apply_inserts). Rust is the authority.
+  const WT_AMPS={
+    organ:[1,1,1,1,1,0.9,0.7,0.5,0.3],
+    warm:[1,0.5,0.25,0.15,0.1,0.06,0.03,0.02,0.01],
+    rich:[1,0.9,0.8,0.7,0.6,0.5,0.4,0.3,0.2],
+    soft:[1,0.5,0.4,0.3,0.2,0.15,0.1,0.08,0.05],
+  };
+  const wtTable=name=>{
+    if(name==null)return null;
+    const a=WT_AMPS[String(name).toLowerCase()];
+    if(!a)return null;
+    const amps=a.map(x=>F(x));
+    let sum=0;for(const x of amps)sum=F(sum+x);
+    return{amps,sum};
+  };
+  const BELL_R=[1,1.96,2.92,4.2].map(x=>F(x));
+  const BELL_A=[1,0.6,0.3,0.15].map(x=>F(x));
+  const BELL_TAU=[1.5,1.2,1,0.8].map(x=>F(x));
+  const bellValue=(t,f)=>{
+    let v=0;
+    for(let k=0;k<4;k++){
+      const env=F(F(BELL_A[k])*F(Math.exp(F(F(-t)/BELL_TAU[k]))));
+      v=F(v+F(env*F(sinPi(F(F(BELL_R[k]*F(f))*t)))));
+    }
+    return v;
+  };
+  const partialsValue=(arr,ph)=>{
+    let v=0;
+    for(let i=0;i<arr.length;i++)v=F(v+F(arr[i]*F(sinPi(F((i+1)*ph)))));
+    return v;
+  };
+  const wtValue=(tab,ph)=>{
+    let v=0;
+    for(let i=0;i<tab.amps.length;i++)v=F(v+F(tab.amps[i]*F(sinPi(F((i+1)*ph)))));
+    return F(v/Math.max(F(1e-6),tab.sum));
+  };
+  const noiseSeed=start=>((start>>>0)+0x9E3779B9)>>>0;
+  const noiseValue=(c,sr)=>{
+    let s=c.ns>>>0;
+    s=(s^(s<<13))>>>0;
+    s=(s^(s>>>17))>>>0;
+    s=(s^(s<<5))>>>0;
+    c.ns=s;
+    const white=F(F((s>>>16)*F(1/32768))-1);
+    const alpha=F(1-F(Math.exp(F(F(F(-2*PI_F)*6000)/sr))));
+    c.lp=F(c.lp+F(alpha*F(white-c.lp)));
+    return F(white-c.lp);
+  };
+  const uniFk=(st,nUni,k,f0)=>{
+    const ratio=nUni>1?F(Math.pow(2,F(F(F(F(k*2)/(nUni-1))-1)*F(st.det/1200)))):1;
+    return F(F(f0)*F(ratio));
+  };
+  // One unison voice: reads the phase BEFORE advancing it, except FM which
+  // advances the carrier first and reads the NEW phase (as render.rs).
+  const oscValue=(c,st,k,fk,sr,wf)=>{
+    if(st.fm){
+      const ratio=st.fm[0],index=st.fm[1],fb=st.fm[2];
+      const m=F(F(sinPi(c.fmPh))+F(fb*c.fmPrev));
+      c.fmPrev=m;
+      c.uni[k]=wrapP(F(c.uni[k]+F(F(fk+F(index*m))/sr)));
+      c.fmPh=wrapP(F(c.fmPh+F(F(ratio*fk)/sr)));
+      return wf(c.uni[k]);
+    }
+    const ph=c.uni[k];
+    const mnew=wrapP(F(ph+F(fk/sr)));
+    const wrapped=mnew<ph;
+    let v;
+    if(st.sync>0){
+      const s=wrapped?mnew:wrapP(F(c.slave[k]+F(F(fk*st.sync)/sr)));
+      c.slave[k]=s;
+      v=wf(s);
+    }else if(st.wt){v=wtValue(st.wt,ph);}
+    else if(st.partials){v=partialsValue(st.partials,ph);}
+    else if(st.pwm>0){
+      const pw=F(F(0.12)+F(st.pwm*F(0.5+F(0.5*F(sinPi(c.pwmPh))))));
+      v=ph<pw?1:-1;
+    }else{v=wf(ph);}
+    c.uni[k]=mnew;
+    return v;
+  };
+  // Note inserts after the filter: drive, fold, crush (Rust round = half away
+  // from zero), redux (sample-hold).
+  const applyInserts=(c,st,i,x)=>{
+    if(st.drive>0){
+      const g=F(1+F(4*st.drive));
+      const comp=F(1/F(1+F(F(0.6)*st.drive)));
+      x=F(F(Math.tanh(F(x*g)))*comp);
+    }
+    if(st.fold>0){
+      let q=F(x+1)%4;
+      if(q<0)q=F(q+4);
+      const folded=F(1-Math.abs(F(q-2)));
+      x=F(F(F(1-st.fold)*x)+F(st.fold*folded));
+    }
+    if(st.crushScale!=null){
+      const v=F(x*st.crushScale);
+      x=F(F(Math.sign(v)*Math.round(Math.abs(v)))/st.crushScale);
+    }
+    if(st.redux>1){
+      if(i%st.redux===0)c.held=x;
+      x=c.held;
+    }
+    return x;
+  };
+  // Resolve the P6-3A fields of a note (`synth` from schedule_bar_json, already
+  // clamped like NoteParam::of except crush/redux/wt which are derived here).
+  const richSt=(st,st0)=>{
+    st.fm=Array.isArray(st0.fm)?st0.fm.map(x=>F(x)):null;
+    st.partials=Array.isArray(st0.partials)?st0.partials.map(x=>F(x)):null;
+    st.wt=wtTable(st0.wt);
+    st.pwm=F(st0.pwm||0);
+    st.sync=F(st0.sync||0);
+    st.bell=!!st0.bell;
+    st.noise=F(st0.noise||0);
+    st.am=F(st0.am||0);
+    st.ring=F(st0.ring||0);
+    st.drive=F(st0.drive||0);
+    st.fold=F(st0.fold||0);
+    st.crushScale=st0.crush==null?null:F(Math.pow(2,Math.max(1,st0.crush)-1));
+    const rx=F(st0.redux||0);
+    st.redux=Math.round(F(1+F(20*F(Math.min(1,Math.max(0,rx))))));
+    return st;
+  };
+  const noteCtx=(nUni,start)=>{
+    const c={nUni,uni:[],subPh:0,dubPh:0,ic1:0,ic2:0,
+      fmPh:0,fmPrev:0,pwmPh:0,slave:[],ns:noiseSeed(start),lp:0,amPh:0,ringPh:0,held:0};
+    for(let k2=0;k2<nUni;k2++){c.uni.push(F(k2/(nUni+1)));c.slave.push(0);}
+    return c;
+  };
+  // One sample of the note: rich oscillators + layers into the SVF then the
+  // note inserts. `c` is the note ctx (noteCtx), `st` the resolved params
+  // {ft,q,c0,c1,det,sub,dub,+richSt}. Advances c. Returns the (unscaled) fout.
   const noteSample=(c,st,wf,f0,dur,i,sr)=>{
     const t=F(i/sr);
     let out=0;
-    for(let k=0;k<c.nUni;k++){
-      const ratio=c.nUni>1?Math.pow(2,F(F(F(F(k*2)/(c.nUni-1))-1)*F(st.det/1200))):1;
-      const fk=F(F(f0)*F(ratio));
-      const ph=c.uni[k];
-      out=F(out+wf(ph));
-      c.uni[k]=wrapP(F(ph+F(fk/sr)));
+    if(st.bell){
+      out=bellValue(t,f0);
+      for(let k=0;k<c.nUni;k++){
+        const fk=uniFk(st,c.nUni,k,f0);
+        c.uni[k]=wrapP(F(c.uni[k]+F(fk/sr)));
+      }
+    }else{
+      for(let k=0;k<c.nUni;k++){
+        const fk=uniFk(st,c.nUni,k,f0);
+        out=F(out+oscValue(c,st,k,fk,sr,wf));
+      }
+      out=F(F(out)/c.nUni);
     }
-    out=F(F(out)/c.nUni);
+    if(st.pwm>0)c.pwmPh=wrapP(F(c.pwmPh+F(F(F(f0)/4)/sr)));
+    if(st.noise>0)out=F(out+F(st.noise*noiseValue(c,sr)));
     if(st.sub>0){out=F(out+F(st.sub*sinPi(c.subPh)));c.subPh=wrapP(F(c.subPh+F(F(F(f0)/2)/sr)));}
     if(st.dub>0){out=F(out+F(st.dub*wf(c.dubPh)));c.dubPh=wrapP(F(c.dubPh+F(F(F(f0)*2)/sr)));}
-    if(st.ft<0)return out;
-    const fc=st.c1===st.c0?st.c0:F(F(st.c0)+F(F(F(st.c1)-F(st.c0))*Math.min(1,F(F(t)/dur))));
-    return svf(out,fc,st.q,st.ft,c,sr);
+    if(st.am>0){out=F(out*F(0.5+F(0.5*F(sinPi(c.amPh)))));c.amPh=wrapP(F(c.amPh+F(st.am/sr)));}
+    if(st.ring>0){out=F(out*F(sinPi(c.ringPh)));c.ringPh=wrapP(F(c.ringPh+F(st.ring/sr)));}
+    if(st.ft>=0){
+      const fc=st.c1===st.c0?st.c0:F(F(st.c0)+F(F(F(st.c1)-F(st.c0))*Math.min(1,F(F(t)/dur))));
+      out=svf(out,fc,st.q,st.ft,c,sr);
+    }
+    return applyInserts(c,st,i,out);
   };
   // Biquad (DF1, RBJ coefficients, native denormal guard on y1).
   const bqSet=(bq,kind,sr,freq,q)=>{
@@ -7296,6 +7438,7 @@ const THEME_AA={
         st.det=Math.max(0,st0.detune||0);
         st.sub=F(Math.min(1,Math.max(0,st0.sub||0)));
         st.dub=F(Math.min(1,Math.max(0,st0.double||0)));
+        richSt(st,st0);
         const nUni=Math.max(1,st0.unison||0);
         const env=st0.env?st0.env:[0.003,0.015,0.92,0.05];
         const dur=F(F(e.dur)*sec);
@@ -7305,8 +7448,7 @@ const THEME_AA={
         const start=frame+Math.floor(F(F(F(e.phase)*sec)*sr));
         const amp=F(F(e.gain)*(e.vel==null?1:e.vel));
         if(!(amp>0)||isNaN(amp))continue;
-        const c={nUni,uni:[],subPh:0,dubPh:0,ic1:0,ic2:0};
-        for(let k2=0;k2<nUni;k2++)c.uni.push(F(k2/(nUni+1)));
+        const c=noteCtx(nUni,start);
         const wf=p=>wave(e.wave,p);
         for(let i=0;i<n;i++){
           const ix=start+i;
@@ -7363,6 +7505,7 @@ const THEME_AA={
         st.det=Math.max(0,st0.detune||0);
         st.sub=F(Math.min(1,Math.max(0,st0.sub||0)));
         st.dub=F(Math.min(1,Math.max(0,st0.double||0)));
+        richSt(st,st0);
         const nUni=Math.max(1,st0.unison||0);
         const env=st0.env?st0.env:[0.003,0.015,0.92,0.05];
         const dur=F(F(e.dur)*sec);
@@ -7394,8 +7537,7 @@ const THEME_AA={
         let echoTail=0;
         if(echo){const rp=echo.fb>0?Math.ceil(Math.log(1e-3)/Math.log(echo.fb)):0;echoTail=Math.min(30,echo.delayS*(rp+1));}
         const nMax=Math.ceil(F(F(F(F(gate)+F(rel))+F(echoTail))*sr));
-        const c={nUni,uni:[],subPh:0,dubPh:0,ic1:0,ic2:0};
-        for(let k2=0;k2<nUni;k2++)c.uni.push(F(k2/(nUni+1)));
+        const c=noteCtx(nUni,start);
         const wf=p=>wave(e.wave,p);
         for(let i=0;i<nMax;i++){
           const ix=start+i;
