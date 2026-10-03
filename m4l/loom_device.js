@@ -6,14 +6,21 @@
 // enregistrement du fichier (éditeur Loom, Ctrl+S) réécrit le clip : on code,
 // Live joue. Le moteur est le même que l'appli Loom (loom bake), au bit près.
 //
-// Messages : fichier <chemin> · code <texte> · voix <nom> · cuire · bang (init)
-// Sorties  : 0 = texte d'état pour l'interface · 1 = OSC de contrôle (tests)
+// On peut aussi coder DANS Live : l'éditeur du device (Tab ou ▶ pour jouer).
+// Le code est celui du morceau entier, partagé par tous les devices Loom du set
+// (Dict « loom_projet ») : chaque piste recuit sa voix. Il est sauvé avec le set
+// (pattr), et écrit dans le fichier .loom s'il y en a un de lié.
+//
+// Messages : fichier <chemin> · code <texte> · editeur <texte> · voix <nom> · cuire · bang (init)
+// Sorties  : 0 = texte d'état · 1 = OSC de contrôle (tests) · 2 = pattr chemin
+//            3 = pattr code · 4 = l'éditeur (set <texte>)
 
 autowatch = 0;
 inlets = 1;
-outlets = 3;
+outlets = 5;
 
-var etat = { fichier: '', source: '', lu: null, voix: '', pret: false, tempoFait: false };
+var PROJET = 'loom_projet';
+var etat = { fichier: '', source: '', lu: null, voix: '', pret: false, tempoFait: false, projet: null };
 var veille = null;
 
 function dire(t) {
@@ -31,13 +38,14 @@ function bang() {
             return;
         }
     }
-    dire(etat.fichier ? 'Loom prêt · ' + etat.fichier : 'Loom prêt · glisse un fichier .loom');
+    dire(etat.fichier ? 'Loom prêt · ' + etat.fichier : 'Loom prêt · écris ton code, Tab pour jouer');
     if (!veille) {
         veille = new Task(surveille, this);
         veille.interval = 500;
         veille.repeat();
     }
     surveille();   // chemin restauré avec le set avant que le moteur soit prêt
+    if (etat.source && !etat.fichier) cuire();   // code restauré avec le set
 }
 
 function fichier() {
@@ -59,23 +67,77 @@ function code() {
     cuire();
 }
 
+// textedit (outputmode 1) : le texte arrive en un seul symbole, parfois précédé de « text »
+function texteDe(args) {
+    var a = arrayfromargs(args);
+    if (a.length > 1 && a[0] === 'text') a.shift();
+    return a.join(' ');
+}
+
+// l'éditeur du device : on joue ce code, on le partage avec les autres devices,
+// on le sauve avec le set et dans le fichier lié
+function editeur() {
+    var t = texteDe(arguments);
+    if (!t.replace(/\s/g, '')) return;
+    etat.source = t;
+    outlet(3, t);
+    var d = new Dict(PROJET);
+    etat.projet = Date.now();
+    d.set('version', etat.projet);
+    d.set('code', t);
+    if (etat.fichier) ecritFichier(t);
+    cuire();
+}
+
+// le code sauvé avec le set (pattr) : rendu à l'éditeur, joué quand le moteur est prêt
+function restaurecode() {
+    var t = texteDe(arguments);
+    if (!t || t === '0' || etat.fichier) return;
+    etat.source = t;
+    outlet(4, 'set', t);
+    if (etat.pret) cuire();
+}
+
+function ecritFichier(t) {
+    var f = new File(etat.fichier, 'write', 'TEXT');
+    if (!f.isopen) { dire('écriture impossible : ' + etat.fichier); return; }
+    f.eof = 0;
+    f.writestring(t);
+    f.close();
+    etat.lu = t;    // c'est nous : pas de recuisson en double au prochain tour
+}
+
 function voix() {
     etat.voix = arrayfromargs(arguments).join(' ');
     cuire();
 }
 
 function anything() {
-    // commandes OSC venues de udpreceive : /loom/code, /loom/fichier, /loom/voix, /loom/cuire
+    // commandes OSC venues de udpreceive (build de test) : /loom/code, /loom/fichier, /loom/voix, /loom/editeur, /loom/cuire
     var m = messagename.replace(/^\/loom\//, '');
     var a = arrayfromargs(arguments);
     if (m === 'code') code.apply(this, a);
     else if (m === 'fichier') fichier.apply(this, a);
     else if (m === 'voix') voix.apply(this, a);
+    else if (m === 'editeur') editeur.apply(this, a);
     else if (m === 'cuire') cuire();
 }
 
 function surveille() {
-    if (!etat.fichier || !etat.pret) return;
+    if (!etat.pret) return;
+    // un autre device Loom du set a joué du code : on le suit
+    var d = new Dict(PROJET), v = d.get('version');
+    if (v !== null && v !== undefined && v !== etat.projet) {
+        etat.projet = v;
+        var c = String(d.get('code') || '');
+        if (c && c !== etat.source) {
+            etat.source = c;
+            outlet(3, c);
+            outlet(4, 'set', c);
+            cuire();
+        }
+    }
+    if (!etat.fichier) return;
     var f = new File(etat.fichier, 'read');
     if (!f.isopen) {
         if (etat.lu !== false) dire('introuvable : ' + etat.fichier);   // une fois, pas toutes les 500 ms
@@ -90,6 +152,7 @@ function surveille() {
     if (texte === etat.lu) return;
     etat.lu = texte;
     etat.source = texte;
+    outlet(4, 'set', texte);
     cuire();
 }
 
@@ -173,7 +236,12 @@ function clipLoom(piste, longueur, voix) {
             }
         } else if (vide < 0) vide = s;
     }
-    if (vide < 0) { dire('aucun emplacement de clip libre sur la piste'); return null; }
+    if (vide < 0) {
+        // piste pleine (un set cuit par sections) : une scène de plus, en bas, pour le clip Loom
+        new LiveAPI('live_set').call('create_scene', -1);
+        vide = piste.api.getcount('clip_slots') - 1;
+        if (vide < n) { dire('aucun emplacement de clip libre sur la piste'); return null; }
+    }
     var libre = new LiveAPI(piste.api.unquotedpath + ' clip_slots ' + vide);
     libre.call('create_clip', longueur);
     var clip = new LiveAPI(libre.unquotedpath + ' clip');

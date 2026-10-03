@@ -80,12 +80,12 @@ def boite(id, classe, rect, texte=None, ins=1, outs=0, types=None, **attrs):
 def patch(test=False):
     boites = [
         boite('obj-1', 'newobj', [20, 20, 90, 22], 'live.thisdevice', 1, 3, ['bang', 'int', 'int']),
-        boite('obj-2', 'v8.codebox', [20, 200, 420, 200], None, 1, 3, ['', '', ''],
+        boite('obj-2', 'v8.codebox', [20, 200, 420, 200], None, 1, 5, ['', '', '', '', ''],
               code=code(), filename='none', fontname='Menlo', fontsize=10.0, fontface=0,
               saved_object_attributes={'parameter_enable': 0}),
         boite('obj-3', 'live.drop', [140, 20, 160, 60], None, 1, 1, [''],
-              presentation=1, presentation_rect=[6, 6, 150, 56],
-              legend='Glisse un fichier .loom',
+              presentation=1, presentation_rect=[392, 6, 302, 30],
+              legend='fichier .loom (optionnel)',
               saved_attribute_attributes={'valueof': {'parameter_longname': 'LOOM fichier',
                                                       'parameter_shortname': 'fichier',
                                                       'parameter_type': 4}},
@@ -94,8 +94,8 @@ def patch(test=False):
         boite('obj-5', 'newobj', [260, 100, 110, 22], 'udpreceive 7402', 1, 1, ['']),
         boite('obj-6', 'newobj', [20, 440, 70, 22], 'prepend set', 1, 1, ['']),
         boite('obj-7', 'comment', [20, 480, 300, 40], 'Loom', 1, 0, None,
-              presentation=1, presentation_rect=[162, 6, 230, 56], fontsize=11.0,
-              linecount=3, textcolor=[0.9, 0.9, 0.9, 1.0]),
+              presentation=1, presentation_rect=[100, 147, 286, 18], fontsize=9.0,
+              linecount=1, textcolor=[0.9, 0.9, 0.9, 1.0]),
         boite('obj-8', 'newobj', [200, 440, 150, 22], 'udpsend 127.0.0.1 7401', 1, 0),
         # le chemin du fichier, sauvé avec le set (paramètre « blob », stocké seulement)
         boite('obj-11', 'newobj', [200, 480, 140, 22], 'pattr loomfichier', 1, 3, ['', '', ''],
@@ -105,7 +105,31 @@ def patch(test=False):
                                                       'parameter_type': 3, 'parameter_invisible': 1}}),
         boite('obj-12', 'newobj', [200, 520, 100, 22], 'prepend restaure', 1, 1, ['']),
         # les visuels : piano-roll dans le device, un clic ouvre la scène
-        v8ui('obj-13', [460, 200, 388, 96], 'mini', [6, 66, 388, 96]),
+        v8ui('obj-13', [460, 200, 302, 123], 'mini', [392, 40, 302, 123]),
+        # l'éditeur : on code dans Live. Tab (tabmode) ou ▶ joue, Retour va à la ligne
+        boite('obj-17', 'textedit', [20, 560, 380, 137], None, 1, 4, ['', 'int', '', ''],
+              presentation=1, presentation_rect=[6, 6, 380, 137],
+              keymode=0, outputmode=1, tabmode=1, wordwrap=0, lines=0, autoscroll=1,
+              fontname='Menlo', fontsize=10.0, fontface=0, border=0.0, rounded=0.0,
+              bgcolor=[0.043, 0.059, 0.043, 1.0], textcolor=[0.616, 1.0, 0.541, 1.0],
+              parameter_enable=0),
+        boite('obj-18', 'newobj', [20, 710, 100, 22], 'prepend editeur', 1, 1, ['']),
+        boite('obj-19', 'live.text', [420, 560, 90, 18], None, 1, 2, ['', ''],
+              presentation=1, presentation_rect=[6, 147, 90, 18], mode=0,
+              text='▶ jouer (Tab)', texton='▶ jouer (Tab)', parameter_enable=1, varname='jouer',
+              saved_attribute_attributes={'valueof': {'parameter_longname': 'jouer',
+                                                      'parameter_shortname': 'jouer',
+                                                      'parameter_type': 2,
+                                                      'parameter_enum': ['val1', 'val2'],
+                                                      'parameter_mmax': 1}}),
+        boite('obj-20', 'newobj', [420, 590, 30, 22], 't b', 1, 1, ['bang']),
+        # le code, sauvé avec le set
+        boite('obj-21', 'newobj', [200, 600, 140, 22], 'pattr loomcode', 1, 3, ['', '', ''],
+              parameter_enable=1,
+              saved_attribute_attributes={'valueof': {'parameter_longname': 'loomcode',
+                                                      'parameter_shortname': 'loomcode',
+                                                      'parameter_type': 3, 'parameter_invisible': 1}}),
+        boite('obj-22', 'newobj', [200, 640, 110, 22], 'prepend restaurecode', 1, 1, ['']),
         boite('obj-14', 'newobj', [460, 310, 60, 22], 'pcontrol', 1, 1, ['']),
         boite('obj-15', 'newobj', [460, 340, 80, 22], 'p scène', 1, 0, None, patcher=scene()),
         boite('obj-16', 'newobj', [560, 310, 90, 22], 'prepend /loom/vue', 1, 1, ['']),
@@ -122,6 +146,10 @@ def patch(test=False):
         ('obj-9', 0, 'obj-10', 0),
         ('obj-2', 2, 'obj-11', 0), ('obj-11', 0, 'obj-12', 0), ('obj-12', 0, 'obj-2', 0),
         ('obj-13', 0, 'obj-14', 0), ('obj-14', 0, 'obj-15', 0),
+        ('obj-17', 0, 'obj-18', 0), ('obj-18', 0, 'obj-2', 0),
+        ('obj-19', 0, 'obj-20', 0), ('obj-20', 0, 'obj-17', 0),
+        ('obj-2', 3, 'obj-21', 0), ('obj-21', 0, 'obj-22', 0), ('obj-22', 0, 'obj-2', 0),
+        ('obj-2', 4, 'obj-17', 0),
         ('obj-13', 1, 'obj-16', 0), ('obj-16', 0, 'obj-8', 0),
     ]
     boites = [b for b in boites if b['id'] != 'obj-6']
@@ -131,7 +159,7 @@ def patch(test=False):
         hors = ('obj-5', 'obj-8', 'obj-16')
         boites = [b for b in boites if b['id'] not in hors]
         lignes = [l for l in lignes if l[0] not in hors and l[2] not in hors]
-    return amxd.patcher(boites, lignes, 'Loom', largeur=400.0)
+    return amxd.patcher(boites, lignes, 'Loom', largeur=700.0)
 
 
 if __name__ == '__main__':

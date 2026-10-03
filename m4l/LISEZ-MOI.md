@@ -23,10 +23,18 @@ une scène par section. Lance les scènes de haut en bas. Pour le modifier, glis
 2. Nomme la piste comme une voix de ton morceau : `kick`, `bass`, `pad`…
    (`Loom kick` marche aussi).
 3. Pose le device **Loom** sur la piste, avant l'instrument.
-4. Glisse ton fichier `.loom` sur le device.
+4. Écris ton code dans l'éditeur du device, puis **Tab** (ou **▶ jouer**).
+
+Le code est celui de tout le morceau, partagé par tous les devices Loom du set :
+écris-le sur n'importe quelle piste, chaque piste cuit sa voix. Il est sauvé avec
+le set. Une erreur garde l'ancien clip : la musique ne s'arrête pas.
+
+Tu préfères ton éditeur ? Glisse un fichier `.loom` sur la zone « fichier » :
+le device suit ses enregistrements, et l'éditeur du device écrit dedans.
 
 Le device écrit un clip « Loom · kick » dans la piste, de la longueur du morceau
-(`song:`), en boucle. Lance-le comme n'importe quel clip.
+(`song:`), en boucle. Lance-le comme n'importe quel clip. Si la piste n'a plus
+d'emplacement libre, il ajoute une scène en bas.
 
 ## Voir
 
@@ -76,7 +84,9 @@ Write music in Loom, Live plays it. The device embeds Loom's engine (the same as
 app, compiled to WebAssembly), so Live plays the same notes at the same time, sample-accurate (your Live instruments make the sound).
 
 1. Make a MIDI track with an instrument, name it after one of your voices (`kick`, `bass`…).
-2. Put **Loom** before the instrument and drop your `.loom` file on it.
+2. Put **Loom** before the instrument, write your code in its editor, press **Tab**.
+   The code is the whole song, shared by every Loom device in the set and saved with it.
+   You can also link a `.loom` file and use any editor.
 3. It writes a looping clip of the whole song. Save the file: the clip is rebuilt in
    about half a second while Live keeps playing. A code error keeps the previous clip.
 
