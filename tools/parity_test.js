@@ -100,6 +100,7 @@ const onsets = arr => { const m = {}; for (const e of arr) (m[e.voice] || (m[e.v
   const o = {}; for (const v in m) o[v] = [...m[v]].sort((a, b) => a - b); return o; };
 
 const pieces = {
+  'courbes + auto: (pas des voix)': 'send: rev reverb hall\nauto: master 0..1@exp..1..0 over 8\nauto: send rev 0..0.8\nkey: c minor\nlead: 1 3 5 3 | lp 200..4000@exp..800 | over 4 | send rev 0.3\nkick: x . x .',
   'generators+structure': 'seed: 7\nbpm: 120\nsong: a*2 b*2\nkick: e(3,8)\nhat: ca(110,16)\nlead: walk(8) | in a\nmel@b: drunk(16)',
   'poly+jux+off+microtonal': "seed: 3\nkey: c 0 1.5 3 5 6.5 8 10\nfil: 1 4 6 3 5 1' | poly 13\nm: 1 2 3 | jux rev | off 2",
   'meter composé 2+2+3/8': 'seed: 4\nmeter: 2+2+3/8\nlead: 1 3 5 1\' 7 5 3 4\nkick: x . . x . . x .\nhat: x x x x x x x x',
@@ -244,6 +245,7 @@ const an_perfect = an_bad === 0;
 // Rust computes in f32; the JS mirror frounds every feedback/phase state, so the
 // samples should agree to ~1e-6..1e-3 (a Math.sin/tan/pow last-ulp is possible).
 const rd_pieces = {
+  'courbe à points sur lp': 'key: a minor\nlead: 1 5 3 1 | square | lp 300..5000@exp..900@smooth q 3 | env 0.01 0.2 0.6 0.1',
   'sine + env ADSR': 'key: c major\nlead: 1 3 5 1 5 3 1 | sine | env 0.01 0.15 0.8 0.3',
   'square + lp balayé': 'key: a minor\nlead: 1 5 3 1 | square | lp 300..4000 q 3 | env 0.01 0.2 0.6 0.1',
   'saw + hp q élevé': 'key: c major\nlead: 1 2 3 5 3 2 | saw | hp 500 q 4',

@@ -86,6 +86,7 @@ fn synth_v1(s: &loom_core::Synth) -> SynthV1 {
     let cutoff = match s.cutoff {
         Some(Param::Const(x)) => Some(CutoffV1 { a: x, b: x }),
         Some(Param::Sweep { a, b }) => Some(CutoffV1 { a, b }),
+        Some(Param::Curve { n, v, .. }) => Some(CutoffV1 { a: v[0], b: v[(n as usize).clamp(1, 8) - 1] }),
         Some(Param::Signal { a, .. }) => Some(CutoffV1 { a, b: a }), // v1: LFO -> base
         None if s.filter_type.is_some() => Some(CutoffV1 { a: 800.0, b: 800.0 }),
         None => None,

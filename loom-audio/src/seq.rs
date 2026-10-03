@@ -786,6 +786,7 @@ impl Sequencer {
                 }
             }
             self.live.retain(|(_, v)| !v.done());
+            self.master.automate(self.clock.bars, self.clock.song_bars);
             let s = self.master.process(&self.mix);
             peak = peak.max(s.l.abs()).max(s.r.abs());
             match frame {
@@ -936,6 +937,26 @@ mod tests {
         m.set_muted("crunch", true);
         m.play();
         assert!(bars(&mut m, 1.0).iter().all(|x| *x == 0.0));
+    }
+
+    #[test]
+    fn auto_master_monte_le_volume() {
+        let rms = |x: &[f32]| (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt();
+        let render = |src: &str| {
+            let mut s = seq();
+            s.set_program(Program::parse(src));
+            s.play();
+            bars(&mut s, 2.0)
+        };
+        let base = "bpm: 120\npad: c4 c4 c4 c4 | sine | gain 0.3";
+        let flat = render(base);
+        let auto = render(&format!("{base}\nauto: master 0..1 over 2"));
+        // fenêtres de 0,2 s (stéréo entrelacé) : début de la mesure 1, fin de la mesure 2
+        let w = |b: &[f32], at: f32| rms(&b[(at * SR) as usize * 2..((at + 0.2) * SR) as usize * 2]);
+        let (early, late) = (w(&auto, 0.3) / w(&flat, 0.3), w(&auto, 3.6) / w(&flat, 3.6));
+        assert!(early < 0.2, "début de courbe presque muet : {early}");
+        assert!(late > 0.85, "fin de courbe au plein volume : {late}");
+        assert!(auto.iter().all(|x| x.is_finite()));
     }
 
     #[test]

@@ -827,7 +827,7 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 1. Partition : loom-app/src/score.rs, MusicXML 4.0 et LilyPond (loom bake x.loom x.musicxml|.ly, Alt+X), grille par temps (double croche ou triolet), liaisons aux barres, accords, armure, batterie, repères de section, tempo ; ouvert et imprimé par MuseScore 4 (PDF vérifié à l'œil)
 - [x] 2. Harmonie : V7/V, vii°7/ii, emprunts (bVII, iv, ♯iv°), renversements (6 64 65 43 42), N6 It6 Fr6 Ger6 ; prof : lignes couleur et modulation ; réharmo jazz/triton (TRANSFORME, `loom reharm`, bouton web). Parité romain 252/252, analyse 30/30, onsets 490/490, workspace 485
 - [x] 8. Contrepoint : quintes et octaves parallèles, tessitures, croisements ; dans le prof quand au moins 2 voix ont des noms de chœur (sinon trop de bruit : 59/66 morceaux électro signalés), `loom contrepoint` pour forcer. Workspace 489
-- [ ] 6. Automation : courbes à points (`0 .2 1@exp`) et automation du master et des envois
+- [x] 6. Automation : courbes à points `lp 200..4000@exp..800` (8 points, @lin @exp @log @step @smooth) sur tout param balayable, `auto: master …` et `auto: send NOM …` (natif lissé 10 ms, web 8 rampes par mesure). Bug corrigé au passage : après un export web, les `send:` restaient branchés sur le graphe hors-ligne. Workspace 492, onsets 498/498, rendu 10/10.
 - [ ] 7. Micro-tons et traditions : vrai N-EDO, import Scala (.scl), ajnas/sayr maqam, aroha/avaroha raga
 - [ ] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
 - [ ] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo

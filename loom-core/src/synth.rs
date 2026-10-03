@@ -13,6 +13,59 @@ pub enum Param {
     Const(f32),
     Sweep { a: f32, b: f32 },
     Signal { shape: SigShape, rate: f32, a: f32, b: f32 },
+    /// Courbe à points `200..4000@exp..800` : `n` valeurs réparties sur la durée
+    /// (`| over N`, sinon la section), `s[i]` = forme du segment qui arrive au point `i`.
+    Curve { n: u8, v: [f32; CURVE_POINTS], s: [CurveShape; CURVE_POINTS] },
+}
+
+/// Points au plus dans une courbe d'automation.
+pub const CURVE_POINTS: usize = 8;
+
+/// La forme d'un segment de courbe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CurveShape {
+    #[default]
+    Lin,
+    /// Géométrique (les fréquences et les volumes s'entendent ainsi) ; t² si une borne est ≤ 0.
+    Exp,
+    /// Départ rapide puis on se pose : 1-(1-t)².
+    Log,
+    /// Marche : on tient la valeur jusqu'au point suivant.
+    Step,
+    /// Demi-cosinus, sans angle.
+    Smooth,
+}
+
+impl CurveShape {
+    fn parse(w: &str) -> Option<CurveShape> {
+        Some(match w {
+            "lin" => CurveShape::Lin,
+            "exp" => CurveShape::Exp,
+            "log" => CurveShape::Log,
+            "step" => CurveShape::Step,
+            "smooth" | "ease" => CurveShape::Smooth,
+            _ => return None,
+        })
+    }
+}
+
+/// La valeur d'une courbe à la position `p` (0..1). Même calcul que le JS `curveAt`.
+pub fn curve_at(n: u8, v: &[f32; CURVE_POINTS], s: &[CurveShape; CURVE_POINTS], p: f32) -> f32 {
+    let n = (n as usize).clamp(1, CURVE_POINTS);
+    if n == 1 { return v[0]; }
+    let k = (n - 1) as f32;
+    let x = p.clamp(0.0, 1.0) * k;
+    let i = (x.floor() as usize).min(n - 2);
+    let t = x - i as f32;
+    let (a, b) = (v[i], v[i + 1]);
+    match s[i + 1] {
+        CurveShape::Lin => a + (b - a) * t,
+        CurveShape::Exp if a > 0.0 && b > 0.0 => a * (b / a).powf(t),
+        CurveShape::Exp => a + (b - a) * t * t,
+        CurveShape::Log => a + (b - a) * (1.0 - (1.0 - t) * (1.0 - t)),
+        CurveShape::Step => if t >= 1.0 { b } else { a },
+        CurveShape::Smooth => a + (b - a) * (1.0 - (t * std::f32::consts::PI).cos()) / 2.0,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,17 +89,40 @@ impl Param {
             let b = num(p, i + 3).unwrap_or(1.0);
             return Some(Param::Signal { shape, rate, a, b });
         }
-        if let Some((a, b)) = w.split_once("..") {
-            if let (Ok(a), Ok(b)) = (a.parse::<f32>(), b.parse::<f32>()) {
-                return Some(Param::Sweep { a, b });
+        if w.contains("..") {
+            let parts: Vec<&str> = w.split("..").collect();
+            if parts.len() > CURVE_POINTS { return None; }
+            let mut v = [0.0f32; CURVE_POINTS];
+            let mut s = [CurveShape::Lin; CURVE_POINTS];
+            let mut shaped = false;
+            for (i, part) in parts.iter().enumerate() {
+                let (num, shape) = match part.split_once('@') {
+                    Some((x, sh)) => { shaped = true; (x, CurveShape::parse(sh)?) }
+                    None => (*part, CurveShape::Lin),
+                };
+                v[i] = num.parse::<f32>().ok().filter(|x| x.is_finite())?;
+                s[i] = shape;
             }
+            if parts.len() == 2 && !shaped { return Some(Param::Sweep { a: v[0], b: v[1] }); }
+            return Some(Param::Curve { n: parts.len() as u8, v, s });
         }
         w.parse::<f32>().ok().filter(|x| x.is_finite()).map(Param::Const)
     }
 
+    /// La valeur à la position `p` (0..1) d'une durée : sweep et courbe suivent `p`,
+    /// un signal (LFO) reste à sa base (il vit dans le temps, pas sur une durée).
+    pub fn at_progress(&self, p: f32) -> f32 {
+        match *self {
+            Param::Const(x) => x,
+            Param::Sweep { a, b } => a + (b - a) * p.clamp(0.0, 1.0),
+            Param::Curve { n, ref v, ref s } => curve_at(n, v, s, p),
+            Param::Signal { a, .. } => a,
+        }
+    }
+
     /// The constant value, or the start of a sweep/signal range (for static uses).
     pub fn base(&self) -> f32 {
-        match *self { Param::Const(x) => x, Param::Sweep { a, .. } | Param::Signal { a, .. } => a }
+        match *self { Param::Const(x) => x, Param::Sweep { a, .. } | Param::Signal { a, .. } => a, Param::Curve { v, .. } => v[0] }
     }
 }
 
@@ -482,6 +558,46 @@ pub struct SendSpec {
     pub b: Option<f32>,
 }
 
+/// `auto: master 0..1@exp..1..0 over 32` ou `auto: send rev 0..0.8 over 16` :
+/// automation du volume général ou du retour d'un `send:`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MixAuto {
+    /// `master`, ou le nom d'un `send:`.
+    pub target: String,
+    pub curve: Param,
+    /// Durée de la courbe en mesures ; sinon tout le `song:`, sinon 16 mesures. Elle boucle.
+    pub over: Option<f32>,
+}
+
+impl MixAuto {
+    /// La valeur à `bars` mesures depuis RUN (le morceau dure `song_bars`, 0 = pas de song:).
+    pub fn value(&self, bars: f64, song_bars: u32) -> f32 {
+        let len = self.over.filter(|o| *o > 0.0).map(|o| o as f64)
+            .unwrap_or(if song_bars > 0 { song_bars as f64 } else { 16.0 });
+        let v = self.curve.at_progress((bars.rem_euclid(len) / len) as f32);
+        if self.target == "master" { v.clamp(0.0, 1.5) } else { v.clamp(0.0, 1.0) }
+    }
+
+    fn parse_all(src: &str) -> Vec<MixAuto> {
+        let mut out = Vec::new();
+        for raw in src.lines() {
+            let line = crate::decomment(raw).trim();
+            let Some(i) = line.find(':') else { continue };
+            if !line[..i].trim().eq_ignore_ascii_case("auto") { continue; }
+            let w: Vec<&str> = line[i + 1..].split_whitespace().collect();
+            let (target, at) = match w.first().map(|s| s.to_lowercase()).as_deref() {
+                Some("master") => ("master".to_string(), 1),
+                Some("send") => match w.get(1) { Some(n) => (n.to_lowercase(), 2), None => continue },
+                _ => continue,
+            };
+            let Some(curve) = Param::parse(&w, at) else { continue };
+            let over = w.iter().position(|x| x.eq_ignore_ascii_case("over")).and_then(|k| num(&w, k + 1)).filter(|o| *o > 0.0 && o.is_finite());
+            out.push(MixAuto { target, curve, over });
+        }
+        out
+    }
+}
+
 /// The mix-wide directives the browser applies to the whole song.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MixSettings {
@@ -493,6 +609,8 @@ pub struct MixSettings {
     pub warmth: f32,
     pub room: Room,
     pub buses: Vec<BusConfig>,
+    /// `auto:` lignes : automation du master et des retours d'envoi.
+    pub autos: Vec<MixAuto>,
     pub sends: Vec<SendSpec>,
     /// `morph: N` — crossfade changed voices over N bars on re-evaluation (0 = instant).
     pub morph: u32,
@@ -591,6 +709,7 @@ impl MixSettings {
             warmth: directive_pct(src, "warmth", 0.3, 1.0),
             room,
             buses,
+            autos: MixAuto::parse_all(src),
             sends,
             morph: directive(src, "morph").and_then(|v| v.parse::<u32>().ok()).unwrap_or(0).min(32),
             loop_section: directive(src, "loop").map(|s| s.to_lowercase()).filter(|s| !s.is_empty()),
@@ -708,5 +827,47 @@ mod tests {
         let src = "def fx: reverb 0.5 | delay 0.3\ndef b: $fx | gain 0.2\npad: c3 | $b";
         assert_eq!(expand_macros(src), "pad: c3 | reverb 0.5 | delay 0.3 | gain 0.2");
         assert_eq!(expand_macros("a: x | $nope"), "a: x | $nope");
+    }
+
+    #[test]
+    fn courbes_a_points() {
+        let cut = |seg: &str| { let mut s = Synth::default(); s.apply_segment(seg, &mut crate::Wave::Square); s.cutoff };
+        let (s, _) = synth(&["lp 200..4000@exp..800", "over 8"]);
+        let Some(Param::Curve { n, v, s: sh }) = s.cutoff else { panic!("{:?}", s.cutoff) };
+        assert_eq!((n, v[0], v[1], v[2]), (3, 200.0, 4000.0, 800.0));
+        assert_eq!((sh[1], sh[2]), (CurveShape::Exp, CurveShape::Lin));
+        // milieu du segment exp : moyenne géométrique de 200 et 4000
+        assert!((curve_at(n, &v, &sh, 0.25) - (200.0f32 * 4000.0).sqrt()).abs() < 0.5);
+        assert_eq!(curve_at(n, &v, &sh, 0.5), 4000.0);
+        assert_eq!(curve_at(n, &v, &sh, 1.0), 800.0);
+        // A..B reste un Sweep (rien ne change pour les anciens morceaux)
+        assert_eq!(cut("lp 200..2000"), Some(Param::Sweep { a: 200.0, b: 2000.0 }));
+        // formes
+        let (mut v, mut sh) = ([0.0f32; CURVE_POINTS], [CurveShape::Lin; CURVE_POINTS]);
+        v[1] = 1.0;
+        for (shape, at_quarter) in [(CurveShape::Step, 0.0), (CurveShape::Log, 0.4375), (CurveShape::Smooth, 0.1464466), (CurveShape::Exp, 0.0625)] {
+            sh[1] = shape;
+            assert!((curve_at(2, &v, &sh, 0.25) - at_quarter).abs() < 1e-5, "{shape:?}");
+        }
+        // refus (forme inconnue, nombre invalide, trop de points) : la coupure par défaut
+        assert_eq!(cut("lp 200..4000@wobble"), Some(Param::Const(800.0)));
+        assert_eq!(cut("lp 200..x"), Some(Param::Const(800.0)));
+        assert_eq!(cut("lp 1..2..3..4..5..6..7..8..9"), Some(Param::Const(800.0)));
+    }
+
+    #[test]
+    fn automation_du_master_et_des_envois() {
+        let m = MixSettings::parse("send: rev reverb hall\nauto: master 0..1@exp..1..0 over 8\nauto: send rev 0..0.8 # retour\nauto: bidule 1\nlead: c4");
+        assert_eq!(m.autos.len(), 2);
+        let (a, b) = (&m.autos[0], &m.autos[1]);
+        assert_eq!((a.target.as_str(), a.over, b.target.as_str(), b.over), ("master", Some(8.0), "rev", None));
+        // 3 segments sur 8 mesures : 1 au tiers, encore 1 aux deux tiers, 0 à la fin
+        assert!((a.value(8.0 / 3.0, 0) - 1.0).abs() < 1e-4);
+        assert!((a.value(16.0 / 3.0, 0) - 1.0).abs() < 1e-4);
+        assert!(a.value(7.99, 0) < 0.01);
+        assert_eq!(a.value(8.0, 0), 0.0, "elle boucle");
+        // sans over : tout le song (32 mesures), sinon 16
+        assert!((b.value(8.0, 32) - 0.2).abs() < 1e-5);
+        assert!((b.value(8.0, 0) - 0.4).abs() < 1e-5);
     }
 }

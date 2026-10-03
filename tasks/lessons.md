@@ -36,3 +36,5 @@ J'ai annoncé « la page suit la fenêtre » sans l'avoir vue : le `expr $i3-$i1
 (syntaxe Pd) ne marche pas dans Max, un expr = une formule. Règle : build de test,
 `/loom/fenetre` par UDP, `app_screenshot` de la fenêtre « Loom » (et son bouton plein écran),
 PUIS remettre le build de vente. Munay ne doit pas servir de testeur.
+
+- 03/10/2026 : un test « silencieux » dans le navigateur jouait vraiment. Les batteries ignorent `| gain 0`, et j'ai laissé la lecture tourner (Munay : « is loom sounding ? »). Règle : tester avec une voix mélodique à gain 0 (jamais une batterie), et cliquer STOP dans le même appel que RUN.

@@ -209,6 +209,9 @@ pub struct SendReturn {
     pub kind: String,
     /// Limiter on how much wet comes back (the return fader), 0..1.
     pub level: f32,
+    /// `auto: send NOM …` : multiplicateur visé et lissé (1 sans automation).
+    auto_target: f32,
+    auto: f32,
     eff: SendEff,
 }
 
@@ -227,7 +230,7 @@ impl SendReturn {
                 SendEff::Rv(Reverb::new(sr, &room))
             }
         };
-        SendReturn { name: spec.name.clone(), kind: spec.kind.clone(), level, eff }
+        SendReturn { name: spec.name.clone(), kind: spec.kind.clone(), level, auto_target: 1.0, auto: 1.0, eff }
     }
     fn set_bar(&mut self, sec: f32, sr: f32) {
         if let SendEff::Ec(e) = &mut self.eff { e.set_bar(sec, sr); }
@@ -261,6 +264,12 @@ pub struct Master {
     sat: Saturator,
     limiter: Compressor,
     brick: Limiter,
+    /// `auto:` du morceau, le gain du master visé et lissé, et le pas de lissage (~10 ms).
+    autos: Vec<loom_core::MixAuto>,
+    auto_gain_target: f32,
+    auto_gain: f32,
+    auto_coef: f32,
+    auto_tick: u32,
 }
 
 /// A number that is safe to feed into feedback networks.
@@ -292,6 +301,11 @@ impl Master {
             delay: PingPong::new(sr),
             sends: Vec::new(),
             bar_sec: 2.0,
+            autos: Vec::new(),
+            auto_gain_target: 1.0,
+            auto_gain: 1.0,
+            auto_coef: 1.0 - (-1.0 / (0.01 * sr)).exp(),
+            auto_tick: 0,
             space_send: SPACE_SEND,
             echo_send: ECHO_SEND,
             eq_db: [EQ_LOW_DB, EQ_MID_DB, EQ_HIGH_DB],
@@ -324,7 +338,28 @@ impl Master {
             self.sends = mix.sends.iter().map(|c| SendReturn::new(self.sr, c)).collect();
             for s in &mut self.sends { s.set_bar(self.bar_sec, self.sr); }
         }
+        self.autos = mix.autos.clone();
+        if !self.autos.iter().any(|a| a.target == "master") { self.auto_gain_target = 1.0; }
+        for s in &mut self.sends {
+            if !self.autos.iter().any(|a| a.target.eq_ignore_ascii_case(&s.name)) { s.auto_target = 1.0; }
+        }
     }
+
+    /// Avance les `auto:` à `bars` mesures depuis RUN (appelé à chaque échantillon,
+    /// recalculé toutes les 32). Le lissage se fait dans `process`.
+    pub fn automate(&mut self, bars: f64, song_bars: u32) {
+        if self.autos.is_empty() { return; }
+        self.auto_tick = self.auto_tick.wrapping_add(1);
+        if self.auto_tick % 32 != 1 { return; }
+        for a in &self.autos {
+            let v = a.value(bars, song_bars);
+            if a.target == "master" { self.auto_gain_target = v; }
+            else if let Some(s) = self.sends.iter_mut().find(|s| s.name.eq_ignore_ascii_case(&a.target)) { s.auto_target = v; }
+        }
+    }
+
+    /// Le gain d'automation du master en ce moment (pour les tests et l'affichage).
+    pub fn auto_gain(&self) -> f32 { self.auto_gain }
 
     /// Index of a `send:` return by name, for `| send NAME` routing.
     pub fn send_index(&self, name: &str) -> Option<usize> {
@@ -414,14 +449,17 @@ impl Master {
         mix.add(space.scale(self.space_send));
         // each `send:` return processes its accumulated stream and its wet output
         // comes back in parallel (the dry bus is untouched)
+        let k = self.auto_coef;
         for (i, send) in self.sends.iter_mut().enumerate() {
+            send.auto += (send.auto_target - send.auto) * k;
             if send.level <= 0.0 { continue; }
             let Some(x) = input.sends.get(i) else { continue };
-            mix.add(send.eff.process(clean(*x)).scale(send.level));
+            mix.add(send.eff.process(clean(*x)).scale(send.level * send.auto));
         }
 
         // mastering chain
-        let mut x = mix.scale(self.volume * 0.8);
+        self.auto_gain += (self.auto_gain_target - self.auto_gain) * k;
+        let mut x = mix.scale(self.volume * self.auto_gain * 0.8);
         x = Stereo { l: self.hpf[0].process(x.l), r: self.hpf[1].process(x.r) };
         x = self.glue.process(x, false);
         for (c, v) in self.eq.iter_mut().zip([&mut x.l, &mut x.r]) {

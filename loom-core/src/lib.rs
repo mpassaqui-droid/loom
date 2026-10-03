@@ -5,7 +5,7 @@
 //! so the language behaves identically everywhere. No external dependencies.
 
 mod synth;
-pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flange, Fm, Harm, Lfo, MixSettings, Param, Reson, Room, SendSpec, SigShape, Synth};
+pub use synth::{expand_macros, BusConfig, Bend, Echo, Env, Eq3, FilterType, Flange, Fm, Harm, Lfo, MixSettings, Param, CurveShape, curve_at, CURVE_POINTS, MixAuto, Reson, Room, SendSpec, SigShape, Synth};
 
 /// Deterministic mono PCM renderer (P6-1 of the unified synthesis/FX engine) —
 /// std-only, no dependencies; consumes the Rust scheduler's events directly.
@@ -248,9 +248,9 @@ pub struct Event {
 }
 
 /// Names that introduce a *directive* (key/scale/seed/song/duck/feel/…), not a voice.
-const DIRECTIVES: [&str; 23] = [
+const DIRECTIVES: [&str; 24] = [
     "key", "scale", "seed", "song", "arrange", "duck", "feel", "scene", "prog", "tune",
-    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "send", "morph",
+    "bpm", "tempo", "meter", "accel", "groove", "title", "warmth", "film", "loop", "bus", "room", "send", "morph", "auto",
 ];
 
 /// Euclidean rhythm: distribute `k` hits as evenly as possible across `n`

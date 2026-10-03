@@ -143,6 +143,7 @@ pub(crate) fn cutoff_span(c: Option<Param>) -> (f32, f32) {
     match c {
         Some(Param::Const(x)) => (x, x),
         Some(Param::Sweep { a, b }) => (a, b),
+        Some(Param::Curve { n, v, .. }) => (v[0], v[(n as usize).clamp(1, crate::synth::CURVE_POINTS) - 1]),
         Some(Param::Signal { a, .. }) => (a, a),
         None => (DEFAULT_CUTOFF, DEFAULT_CUTOFF),
     }

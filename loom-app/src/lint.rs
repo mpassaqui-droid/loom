@@ -15,6 +15,7 @@ pub struct Lint {
 /// les quelques verbes que le web ajoute à la main). Le test
 /// `meme_liste_que_le_web` vérifie qu'elle suit le web.
 pub const KNOWN: &[&str] = &[
+    "auto", "master", "lin", "exp", "log", "step", "smooth", "ease",
     "rev", "fast", "ply", "linger", "segment", "range", "loopAt", "loopat", "slow", "every", "jux", "chunk", "off",
     "add", "semi", "palindrome", "sometimes", "often", "rarely", "rot", "iter", "poly", "markov", "invert", "sequence",
     "mutate", "develop", "stutter", "cresc", "dim", "arp", "pink", "sieve", "arc", "rise", "fall", "gendy", "spectrum",
@@ -215,6 +216,8 @@ mod tests {
             }
         }
         assert!(lint("lead: c4 | send rev 0.4 | glide 0.1 | widen 1.2\n", None).is_empty());
+        let auto = "send: rev reverb hall\npad: c4 | lp 200..4000@exp..800 | over 8\nauto: master 0..1@smooth..0 over 8\nauto: send rev 0..0.8\n";
+        assert!(lint(auto, None).is_empty(), "{:?}", lint(auto, None));
     }
 
     #[test]

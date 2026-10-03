@@ -45,6 +45,7 @@ impl Clock {
         match *p {
             Param::Const(x) => x,
             Param::Sweep { a, b } => a + (b - a) * self.progress(over),
+            Param::Curve { n, ref v, ref s } => loom_core::curve_at(n, v, s, self.progress(over)),
             Param::Signal { shape, rate, a, b } => {
                 let ph = self.bars * rate as f64;
                 let s = match shape {
