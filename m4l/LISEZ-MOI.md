@@ -4,6 +4,13 @@
 (le même que l'appli, compilé en WebAssembly) : Live joue les mêmes notes que
 Loom, au même moment, à l'échantillon près. Le son, ce sont tes instruments Live.
 
+## La démo
+
+Ouvre `demo/Loom demo Project/Loom demo.als` : le morceau `exemples/odyssey.loom`
+déjà cuit, une piste par voix avec son instrument Live et le device Loom devant,
+une scène par section. Lance les scènes de haut en bas. Pour le modifier, glisse
+`odyssey.loom` sur le device d'une piste, édite, enregistre.
+
 ## Installer
 
 1. Glisse `Loom.amxd` dans ta User Library (ou directement sur une piste).

@@ -86,8 +86,8 @@ class Live:
         raise TimeoutError(f'Live ne répond pas à {addr} (AbletonOSC chargé ?)')
 
 
-def construit(baked, prefixe='LOOM'):
-    live = Live()
+def construit(baked, prefixe='LOOM', live=None):
+    live = live or Live()
     live.demande('/live/song/get/tempo')                      # Live et AbletonOSC sont là
     beats = baked['meter_beats']
     sections = baked['sections'] or [['morceau', 0, baked['bars']]]
