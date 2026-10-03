@@ -813,7 +813,7 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] 4. Correcteur : loom-app/src/lint.rs (fautes de frappe avec suggestion, degrés sans key:, ^ sans prog:, sections absentes de song:, sample inconnu), lignes soulignées en rouge au RUN ; 5 tests, 0 faux positif sur les 66 exemples (1 vrai : studio.loom l.35, ^1 sans prog:)
 - [x] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur
 - [x] 6. Lien Live : chaque RUN écrit le .loom lié
-- [ ] 7. Scènes : plus de visuels terminal
+- [x] 7. Scènes : le terminal dessine les 24 scènes natives de la fenêtre (avant 5, les autres étaient remplacées), test qui vérifie que chacune dessine
 - [x] 8. Partition à l'écran : Alt+F, grande portée (sol et fa), lignes supplémentaires, ♯/♭, tête de lecture ; vérifiée dans tmux sur ballade.loom
 - [x] 9. Thèmes intégrés hors Omarchy : Alt+C fait défiler les 62 thèmes du web (copiés par tools/gen_themes.py, une seule source), choix gardé dans ~/.local/state/loom/theme
 - [ ] 10. Dictée vocale dans VIBE (whisper local)
