@@ -71,6 +71,13 @@ def patch():
               presentation=1, presentation_rect=[162, 6, 230, 56], fontsize=11.0,
               linecount=3, textcolor=[0.9, 0.9, 0.9, 1.0]),
         boite('obj-8', 'newobj', [200, 440, 150, 22], 'udpsend 127.0.0.1 7401', 1, 0),
+        # le chemin du fichier, sauvé avec le set (paramètre « blob », stocké seulement)
+        boite('obj-11', 'newobj', [200, 480, 140, 22], 'pattr loomfichier', 1, 3, ['', '', ''],
+              parameter_enable=1,
+              saved_attribute_attributes={'valueof': {'parameter_longname': 'loomfichier',
+                                                      'parameter_shortname': 'loomfichier',
+                                                      'parameter_type': 3, 'parameter_invisible': 1}}),
+        boite('obj-12', 'newobj', [200, 520, 100, 22], 'prepend restaure', 1, 1, ['']),
         boite('obj-9', 'newobj', [400, 20, 50, 22], 'midiin', 1, 1, ['int']),
         boite('obj-10', 'newobj', [400, 440, 50, 22], 'midiout', 1, 0),
     ]
@@ -82,6 +89,7 @@ def patch():
         ('obj-2', 0, 'obj-7', 0),
         ('obj-2', 1, 'obj-8', 0),
         ('obj-9', 0, 'obj-10', 0),
+        ('obj-2', 2, 'obj-11', 0), ('obj-11', 0, 'obj-12', 0), ('obj-12', 0, 'obj-2', 0),
     ]
     boites = [b for b in boites if b['id'] != 'obj-6']
     return amxd.patcher(boites, lignes, 'LOOM', largeur=400.0)

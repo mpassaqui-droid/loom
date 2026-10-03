@@ -43,5 +43,17 @@ new Function('sorties', `
   bang(); code('kick: x . x .');
 `)(sorties);
 ok(String(sorties[sorties.length - 1]).includes('aucune voix'), 'voix absente : message clair, aucun clip touché');
+// pattr vide (0) et fichier introuvable : un seul message, aucun spam
+const s2 = [];
+new Function('s2', `
+  var outlet = function () { s2.push(Array.prototype.slice.call(arguments)); };
+  var arrayfromargs = function (a) { return Array.prototype.slice.call(a); };
+  function Task() { this.repeat = function () {}; }
+  function File() { this.isopen = false; }
+  ${fs.readFileSync(tmp, 'utf8')}
+  restaure(0); bang(); fichier('/nulle/part.loom'); surveille(); surveille(); surveille();
+`)(s2);
+const etats = s2.filter(a => a[1] === '/loom/etat').map(a => a[2]);
+ok(!etats.some(e => e.includes(': 0')) && etats.filter(e => e.startsWith('introuvable')).length === 1, 'pattr vide ignoré, « introuvable » dit une seule fois');
 console.log(echecs ? `${echecs} échec(s)` : 'device : tout passe');
 process.exit(echecs ? 1 : 0);

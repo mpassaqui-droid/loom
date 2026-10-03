@@ -31,17 +31,19 @@ function bang() {
             return;
         }
     }
-    dire('LOOM prêt · glisse un fichier .loom');
+    dire(etat.fichier ? 'LOOM prêt · ' + etat.fichier : 'LOOM prêt · glisse un fichier .loom');
     if (!veille) {
         veille = new Task(surveille, this);
         veille.interval = 500;
         veille.repeat();
     }
+    surveille();   // chemin restauré avec le set avant que le moteur soit prêt
 }
 
 function fichier() {
-    var p = arrayfromargs(arguments).join(' ');
-    if (!p || p === 'none' || p === etat.fichier) return;
+    var p = String(arrayfromargs(arguments).join(' '));
+    // pattr rend 0 et live.drop « none » tant que rien n'a été choisi
+    if (!p || p === 'none' || p === '0' || p === etat.fichier) return;
     // live.drop rend un chemin Max « Macintosh HD:/Users/... »
     etat.fichier = p.replace(/^[^:\/]+:\//, '/');
     etat.lu = null;
@@ -75,7 +77,11 @@ function anything() {
 function surveille() {
     if (!etat.fichier || !etat.pret) return;
     var f = new File(etat.fichier, 'read');
-    if (!f.isopen) { dire('introuvable : ' + etat.fichier); return; }
+    if (!f.isopen) {
+        if (etat.lu !== false) dire('introuvable : ' + etat.fichier);   // une fois, pas toutes les 500 ms
+        etat.lu = false;
+        return;
+    }
     var morceaux = [];
     while (f.position < f.eof) morceaux.push(f.readstring(Math.min(16000, f.eof - f.position)));
     f.close();
