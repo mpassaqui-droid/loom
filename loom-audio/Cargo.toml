@@ -2,6 +2,7 @@
 name = "loom-audio"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "LOOM native sound: synth voices + a sample-clock sequencer driven by loom-core, with live audio output (cpal) and offline WAV rendering."
 
 [dependencies]

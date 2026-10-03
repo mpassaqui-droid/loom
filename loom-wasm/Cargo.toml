@@ -2,6 +2,7 @@
 name = "loom-wasm"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "WASM bindings for loom-core — runs the exact same engine in the browser and on phones."
 
 [lib]

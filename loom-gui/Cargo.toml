@@ -2,6 +2,7 @@
 name = "loom-gui"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "LOOM in a native window (egui) — editor, step grid, transport, themed to Omarchy."
 
 [dependencies]

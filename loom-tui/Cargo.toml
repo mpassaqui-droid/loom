@@ -2,6 +2,7 @@
 name = "loom-tui"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Terminal live-coding client for LOOM — the same engine, native audio, runs in your terminal like a tracker."
 
 [package.metadata.deb]
@@ -11,10 +12,6 @@ section = "sound"
 depends = "libasound2"
 extended-description = "LOOM : un langage de live-coding musical, dans le terminal, avec son moteur audio natif."
 assets = [["target/release/loom", "usr/bin/", "755"]]
-
-[features]
-# sans contrôle de licence : la version de Munay (cargo install --path loom-tui --features libre)
-libre = []
 
 [[bin]]
 name = "loom"
