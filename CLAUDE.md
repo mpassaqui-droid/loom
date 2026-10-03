@@ -60,6 +60,9 @@ model + good prompting + a growing language — we do NOT hardcode "all of music
 - Every new language feature: update the parser, add tests, then expose it in
   `web/index.html` and update the AI system prompt so the brain can use it.
 - Small commits, clear messages. Explain tradeoffs to the owner.
+- **Le web est en ligne sur https://munaypassaqui.com/loom/** (demande du propriétaire, 03/10/2026).
+  Après chaque commit qui touche `web/`, pousser puis lancer `tools/publier-site.sh` (publie le dernier
+  commit, sans les samples tiers, sur le projet Cloudflare Pages `munay-passaqui`), et vérifier la page.
 
 ## The AI brain
 Use the strongest available Claude model (Fable 5, formerly Opus) for composition
