@@ -812,7 +812,7 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [ ] 3. Mes sons : importer / vider ses samples depuis l'appli
 - [ ] 4. Correcteur : erreurs soulignées dans l'éditeur
 - [x] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur
-- [ ] 6. Lien Live : chaque RUN écrit le .loom lié
+- [x] 6. Lien Live : chaque RUN écrit le .loom lié
 - [ ] 7. Scènes : plus de visuels terminal
 - [ ] 8. Partition (notation.rs) à l'écran
 - [ ] 9. Thèmes intégrés hors Omarchy

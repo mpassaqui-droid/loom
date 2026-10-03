@@ -90,6 +90,7 @@ fn draw_transport(f: &mut Frame, app: &App, area: Rect) {
         spans.extend(studio_view::transport_spans(app));
         if app.is_recording() { spans.push(Span::styled("  ● REC", Style::new().fg(c(t.error)).add_modifier(Modifier::BOLD))); }
         if app.metronome { spans.push(Span::styled("  ♩", accent)); }
+        if app.lien { spans.push(Span::styled("  ⇄ lié", accent)); }
         if app.midi_clock { spans.push(Span::styled("  MIDI→", accent)); }
         if app.midi_follow { spans.push(Span::styled("  →MIDI", accent)); }
     }
@@ -353,6 +354,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         section("IA — VIBE"),
         key("Alt+N / Alt+Z", "morceau suivant / au hasard (comme les presets du web)"),
         key("Ctrl+O puis Suppr", "mettre un de tes morceaux à la corbeille"),
+        key("Alt+K", "lien Live : chaque RUN enregistre le fichier, le device Loom de Live le suit"),
         key("Alt+X", "exporter un fichier MIDI standard (.mid) à côté du morceau, pour un DAW"),
         key("F2", "décrire la musique en mots, Claude écrit le code"),
         key("F2 puis 1..0", "les puces : + batterie, + basse, + nappe, + triste, + énergie, + exotique, varier, simplifier, continuer, corriger"),

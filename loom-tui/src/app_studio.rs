@@ -180,6 +180,7 @@ impl App {
             KeyCode::Char('x' | 'X') => self.export_midi(),
             KeyCode::Char('n' | 'N') => self.other_song(false),
             KeyCode::Char('z' | 'Z') => self.other_song(true),
+            KeyCode::Char('k' | 'K') => self.toggle_lien(),
             _ => return false,
         }
         true

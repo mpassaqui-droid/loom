@@ -74,6 +74,8 @@ pub struct App {
     pub midi_clock: bool,
     pub midi_follow: bool,
     pub metronome: bool,
+    /// Lien Live (Alt+K) : chaque RUN enregistre aussi le fichier, qu'un device Loom de Live suit.
+    pub lien: bool,
     /// The SCÈNE's state (scene choice, sound analysis, sparks).
     pub stage: TermStage,
     /// STUDIO: master knobs, mixer, meters, MIDI LEARN, stems, demo…
@@ -105,6 +107,7 @@ impl App {
             midi_clock: false,
             midi_follow: false,
             metronome: false,
+            lien: false,
             stage: TermStage::default(),
             studio,
             teacher: Teacher::default(),
@@ -170,6 +173,7 @@ impl App {
         self.stage.load(&text, &program);
         self.program = program;
         self.running_text = Some(text);
+        if self.lien && self.path.is_some() { self.save(); }
         self.info(if was_playing { format!("▶ {n} voix — change à la prochaine mesure") } else { format!("▶ {n} voix") });
     }
 
@@ -272,6 +276,14 @@ impl App {
         self.midi_follow = !self.midi_follow;
         e.set_midi_follow(self.midi_follow);
         self.info(if self.midi_follow { "LOOM suit l'horloge MIDI externe" } else { "tempo du morceau rétabli" });
+    }
+
+    /// Alt+K: lien Live — chaque RUN écrit le fichier (le device Loom de Live recuit son clip).
+    pub fn toggle_lien(&mut self) {
+        if self.path.is_none() && !self.lien { self.save(); }
+        self.lien = !self.lien;
+        let nom = self.path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+        self.info(if self.lien { format!("lien Live : chaque RUN écrit {nom} · glisse ce fichier sur le device Loom") } else { "lien Live coupé".into() });
     }
 
     /// Ctrl+T: tick on every beat.
