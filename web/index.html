@@ -7287,6 +7287,8 @@ const THEME_AA={
       last==="V"?"l'oreille reste en suspens sur le V : tension non résolue":
       last==="IV"||last==="II"||last==="VI"?"l'oreille circule (mouvement) sans conclure":
       "tension intermédiaire : ni repos net, ni vrai suspens";}
+  // ajnas d'un maqâm : jins de base, ghammaz, jins du haut, sayr (miroir de loom-core MAQAM_AJNAS)
+  const MAQAM_AJNAS={bayati:["jins bayati (2e neutre)","4","jins nahawand ou rast","commence bas, tourne autour de la tonique, s'appuie sur la quarte puis redescend lentement"],rast:["jins rast (3e neutre)","5","jins rast ou nahawand","part de la tonique, monte à la quinte, la 7e neutre s'abaisse en redescendant"],saba:["jins saba (4e diminuée)","3","jins hijaz","reste dans le grave, insiste sur la 3e, la 4e basse donne la plainte"],sikah:["jins sikah (tonique sur un quart de ton)","3","jins hijaz ou rast","la tonique elle-même flotte, la phrase pose sur la 3e avant de revenir"],huzam:["jins sikah","3","jins hijaz","comme sikah, puis la seconde augmentée du haut colore la montée"],jiharkah:["jins jiharkah (majeur, 7e un peu basse)","5","jins jiharkah","lumineux, monte vite à la quinte, la 7e légèrement basse adoucit le retour"],hijaz:["jins hijaz (seconde augmentée 2-3)","4","jins nahawand ou rast","commence par la seconde augmentée, appuie sur la quarte, redescend en ornant le 2"]};
   function analyzePiece(text){
     // UNIFIED ANALYSER: when the Rust engine (loom-core -> WASM) is active, its
     // offline analysis is authoritative — the exact same std-only code the native
@@ -7301,7 +7303,9 @@ const THEME_AA={
     if(k){let s="[ analyse ] tonalité : "+NN[((k.tonic%12)+12)%12]+(sn?" "+sn:"");
       if(sn&&SCALE_LORE[sn])s+=" — "+SCALE_LORE[sn];out.push(s);
       if(sn&&TRAD_OF[sn])out.push("   tradition : "+TRAD_OF[sn]+" (tape ?"+TRAD_OF[sn]+" pour l'histoire & le sens)");
-      if(sn&&MOOD[sn])out.push("   humeur : "+MOOD[sn]);}
+      if(sn&&MOOD[sn])out.push("   humeur : "+MOOD[sn]);
+      if(sn&&MAQAM_AJNAS[sn]){const a=MAQAM_AJNAS[sn];out.push("[ maqâm ] "+a[0]+" sur 1, ghammaz (appui) sur "+a[1]+", puis "+a[2]+" au-dessus · sayr : "+a[3]);}
+      if(k.desc)out.push("[ râga ] aroha / avaroha : la montée et la descente n'empruntent pas les mêmes degrés ; LOOM altère tout seul les notes atteintes en descendant");}
     const tune=parseTune(text);
     if(/key:\s*\S+\s+-?[\d.]+\s+-?[\d.]+/.test(text)||/\b(\d+edo|maqam|bayati|rast|saba|sikah|huzam)\b/.test(tune||""))
       out.push("   microtonal : des notes « entre les touches » (quarts de ton / EDO) — couleur hors du piano. ?microtonal");

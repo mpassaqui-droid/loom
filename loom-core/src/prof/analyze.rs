@@ -36,6 +36,18 @@ const TRAD_OF: &[(&str, &str)] = &[
     ("lydian", "modes"), ("mixolydian", "modes"), ("locrian", "modes"),
 ];
 
+/// Les ajnas d'un maqâm : (gamme, jins de base, ghammaz (degré d'appui), jins du haut,
+/// sayr (le chemin habituel de la mélodie)). Miroir du `MAQAM_AJNAS` du web.
+const MAQAM_AJNAS: &[(&str, &str, &str, &str, &str)] = &[
+    ("bayati", "jins bayati (2e neutre)", "4", "jins nahawand ou rast", "commence bas, tourne autour de la tonique, s'appuie sur la quarte puis redescend lentement"),
+    ("rast", "jins rast (3e neutre)", "5", "jins rast ou nahawand", "part de la tonique, monte à la quinte, la 7e neutre s'abaisse en redescendant"),
+    ("saba", "jins saba (4e diminuée)", "3", "jins hijaz", "reste dans le grave, insiste sur la 3e, la 4e basse donne la plainte"),
+    ("sikah", "jins sikah (tonique sur un quart de ton)", "3", "jins hijaz ou rast", "la tonique elle-même flotte, la phrase pose sur la 3e avant de revenir"),
+    ("huzam", "jins sikah", "3", "jins hijaz", "comme sikah, puis la seconde augmentée du haut colore la montée"),
+    ("jiharkah", "jins jiharkah (majeur, 7e un peu basse)", "5", "jins jiharkah", "lumineux, monte vite à la quinte, la 7e légèrement basse adoucit le retour"),
+    ("hijaz", "jins hijaz (seconde augmentée 2-3)", "4", "jins nahawand ou rast", "commence par la seconde augmentée, appuie sur la quarte, redescend en ornant le 2"),
+];
+
 /// The `tune:` directive the way the web's `parseTune` reads it (equal = None).
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tune {
@@ -594,6 +606,12 @@ pub fn analyze(text: &str) -> Vec<String> {
         if let Some((_, mood)) = scale_name.as_deref().and_then(|sn| MOOD.iter().find(|(n, _)| *n == sn)) {
             out.push(format!("   humeur : {mood}"));
         }
+        if let Some((_, base, gh, top, sayr)) = scale_name.as_deref().and_then(|sn| MAQAM_AJNAS.iter().find(|r| r.0 == sn)) {
+            out.push(format!("[ maqâm ] {base} sur 1, ghammaz (appui) sur {gh}, puis {top} au-dessus · sayr : {sayr}"));
+        }
+        if k.desc.is_some() {
+            out.push("[ râga ] aroha / avaroha : la montée et la descente n'empruntent pas les mêmes degrés ; LOOM altère tout seul les notes atteintes en descendant".into());
+        }
     }
 
     let tune = parse_tune(&src);
@@ -930,6 +948,15 @@ mod tests {
         let maj = analyze("key: c major\nlead: 1 3 5");
         assert!(maj.iter().any(|l| l.contains("humeur : la joie franche")), "{maj:?}");
         assert!(!maj.iter().any(|l| l.contains("c'est un mode")), "{maj:?}");
+    }
+
+    #[test]
+    fn ajnas_et_aroha() {
+        let r = analyze("key: d bayati\nney: 1 2 3 4 3 2 1 .");
+        assert!(r.iter().any(|l| l.starts_with("[ maqâm ] jins bayati") && l.contains("ghammaz (appui) sur 4")), "{r:?}");
+        let r = analyze("key: c khamaj\nsitar: 5 6 7 1' 7 6 5 .");
+        assert!(r.iter().any(|l| l.starts_with("[ râga ] aroha / avaroha")), "{r:?}");
+        assert!(!analyze("key: c major\nl: 1 2 3").iter().any(|l| l.starts_with("[ maqâm ]") || l.starts_with("[ râga ]")));
     }
 
     #[test]

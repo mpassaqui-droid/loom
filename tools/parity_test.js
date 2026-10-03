@@ -169,6 +169,8 @@ Object.assign(pieces, step_pieces);
 // must agree line-for-line with the JS analyzePiece (the long-tested fallback):
 // tonality, tuning, acoustics, harmony+cadence, the "why", form, novelty.
 const an_pieces = {
+  'maqam ajnas': "key: d bayati\nney: 1 2 3 4 3 2 1 .",
+  'aroha avaroha': "key: c khamaj\nsitar: 5 6 7 1' 7 6 5 .",
   'knowbase complète (majeur, pyth, ii-V-I, génératif, euclid)': 'key: c major\nprog: Dm G7 C\ntune: pyth\nkick: e(3,8) | every 4 rot 3\nlead: 1 3 5 6 | walk(3,7)\nsong: intro 4 verse 8',
   'morceau libre (novelty seul)': 'lead: c3 e3 g3',
   'microtonal personnalisé': 'key: d 0 1.5 3 5 6.5 8 10\nlead: 1 3 5',
