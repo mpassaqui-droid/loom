@@ -44,6 +44,10 @@ usage :
   loom contrepoint morceau.loom                 quintes/octaves parallèles, croisements, sauts
   loom reharm morceau.loom [jazz|tritone|iiv]  réharmonise prog: (ii-V, substitution de
                                                triton) et écrit le résultat sur la sortie
+  loom plugins                                 les Audio Units installés (macOS)
+  loom au \"Nom\" morceau.loom sortie.wav [voix] [N]
+                                               jouer les notes des voix mélodiques (ou d'une
+                                               voix) dans un instrument AU (prototype)
   loom-gui [morceau.loom]                      la même chose dans une fenêtre
 ";
 
@@ -82,6 +86,10 @@ enum Command {
     Scala { file: String, tonic: String },
     /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
     Bake { file: String, out: String, bars: Option<u32> },
+    /// Les Audio Units installés.
+    Plugins,
+    /// Les notes de `voice` (ou des voix mélodiques) jouées dans l'instrument AU `plugin`.
+    Au { plugin: String, file: String, out: String, voice: Option<String>, bars: Option<u32> },
     Tui(Option<PathBuf>),
 }
 
@@ -144,6 +152,18 @@ fn parse(args: &[&str]) -> Result<Command, String> {
         ["contrepoint" | "counterpoint", file] => Command::Counterpoint { file: file.to_string() },
         ["reharm", file] => Command::Reharm { file: file.to_string(), how: "jazz".into() },
         ["reharm", file, how] => Command::Reharm { file: file.to_string(), how: how.to_string() },
+        ["plugins"] => Command::Plugins,
+        ["au", plugin, file, out, rest @ ..] if rest.len() <= 2 => {
+            let (mut voice, mut bars) = (None, None);
+            for a in rest {
+                match a.parse::<u32>() {
+                    Ok(n) if n > 0 => bars = Some(n),
+                    Ok(_) => return Err(format!("nombre de mesures invalide : {a}")),
+                    Err(_) => voice = Some(a.to_string()),
+                }
+            }
+            Command::Au { plugin: plugin.to_string(), file: file.to_string(), out: out.to_string(), voice, bars }
+        }
         [] => Command::Tui(None),
         [file] if !file.starts_with('-') => Command::Tui(Some(PathBuf::from(file))),
         _ => return Err(format!("arguments non reconnus\n\n{USAGE}")),
@@ -178,6 +198,8 @@ fn main() -> ExitCode {
             Ok(())
         }
         Command::Bake { file, out, bars } => bake(&file, &out, bars),
+        Command::Plugins => plugins(),
+        Command::Au { plugin, file, out, voice, bars } => au(&plugin, &file, &out, voice.as_deref(), bars),
         Command::Tui(path) => tui(path),
     });
     match result {
@@ -285,6 +307,53 @@ fn loudness(file: &str, target: Option<&str>) -> Result<(), String> {
 }
 
 /// `bake`: the program as MIDI notes per voice (JSON), for `tools/bake_live.py`.
+#[cfg(target_os = "macos")]
+fn plugins() -> Result<(), String> {
+    let all = loom_audio::au::list();
+    for kind in [true, false] {
+        println!("{}", if kind { "instruments :" } else { "effets :" });
+        for a in all.iter().filter(|a| a.instrument == kind) { println!("  {}", a.name); }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn plugins() -> Result<(), String> { Err("les Audio Units n'existent que sur macOS".into()) }
+
+#[cfg(target_os = "macos")]
+fn au(plugin: &str, file: &str, out: &str, voice: Option<&str>, bars: Option<u32>) -> Result<(), String> {
+    use loom_audio::au::{find, render_notes, AuInstrument, AuNote};
+    let info = find(plugin).ok_or(format!("aucun Audio Unit ne s'appelle « {plugin} » (voir loom plugins)"))?;
+    let src = read(file)?;
+    let program = loom_core::Program::parse(&src);
+    let bars = bars.unwrap_or_else(|| loom_audio::bake::default_bars(&program));
+    let baked = loom_audio::bake::bake(&src, bars);
+    // du temps (en temps musicaux) aux secondes, mesure par mesure (tempo qui change compris)
+    let mb = baked.meter_beats;
+    let mut starts = vec![0.0f64];
+    for bpm in &baked.bar_bpm { starts.push(starts.last().unwrap() + mb * 60.0 / bpm); }
+    let sec = |beat: f64| {
+        let k = ((beat / mb).floor().max(0.0) as usize).min(baked.bar_bpm.len().saturating_sub(1));
+        starts[k] + (beat - k as f64 * mb) * 60.0 / baked.bar_bpm.get(k).copied().unwrap_or(120.0)
+    };
+    let tracks: Vec<_> = baked.tracks.iter().filter(|t| match voice { Some(v) => t.name == v, None => !t.drum }).collect();
+    if tracks.is_empty() { return Err(match voice { Some(v) => format!("pas de voix « {v} » dans {file}"), None => format!("{file} n'a pas de voix mélodique") }); }
+    let notes: Vec<AuNote> = tracks.iter().flat_map(|t| t.notes.iter()).map(|n| AuNote { on: sec(n.beat), off: sec(n.beat + n.dur), midi: n.pitch, vel: n.vel }).collect();
+    let rate = 48_000.0;
+    let mut inst = AuInstrument::open(&info, rate)?;
+    // deux secondes de plus pour les queues de son
+    let (l, r) = render_notes(&mut inst, &notes, starts.last().copied().unwrap_or(0.0) + 2.0)?;
+    let stereo: Vec<f32> = l.iter().zip(&r).flat_map(|(a, b)| [*a, *b]).collect();
+    loom_audio::wavout::write_wav_as(std::path::Path::new(out), &stereo, rate as u32, loom_audio::WavFormat::Pcm24).map_err(|e| e.to_string())?;
+    let peak = stereo.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+    println!("{} · {} voix · {} notes · {bars} mesures → {out} ({:.1} s, crête {:.1} dBFS)",
+        info.name, tracks.len(), notes.len(), l.len() as f64 / rate, 20.0 * peak.max(1e-9).log10());
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn au(_: &str, _: &str, _: &str, _: Option<&str>, _: Option<u32>) -> Result<(), String> { Err("les Audio Units n'existent que sur macOS".into()) }
+
 fn bake(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
     let src = read(file)?;
     let program = loom_core::Program::parse(&src);
@@ -362,6 +431,9 @@ mod tests {
         assert_eq!(parse(&["reharm", "a.loom"]), Ok(Command::Reharm { file: "a.loom".into(), how: "jazz".into() }));
         assert_eq!(parse(&["loudness", "a.wav", "club"]), Ok(Command::Loudness { file: "a.wav".into(), target: Some("club".into()) }));
         assert!(render_args(&["a.loom", "a.wav", "--sr", "12"]).is_err());
+        assert_eq!(parse(&["plugins"]), Ok(Command::Plugins));
+        assert_eq!(parse(&["au", "DLS", "a.loom", "a.wav", "lead", "8"]), Ok(Command::Au { plugin: "DLS".into(), file: "a.loom".into(), out: "a.wav".into(), voice: Some("lead".into()), bars: Some(8) }));
+        assert_eq!(parse(&["au", "DLS", "a.loom", "a.wav"]), Ok(Command::Au { plugin: "DLS".into(), file: "a.loom".into(), out: "a.wav".into(), voice: None, bars: None }));
         assert_eq!(parse(&["bake", "a.loom", "a.json"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: None }));
         assert_eq!(parse(&["bake", "a.loom", "a.json", "16"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: Some(16) }));
         assert!(parse(&["bake", "a.loom", "a.json", "0"]).is_err());

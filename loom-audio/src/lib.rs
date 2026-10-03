@@ -27,6 +27,9 @@ mod device;
 pub mod midi;
 #[cfg(feature = "device")]
 pub mod input;
+/// Héberger des Audio Units (prototype, macOS seulement).
+#[cfg(target_os = "macos")]
+pub mod au;
 
 #[cfg(feature = "device")]
 pub use device::Engine;
