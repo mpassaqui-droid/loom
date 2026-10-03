@@ -8,6 +8,7 @@
 //! - [`Engine`] (feature `device`): live output on the system sound card.
 //! - [`render`] / [`write_wav`]: offline bounce to a WAV file.
 
+pub mod bake;
 pub mod clock;
 pub mod drums;
 pub mod dsp;

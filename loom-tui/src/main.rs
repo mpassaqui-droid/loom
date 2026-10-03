@@ -4,6 +4,7 @@
 //!   loom play song.loom                  play without the editor (Ctrl+C to stop)
 //!   loom render song.loom out.wav [N]    bounce N bars (default: the song, or 8) to WAV
 //!   loom render song.loom dir --stems [N]  one WAV per voice in `dir`
+//!   loom bake song.loom out.json [N]     MIDI notes per voice + tempo + tuning, for Ableton Live
 //!
 //! Architecture: the audio thread lives inside `loom_audio::Engine` (cpal);
 //! this thread draws with ratatui and sends it commands. Edits hot-swap at
@@ -32,6 +33,8 @@ usage :
   loom render morceau.loom sortie.wav [N]      exporter N mesures en WAV
   loom render morceau.loom dossier --stems [N] une piste WAV par voix dans le dossier
   loom render --help                           détails de l'export
+  loom bake morceau.loom sortie.json [N]       cuire en notes MIDI par voix (pour Ableton Live,
+                                               voir tools/bake_live.py)
   loom-gui [morceau.loom]                      la même chose dans une fenêtre
 ";
 
@@ -57,6 +60,8 @@ enum Command {
     Play(String),
     /// Bounce to `out` (a WAV, or a folder of stems), `bars` bars or the whole song.
     Render { file: String, out: String, bars: Option<u32>, stems: bool },
+    /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
+    Bake { file: String, out: String, bars: Option<u32> },
     Tui(Option<PathBuf>),
 }
 
@@ -85,6 +90,11 @@ fn parse(args: &[&str]) -> Result<Command, String> {
             };
             Command::Render { file: file.to_string(), out: out.to_string(), bars, stems }
         }
+        ["bake", file, out] => Command::Bake { file: file.to_string(), out: out.to_string(), bars: None },
+        ["bake", file, out, bars] => match bars.parse::<u32>() {
+            Ok(n) if n > 0 => Command::Bake { file: file.to_string(), out: out.to_string(), bars: Some(n) },
+            _ => return Err(format!("nombre de mesures invalide : {bars}")),
+        },
         [] => Command::Tui(None),
         [file] if !file.starts_with('-') => Command::Tui(Some(PathBuf::from(file))),
         _ => return Err(format!("arguments non reconnus\n\n{USAGE}")),
@@ -102,6 +112,7 @@ fn main() -> ExitCode {
         Command::Play(file) => play(&file),
         Command::Render { file, out, bars, stems: false } => render(&file, &out, bars),
         Command::Render { file, out, bars, stems: true } => render_stems(&file, &out, bars),
+        Command::Bake { file, out, bars } => bake(&file, &out, bars),
         Command::Tui(path) => tui(path),
     });
     match result {
@@ -170,6 +181,20 @@ fn render(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
     Ok(())
 }
 
+/// `bake`: the program as MIDI notes per voice (JSON), for `tools/bake_live.py`.
+fn bake(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
+    let src = read(file)?;
+    let program = loom_core::Program::parse(&src);
+    if program.voices.is_empty() { return Err(format!("{file} ne contient aucune voix")); }
+    let bars = bars.unwrap_or_else(|| loom_audio::bake::default_bars(&program));
+    let baked = loom_audio::bake::bake(&src, bars);
+    std::fs::write(out, baked.to_json()).map_err(|e| format!("impossible d'écrire {out} : {e}"))?;
+    let notes: usize = baked.tracks.iter().map(|t| t.notes.len()).sum();
+    println!("{bars} mesures · {} pistes · {notes} notes{} → {out}",
+        baked.tracks.len(), if baked.ascl.is_some() { " · accordage" } else { "" });
+    Ok(())
+}
+
 /// `--stems`: every voice to its own WAV in `dir` (the STUDIO's STEMS, from the command line).
 fn render_stems(file: &str, dir: &str, bars: Option<u32>) -> Result<(), String> {
     let src = read(file)?;
@@ -219,6 +244,9 @@ mod tests {
         assert_eq!(render_args(&["a.loom", "pistes", "--stems", "4"]), render("pistes", Some(4), true));
         assert_eq!(render_args(&["--stems", "a.loom", "pistes", "4"]), render("pistes", Some(4), true));
         assert_eq!(render_args(&["--help"]), Ok(Command::RenderHelp));
+        assert_eq!(parse(&["bake", "a.loom", "a.json"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: None }));
+        assert_eq!(parse(&["bake", "a.loom", "a.json", "16"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: Some(16) }));
+        assert!(parse(&["bake", "a.loom", "a.json", "0"]).is_err());
         assert_eq!(render_args(&["a.loom", "a.wav", "-h"]), Ok(Command::RenderHelp));
         assert!(RENDER_USAGE.contains("--stems"));
         for bad in [&["a.loom"][..], &["a.loom", "a.wav", "zéro"], &["a.loom", "a.wav", "0"], &["a.loom", "a.wav", "--stem"], &["a", "b", "1", "2"]] {
