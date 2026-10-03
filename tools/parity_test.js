@@ -128,6 +128,18 @@ const pieces = {
   'evolve (génétique seedée)': 'seed: 3\nlead: evolve(16) | pluck | gain 0.1\nkick: x . . x . . x .',
 };
 
+// Verbes Tidal (ply, linger, segment, range, loopAt). Ces pièces passent dans la
+// parité d'onsets ci-dessous ET dans une parité plus stricte (onset + jeton joué),
+// car range ne change que les hauteurs.
+const tidal_pieces = {
+  'tidal ply': "key: c minor\nkick: x . x . | ply 2\nhat: x x . x | ply 3\nlead: 1 [3 5] . 1'! | ply 2\nm: 1 2 3 4 | every 2 ply 4",
+  'tidal linger': "key: d dorian\nlead: 1 2 3 4 5 6 7 1' | linger 0.25\nm2: 1 2 3 4 5 6 7 1' | linger 0.75\nm3: 1 2 3 4 5 6 7 1' | linger -0.25\nhat: x . x x . x x . | linger 0.5\nm4: 1 2 3 | linger 0.1",
+  'tidal segment': "key: c major\nlead: 1 3 5 | segment 6\nm2: 1 2 3 4 5 | segment 3\nm3: 1 . 5 | segment 8\nk: x . x | segment 4\nm4: walk(8) | segment 5",
+  'tidal range': "seed: 4\nkey: a minor\nlead: 1 2 3 4 5 | range 1 3\nm2: 1 . 3! c4 5? | range 1 1''\nm3: 1 3 5 | range 8 1\nm4: 4 4 | range 2, 5\nm5: walk(8) | range 3 6",
+  'tidal combinés + loopAt': "seed: 2\nkey: e minor\nlead: 1 3 5 7 | range 1 5' | ply 2 | linger 0.5\nm2: 5 3 1 | segment 4 | rev\nbreak: x . . . | sample amen | loopAt 2",
+};
+Object.assign(pieces, tidal_pieces);
+
 // ── ANALYSER PARITY (offline teacher analysis) ─────────────────────────────
 // The Rust analyser (loom-core::prof, now the web's default via analyze_json)
 // must agree line-for-line with the JS analyzePiece (the long-tested fallback):
@@ -319,6 +331,35 @@ for (const [name, src] of Object.entries(pieces)) {
     }
   }
 }
+// Parité stricte des verbes Tidal : chaque (onset, jeton joué) par voix et mesure.
+// Hauteur comparée en MIDI : Rust donne la fréquence résolue, JS le jeton brut
+// (degré ou nom de note) qu'on résout avec la tonalité de la pièce.
+const NOTE = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+const jsMidi = (tok, key, drum) => {
+  if (drum) return 'x';
+  const base = String(tok).replace(/[?*!].*$/, '');
+  if (base === 'x') return 48;
+  if (/^[1-7]/.test(base) && key) return L.degreeToMidi(base, key);
+  const m = /^([a-g])([#b]?)(-?\d+)$/.exec(base);
+  return m ? 12 * (+m[3] + 1) + NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) : '?' + base;
+};
+const rsMidi = e => e.is_drum ? 'x' : e.token === 'x' ? 48 : e.freq == null ? '?' + e.token : Math.round(69 + 12 * Math.log2(e.freq / 440));
+const notesOf = (arr, pitch) => { const m = {}; for (const e of arr) (m[e.voice] || (m[e.voice] = [])).push(r3(e.phase) + ':' + pitch(e));
+  for (const v in m) m[v].sort(); return m; };
+let td_total = 0, td_bad = 0;
+for (const [name, src] of Object.entries(tidal_pieces)) {
+  const key = L.parseKey(src);
+  for (let bar = 0; bar < 4; bar++) {
+    const js = notesOf(L.scheduleBar(src, bar), e => jsMidi(e.tok, key, e.drum));
+    const rs = notesOf(JSON.parse(W.schedule_bar_json(src, bar)), rsMidi);
+    for (const v of new Set([...Object.keys(js), ...Object.keys(rs)])) {
+      td_total++;
+      const a = (js[v] || []).join(' '), b = (rs[v] || []).join(' ');
+      if (a !== b) { td_bad++; if (td_bad <= 8) console.log(`  TIDAL DIFF [${name} bar${bar} ${v}]\n    JS  : ${a}\n    Rust: ${b}`); }
+    }
+  }
+}
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
+console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && td_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

@@ -799,6 +799,47 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
         // | hocket copy tile the bar — every step covered once (interlock).
         Some("hocket") | Some("complement") =>
             tokens.iter().map(|t| if t == "." || t == "~" { "x".to_string() } else { ".".to_string() }).collect(),
+        // Tidal verbs (mirrored op-for-op in web/index.html applyOne):
+        // ply N: each event repeated N times inside its own step
+        Some("ply") => {
+            let n = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(2).clamp(1, 16);
+            if n == 1 { return tokens.to_vec(); }
+            tokens.iter().map(|t| if t == "." || t == "~" { t.clone() }
+                else { format!("[{}]", vec![t.as_str(); n].join(" ")) }).collect()
+        }
+        // linger F: loop the first fraction F of the bar (F<0: the last |F|)
+        Some("linger") => {
+            if tokens.is_empty() { return tokens.to_vec(); }
+            let f = parts.get(1).and_then(|x| x.parse::<f64>().ok()).filter(|f| f.is_finite() && *f != 0.0).unwrap_or(0.25);
+            if f.abs() >= 1.0 { return tokens.to_vec(); }
+            let len = tokens.len();
+            let k = ((len as f64 * f.abs() + 0.5).floor() as usize).clamp(1, len);
+            let slice = if f > 0.0 { &tokens[..k] } else { &tokens[len - k..] };
+            slice.iter().cycle().take(len).cloned().collect()
+        }
+        // segment N: resample the line into N even steps (nearest earlier token)
+        Some("segment") => {
+            if tokens.is_empty() { return tokens.to_vec(); }
+            let len = tokens.len();
+            let n = parts.get(1).and_then(|x| x.parse::<usize>().ok()).unwrap_or(len).clamp(1, 64);
+            (0..n).map(|i| tokens[i * len / n].clone()).collect()
+        }
+        // range A B: rescale the pattern's lowest..highest degree onto A..B
+        Some("range") => {
+            let (Some(a), Some(b)) = (parts.get(1).and_then(|x| range_bound(x)), parts.get(2).and_then(|x| range_bound(x)))
+                else { return tokens.to_vec() };
+            let idx: Vec<Option<(i64, &str)>> = tokens.iter().map(|t| deg_index(t)).collect();
+            let lo = idx.iter().flatten().map(|d| d.0).min();
+            let hi = idx.iter().flatten().map(|d| d.0).max();
+            let (Some(lo), Some(hi)) = (lo, hi) else { return tokens.to_vec() };
+            tokens.iter().zip(idx).map(|(t, d)| match d {
+                None => t.clone(),
+                Some((i, mods)) => {
+                    let ni = if hi == lo { a } else { a + ((i - lo) * (b - a) * 2 + (hi - lo)).div_euclid(2 * (hi - lo)) };
+                    deg_from_index(ni, mods)
+                }
+            }).collect()
+        }
         // motivic development: an arc of transformations picked by the bar, so a
         // section EVOLVES instead of repeating. Reuses parity-tested verbs.
         Some("develop") | Some("dev") => {
@@ -808,6 +849,34 @@ fn apply_verb(tokens: &[String], verb: &str, bar: i64, seed: u64) -> Vec<String>
         }
         _ => tokens.to_vec(),
     }
+}
+
+/// `range` helper: a plain scale degree token (`5`, `3'`, `2,` plus `?*!`/digit
+/// mods) as a 0-based diatonic index with its trailing mods. Same grammar as JS.
+fn deg_index(tok: &str) -> Option<(i64, &str)> {
+    let b = tok.as_bytes();
+    if b.is_empty() || !(b'1'..=b'7').contains(&b[0]) { return None; }
+    let mut o = 0i64;
+    let mut k = 1;
+    while k < b.len() && (b[k] == b'\'' || b[k] == b',') { o += if b[k] == b'\'' { 1 } else { -1 }; k += 1; }
+    let mods = &tok[k..];
+    if !mods.bytes().all(|c| matches!(c, b'?' | b'*' | b'!' | b'0'..=b'9')) { return None; }
+    Some(((b[0] - b'1') as i64 + o * 7, mods))
+}
+
+/// `range A B` bound: an integer degree (`8` = 1 an octave up) or a degree token (`5'`).
+fn range_bound(s: &str) -> Option<i64> {
+    if let Ok(n) = s.parse::<i64>() { return Some(n.clamp(-27, 29) - 1); }
+    deg_index(s).filter(|d| d.1.is_empty()).map(|d| d.0)
+}
+
+/// 0-based diatonic index back to a degree token (`'`/`,` octave marks) + mods.
+fn deg_from_index(i: i64, mods: &str) -> String {
+    let oc = i.div_euclid(7);
+    let mut s = (i.rem_euclid(7) + 1).to_string();
+    for _ in 0..oc.abs() { s.push(if oc > 0 { '\'' } else { ',' }); }
+    s.push_str(mods);
+    s
 }
 
 /// Diatonically transpose one degree token by `n` scale-steps (octave wrap, marks/mods kept).
@@ -2307,6 +2376,51 @@ mod tests {
     fn rev_reverses() {
         let t = vec!["a".into(),"b".into(),"c".into()];
         assert_eq!(apply_verb(&t, "rev", 0, 0), vec!["c","b","a"]);
+    }
+
+    fn toks(s: &str) -> Vec<String> { s.split_whitespace().map(|x| x.to_string()).collect() }
+
+    #[test]
+    fn ply_repeats_each_event_inside_its_step() {
+        assert_eq!(apply_verb(&toks("x . 3!"), "ply 3", 0, 0), vec!["[x x x]", ".", "[3! 3! 3!]"]);
+        assert_eq!(apply_verb(&toks("x ."), "ply 1", 0, 0), vec!["x", "."]);
+        assert_eq!(apply_verb(&toks("x"), "ply", 0, 0), vec!["[x x]"]); // default 2
+        // onsets: 2 steps, ply 2 on the first -> hits at 0, 0.25 then rest
+        let ev = schedule_bar(&parse("kick: x . | ply 2"), 0);
+        let ph: Vec<f32> = ev.iter().map(|e| e.phase).collect();
+        assert_eq!(ph, vec![0.0, 0.25]);
+    }
+
+    #[test]
+    fn linger_loops_a_fraction_of_the_bar() {
+        let t = toks("1 2 3 4 5 6 7 1'");
+        assert_eq!(apply_verb(&t, "linger 0.25", 0, 0), toks("1 2 1 2 1 2 1 2"));
+        assert_eq!(apply_verb(&t, "linger 0.75", 0, 0), toks("1 2 3 4 5 6 1 2"));
+        assert_eq!(apply_verb(&t, "linger -0.25", 0, 0), toks("7 1' 7 1' 7 1' 7 1'"));
+        assert_eq!(apply_verb(&t, "linger 1", 0, 0), t);
+        assert_eq!(apply_verb(&toks("a b c"), "linger 0.1", 0, 0), toks("a a a")); // at least one step
+    }
+
+    #[test]
+    fn segment_resamples_the_line() {
+        assert_eq!(apply_verb(&toks("1 3 5"), "segment 6", 0, 0), toks("1 1 3 3 5 5"));
+        assert_eq!(apply_verb(&toks("1 2 3 4"), "segment 2", 0, 0), toks("1 3"));
+        assert_eq!(apply_verb(&toks("1 . 5"), "segment 4", 0, 0), toks("1 1 . 5"));
+        assert_eq!(apply_verb(&toks("1 2"), "segment", 0, 0), toks("1 2")); // default: same length
+    }
+
+    #[test]
+    fn range_rescales_degrees() {
+        // span 1..5 (index 0..4) onto 1..3 (index 0..2): rounding half up
+        assert_eq!(apply_verb(&toks("1 2 3 4 5"), "range 1 3", 0, 0), toks("1 2 2 3 3"));
+        // stretch onto two octaves, mods kept, rests/notes untouched
+        assert_eq!(apply_verb(&toks("1 . 3! c4 5?"), "range 1 1''", 0, 0), toks("1 . 1'! c4 1''?"));
+        // integer bound 8 = one octave up; inverted range flips the contour
+        assert_eq!(apply_verb(&toks("1 3 5"), "range 8 1", 0, 0), toks("1' 5 1")); // 3.5 rounds up
+        // single-degree line goes to A; low octave marks parsed
+        assert_eq!(apply_verb(&toks("4 4"), "range 2, 5", 0, 0), toks("2, 2,"));
+        assert_eq!(apply_verb(&toks("x x"), "range 1 5", 0, 0), toks("x x"));
+        assert_eq!(apply_verb(&toks("1 5"), "range", 0, 0), toks("1 5"));
     }
 
     #[test]

@@ -4,6 +4,20 @@
 > section « Review » ajoutée en fin de session. La roadmap long-terme vit dans
 > `CLAUDE.md` ; ici = le travail en cours, session par session.
 
+## Session 2026-10-03 · verbes Tidal (branche verbes-tidal)
+
+- [x] Inventaire : nudge, stut (alias de stutter), strum, chop existent déjà.
+- [x] loom-core : `ply N`, `linger F`, `segment N`, `range A B` (+ tests), `loopAt N` (synth.rs).
+- [x] loom-audio : `loopAt N` étire le warp sur N mesures (drums et mélodie, + test).
+- [x] web : miroir JS (applyOne, parse, trigger), prompt VIBE, aide, mots-clés.
+- [x] parity_test : 5 pièces Tidal, parité stricte onset + hauteur.
+- [x] Exemple `tidal.loom`.
+
+Review : écartés `stut N FB T` (nom déjà pris par stutter ; l'écho existe via
+`| echo DIV FB` et `| off N`), `rolled` (= `| strum`), `nudge` (existe),
+`chop` (existe), `striate` (tranchage entrelacé qui demande la phase de
+l'événement dans les 3 moteurs audio ; reporté).
+
 ## Session 2026-09-25 — vague 6 : GPU de plus · bus&sends · algocompo · accessibilité · connaissance
 
 > Décision du propriétaire : « ok pour tout » — on lance la vague 6 dans l'ordre
