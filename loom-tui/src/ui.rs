@@ -327,12 +327,20 @@ pub(crate) fn popup(f: &mut Frame, app: &App, title: &str, w: u16, h: u16) -> Re
 
 fn draw_help(f: &mut Frame, app: &mut App) {
     let t = &app.theme;
+    // sur Mac, Alt s'appelle Option (⌥)
     let key = |k: &str, what: &str| Line::from(vec![
-        Span::styled(format!("  {k:<17}"), Style::new().fg(c(t.accent))),
+        Span::styled(format!("  {:<17}", if cfg!(target_os = "macos") { k.replace("Alt+", "⌥") } else { k.to_string() }), Style::new().fg(c(t.accent))),
         Span::raw(what.to_string()),
     ]);
     let section = |s: &str| Line::styled(format!(" {s}"), Style::new().fg(c(t.dim)).add_modifier(Modifier::BOLD));
+    let alt_note = if cfg!(target_os = "macos") {
+        "⌥ = Option. Option ne marche pas ? Ctrl+G puis la lettre"
+    } else {
+        "Alt ne passe pas ? Ctrl+G puis la lettre fait pareil"
+    };
     let lines = vec![
+        Line::styled(format!(" {alt_note}"), Style::new().fg(c(t.accent)).add_modifier(Modifier::BOLD)),
+        Line::from(""),
         section("Jouer"),
         key("Ctrl+R · F5", "jouer / appliquer le code (à la prochaine mesure)"),
         key("Échap · F6", "stop"),

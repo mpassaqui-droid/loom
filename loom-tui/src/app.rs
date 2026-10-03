@@ -91,6 +91,8 @@ pub struct App {
     pub lints: Vec<loom_app::lint::Lint>,
     /// La dictée de VIBE en cours (micro ouvert, ou whisper qui écrit).
     pub dictee: Dictee,
+    /// Ctrl+G vient d'être tapé : la touche suivante compte comme Alt+touche.
+    pub leader: bool,
     /// The SCÈNE's state (scene choice, sound analysis, sparks).
     pub stage: TermStage,
     /// STUDIO: master knobs, mixer, meters, MIDI LEARN, stems, demo…
@@ -125,6 +127,7 @@ impl App {
             lien: false,
             lints: Vec::new(),
             dictee: Dictee::Off,
+            leader: false,
             stage: TermStage::default(),
             studio,
             teacher: Teacher::default(),
@@ -457,6 +460,20 @@ impl App {
     // ---- keys ----------------------------------------------------------
 
     pub fn on_key(&mut self, key: KeyEvent) {
+        // Ctrl+G puis une lettre = Alt+lettre : le Terminal du Mac ne transmet pas
+        // la touche Option par défaut, Ctrl+G marche dans tous les terminaux
+        if self.leader {
+            self.leader = false;
+            if key.code == KeyCode::Esc { self.info("annulé"); return; }
+            let mut k = key;
+            k.modifiers = (k.modifiers - KeyModifiers::CONTROL) | KeyModifiers::ALT;
+            return self.on_key(k);
+        }
+        if key.code == KeyCode::Char('g') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.leader = true;
+            self.info("Ctrl+G : tape la lettre (U mes sons, C thème, F partition, M mixeur…) · Échap annule");
+            return;
+        }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         if self.studio_key(key) { return; }
