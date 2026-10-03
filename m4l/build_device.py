@@ -47,7 +47,7 @@ def vue_code():
 
 
 def v8ui(id, rect, mode, presentation_rect=None):
-    b = boite(id, 'v8ui', rect, None, 1, 1, [''], parameter_enable=0, filename='loom_vue.js', embed=1,
+    b = boite(id, 'v8ui', rect, None, 1, 2, ['', ''], parameter_enable=0, filename='loom_vue.js', embed=1,
               jsarguments=[mode],
               textfile={'filename': 'loom_vue.js', 'flags': 0, 'embed': 1, 'autowatch': 0, 'text': vue_code()})
     if presentation_rect:
@@ -108,6 +108,7 @@ def patch(test=False):
         v8ui('obj-13', [460, 200, 388, 96], 'mini', [6, 66, 388, 96]),
         boite('obj-14', 'newobj', [460, 310, 60, 22], 'pcontrol', 1, 1, ['']),
         boite('obj-15', 'newobj', [460, 340, 80, 22], 'p scène', 1, 0, None, patcher=scene()),
+        boite('obj-16', 'newobj', [560, 310, 90, 22], 'prepend /loom/vue', 1, 1, ['']),
         boite('obj-9', 'newobj', [400, 20, 50, 22], 'midiin', 1, 1, ['int']),
         boite('obj-10', 'newobj', [400, 440, 50, 22], 'midiout', 1, 0),
     ]
@@ -121,13 +122,15 @@ def patch(test=False):
         ('obj-9', 0, 'obj-10', 0),
         ('obj-2', 2, 'obj-11', 0), ('obj-11', 0, 'obj-12', 0), ('obj-12', 0, 'obj-2', 0),
         ('obj-13', 0, 'obj-14', 0), ('obj-14', 0, 'obj-15', 0),
+        ('obj-13', 1, 'obj-16', 0), ('obj-16', 0, 'obj-8', 0),
     ]
     boites = [b for b in boites if b['id'] != 'obj-6']
     if not test:
         # le port UDP de contrôle n'existe que pour les tests : dans le device livré,
         # personne sur le réseau ne doit pouvoir charger un chemin ou du code
-        boites = [b for b in boites if b['id'] not in ('obj-5', 'obj-8')]
-        lignes = [l for l in lignes if 'obj-5' not in (l[0], l[2]) and 'obj-8' not in (l[0], l[2])]
+        hors = ('obj-5', 'obj-8', 'obj-16')
+        boites = [b for b in boites if b['id'] not in hors]
+        lignes = [l for l in lignes if l[0] not in hors and l[2] not in hors]
     return amxd.patcher(boites, lignes, 'Loom', largeur=400.0)
 
 

@@ -24,6 +24,7 @@ Dict.prototype.stringify = function () { return JSON.stringify(dicts[this.nom] |
 const horloge = { pos: 0, joue: 1 };
 function fabriqueLiveAPI(piste) {
   function LiveAPI(p) { this.unquotedpath = p; this.p = p; this.id = p === 'this_device' ? 42 : 7; }
+  // live_set : transport ; le clip : sa lecture et sa position
   LiveAPI.prototype.get = function (k) {
     if (k === 'name') return this.p.indexOf('canonical_parent') >= 0 ? 'Loom ' + piste : '';
     if (k === 'is_playing') return horloge.joue;
@@ -75,7 +76,7 @@ ok([...vusMini].join() === 'ph1', 'mini : seule la voix de la piste s\'allume');
 mini.env.paint();
 ok((mini.appels.rectangle || 0) > p1.notes.length, `mini : dessine les notes + tête de lecture (${mini.appels.rectangle} rectangles)`);
 mini.env.onclick();
-ok(mini.sorties.length === 1 && mini.sorties[0][1] === 'open', 'mini : un clic ouvre la scène');
+const ouv = mini.sorties.filter(s => s[0] === 0); ok(ouv.length === 1 && ouv[0][1] === 'open', 'mini : un clic ouvre la scène');
 
 const sc = vue('scene', 960, 540);
 horloge.pos = 0; sc.env.image();

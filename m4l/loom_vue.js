@@ -13,6 +13,7 @@
 // Le temps vient du clip Loom de la piste (playing_position), donc de Live.
 
 autowatch = 0;
+outlets = 2;    // 0 : « open » vers la scène · 1 : diagnostic (port UDP du build de test)
 mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
@@ -22,6 +23,7 @@ var BG = [0.043, 0.059, 0.043], FG = [0.616, 1.0, 0.541], DIM = [0.169, 0.42, 0.
 
 var vue = { dict: null, version: null, data: null, clipApi: null, clipPath: '', pos: -1, joue: false };
 var particules = [], eclats = {};
+var diag = { images: 0, err: '' };
 
 function fnv(s) {
     var h = 2166136261 >>> 0;
@@ -86,7 +88,9 @@ function avance() {
     vue.joue = false;
     if (vue.clipApi) {
         try {
-            vue.joue = Number(vue.clipApi.get('is_playing')) === 1;
+            // le clip reste « en lecture » quand le transport de Live est arrêté
+            if (!vue.setApi) vue.setApi = new LiveAPI('live_set');
+            vue.joue = Number(vue.setApi.get('is_playing')) === 1 && Number(vue.clipApi.get('is_playing')) === 1;
             if (vue.joue) vue.pos = Number(vue.clipApi.get('playing_position'));
         } catch (e) { vue.joue = false; }
     }
@@ -221,8 +225,15 @@ function paint() {
 // ---- animation ----
 
 function image() {
-    lit();
-    avance();
+    diag.images++;
+    try { lit(); } catch (e) { diag.err = 'lit: ' + e; }
+    try { avance(); } catch (e) { diag.err = 'avance: ' + e; }
+    if (diag.images % 30 === 1) {
+        var d = vue.data;
+        outlet(1, MODE + ' images=' + diag.images + ' dict=' + vue.dict + ' version=' + vue.version +
+            ' pistes=' + (d ? (d.pistes || []).length : -1) + ' voix=' + (d ? d.voix : '') +
+            ' joue=' + vue.joue + ' pos=' + vue.pos + ' err=' + diag.err);
+    }
     for (var k in eclats) { eclats[k] *= 0.86; if (eclats[k] < 0.02) delete eclats[k]; }
     for (var i = particules.length - 1; i >= 0; i--) {
         var q = particules[i];
