@@ -598,7 +598,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
             }
             None => rest.to_string(),
         };
-        let mut segs = rest.split('|').map(|s| s.trim());
+        let mut segs = split_bars(&rest).into_iter().map(|s| s.trim());
 
         let pattern = segs.next().unwrap_or("");
         // stacks: `;` splits the pattern into simultaneous lines
@@ -1397,7 +1397,7 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                         let p0 = i as f32 / spb as f32 + off;
                         let p1 = (i + 1) as f32 / spb as f32 + off;
                         emit_token(&mut events, &v.tokens[idx], p0, p1, v, voice_key.as_ref(),
-                                   base_oct, bar, seed, s.max(0) as usize, prog);
+                                   base_oct, bar, seed, s.max(0) as usize, prog, (idx as i64, nn as i64));
                     }
                 }
                 continue;
@@ -1418,7 +1418,7 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                             let p0 = g as f32 / total as f32 + off;
                             let p1 = (g + 1) as f32 / total as f32 + off;
                             emit_token(&mut events, &v.tokens[idx], p0, p1, v, voice_key.as_ref(),
-                                       base_oct, bar, seed, s.max(0) as usize, prog);
+                                       base_oct, bar, seed, s.max(0) as usize, prog, (idx as i64, nn as i64));
                         }
                     }
                 }
@@ -1468,7 +1468,7 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
                     let off = step_offset(i, n, lv, groove) + shift / n as f32;
                     let p0 = i as f32 / n as f32 + off;
                     let p1 = (i + 1) as f32 / n as f32 + off;
-                    emit_token(&mut events, raw, p0, p1, lv, voice_key.as_ref(), base_oct, bar, seed, i, prog);
+                    emit_token(&mut events, raw, p0, p1, lv, voice_key.as_ref(), base_oct, bar, seed, i, prog, (i as i64, n as i64));
                 }
             }
         }
@@ -1477,12 +1477,20 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
 }
 
 /// Split a pattern on whitespace but keep `[a b]` and `{a b}` groups (nested, mixed) as one token.
+/// Les parenthèses aussi gardent leurs espaces (`=(i * 3)`, `e(3, 8)`) sans couper
+/// le jeton avant elles : `e(` et `=(` commencent en plein jeton.
 pub fn tokenize_pat(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut depth = 0i32;
+    let mut paren = 0i32;
     let mut cur = String::new();
     for ch in s.chars() {
-        if ch == '[' || ch == '{' {
+        if ch == '(' {
+            paren += 1; cur.push(ch);
+        } else if ch == ')' {
+            if paren > 0 { paren -= 1; }
+            cur.push(ch);
+        } else if ch == '[' || ch == '{' {
             if depth == 0 && !cur.is_empty() { out.push(std::mem::take(&mut cur)); }
             depth += 1; cur.push(ch);
         } else if ch == ']' || ch == '}' {
@@ -1490,7 +1498,7 @@ pub fn tokenize_pat(s: &str) -> Vec<String> {
             cur.push(ch);
             if depth == 0 { out.push(std::mem::take(&mut cur)); }
         } else if ch.is_whitespace() {
-            if depth == 0 { if !cur.is_empty() { out.push(std::mem::take(&mut cur)); } }
+            if depth == 0 && paren == 0 { if !cur.is_empty() { out.push(std::mem::take(&mut cur)); } }
             else { cur.push(ch); }
         } else { cur.push(ch); }
     }
@@ -1498,12 +1506,64 @@ pub fn tokenize_pat(s: &str) -> Vec<String> {
     out.into_iter().filter(|t| !t.starts_with('@') && !t.starts_with('>')).collect()
 }
 
+/// Coupe une ligne de voix sur les `|` hors parenthèses : un pas-programme
+/// `=(i|b)` ou un `xys(…1>2:2|3:1…)` garde son `|`. Parenthèses déséquilibrées :
+/// coupe simple sur chaque `|` (comportement d'avant).
+pub fn split_bars(s: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut depth = 0i32;
+    let mut from = 0;
+    for (k, c) in s.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            '|' if depth == 0 => { out.push(&s[from..k]); from = k + 1; }
+            _ => {}
+        }
+    }
+    if depth != 0 { return s.split('|').collect(); }
+    out.push(&s[from..]);
+    out
+}
+
+/// Pas-programme `=(EXPR)` suivi de modificateurs (`?70`, `!`, `*3`…) : le jeton
+/// calculé au moment de jouer le pas. Variables : `i` (position du pas dans sa
+/// ligne, après les verbes ; dans un groupe `[…]`, dans le groupe ; en `poly`,
+/// l'indice dans la liste de jetons), `b` (numéro de mesure), `n` (nombre de pas
+/// de cette ligne). Valeur : avec `key:`/`scale:`, un degré compté depuis 0
+/// (0 = tonique `1`, 7 = `1'`, -1 = `7,`, borné à ±35) ; sans tonalité, une note
+/// MIDI (bornée 0..127, 60 = c4) ; batterie : non nul = coup, 0 = silence.
+/// Expression invalide : silence. Rend `None` si `tok` n'est pas un pas-programme.
+fn step_program(tok: &str, is_drum: bool, keyed: bool, i: i64, n: i64, bar: i64) -> Option<String> {
+    let body = tok.strip_prefix('=')?;
+    if !body.starts_with('(') { return None; }
+    let mut depth = 0i32;
+    let mut close = None;
+    for (k, c) in body.char_indices() {
+        if c == '(' { depth += 1; } else if c == ')' { depth -= 1; if depth == 0 { close = Some(k); break; } }
+    }
+    let Some(close) = close else { return Some(".".into()) };
+    let Ok(e) = Expr::parse(&body[1..close], &['i', 'b', 'n']) else { return Some(".".into()) };
+    let clamp = |x: i64, lo: i64, hi: i64| x.clamp(lo, hi) as i32;
+    let v = e.eval(&[clamp(i, i32::MIN as i64, i32::MAX as i64), clamp(bar, i32::MIN as i64, i32::MAX as i64), clamp(n, 0, i32::MAX as i64)]);
+    let mods = &body[close + 1..];
+    let base = if is_drum {
+        (if v != 0 { "x" } else { "." }).to_string()
+    } else if keyed {
+        deg_from_index(v.clamp(-35, 35) as i64, "")
+    } else {
+        midi_to_name(v.clamp(0, 127))
+    };
+    if base == "." { return Some(base); }
+    Some(base + mods)
+}
+
 /// Recursively emit events for one token within the phase range `[p0, p1)`.
 /// Handles `{a b}` random choice (seeded), `<a/b>` alternation, `[a b]` sub-sequences
 /// (recursive subdivision), `?`/`*` mods, `!` accents and `*N>`/`*N<` rolls, and arps.
 #[allow(clippy::too_many_arguments)]
 fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
-              key: Option<&Key>, base_oct: i32, bar: i64, seed: u64, salt: usize, prog: &[String]) {
+              key: Option<&Key>, base_oct: i32, bar: i64, seed: u64, salt: usize, prog: &[String], pos: (i64, i64)) {
     // {a b c}: pick ONE alternative at random (seeded -> reproducible)
     let mut t = tok.to_string();
     if t.len() >= 2 && t.starts_with('{') && t.ends_with('}') {
@@ -1517,6 +1577,8 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
     t = pick_alt(&t, bar).to_string();
     // ^ / ^N: follow the chord progression
     if !prog.is_empty() && t.starts_with('^') { t = resolve_prog(&t, prog, bar, key, base_oct); }
+    // =(EXPR) : pas-programme, calculé maintenant (voir `step_program`)
+    if let Some(c) = step_program(&t, v.is_drum, key.is_some(), pos.0, pos.1, bar) { t = c; }
     if t == "." || t == "~" { return; }
     // [a b ...]: subdivide this range among the children (recursive)
     if t.len() >= 2 && t.starts_with('[') && t.ends_with(']') {
@@ -1526,7 +1588,7 @@ fn emit_token(events: &mut Vec<Event>, tok: &str, p0: f32, p1: f32, v: &Voice,
         let span = (p1 - p0) / m as f32;
         for (k, child) in inner.iter().enumerate() {
             emit_token(events, child, p0 + k as f32 * span, p0 + (k + 1) as f32 * span,
-                       v, key, base_oct, bar, seed, salt.wrapping_mul(31).wrapping_add(k), prog);
+                       v, key, base_oct, bar, seed, salt.wrapping_mul(31).wrapping_add(k), prog, (k as i64, m as i64));
         }
         return;
     }
@@ -2499,7 +2561,8 @@ mod tests {
         let v = &p.voices[0];
         let e = v.bytebeat.as_ref().expect("voix bytebeat");
         assert_eq!(e.src, "(t*5&t>>7)|(t*3&t>>10)");
-        assert_eq!(e.eval(&[8000]), ((8000 * 5) & (8000 >> 7)) | ((8000 * 3) & (8000 >> 10)));
+        let t = 8001;
+        assert_eq!(e.eval(&[t]), ((t * 5) & (t >> 7)) | ((t * 3) & (t >> 10)));
         assert_eq!((v.gain, v.pan), (0.4, Some(-0.5)));
         assert_eq!(v.tokens, vec!["~"]);
         assert!(v.verbs.is_empty());
@@ -2583,6 +2646,47 @@ mod tests {
         // meneur avec variante de section : la variante de base donne le cycle
         let v = Program::parse("song: x*1 y*1\nm: c4 d4 e4 | poly 4 | sync k\nk: x x | poly 4\nk@y: x | poly 4");
         assert_eq!(v.voices[0].sync.as_ref().map(|s| (s.num, s.den)), Some((2, 4)));
+    }
+
+    #[test]
+    fn step_programs_compute_degrees_notes_and_hits() {
+        // avec tonalité : un degré compté depuis 0 (0 = tonique, 7 = octave)
+        let p = Program::parse("key: c major\nlead: =(i*2) | segment 4");
+        assert_eq!(hits(&p, "lead", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["c3", "e3", "g3", "b3"]);
+        // b = mesure, n = nombre de pas ; espaces et `|` permis dans les parenthèses
+        let p = Program::parse("key: c major\nlead: =( (i + b) % n | 0 ) =(i) =(i) | saw");
+        assert_eq!(hits(&p, "lead", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["c3", "d3", "e3"]);
+        assert_eq!(hits(&p, "lead", 2).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["e3", "d3", "e3"]);
+        assert_eq!(p.voices[0].verbs, Vec::<String>::new());
+        // sans tonalité : note MIDI ; octave négative et bornes
+        let p = Program::parse("m: =(60+i*12) =(200) =(0-5)");
+        assert_eq!(hits(&p, "m", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["c4", "g9", "c-1"]);
+        let p = Program::parse("key: a minor\nm: =(0-1) =(7) =(99)");
+        assert_eq!(hits(&p, "m", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["g3", "a4", "a8"]);
+        // batterie : non nul = coup ; modificateurs après la parenthèse
+        let p = Program::parse("kick: =(i%3==0) | segment 8\nhat: =(1)! =(1)*2 =(0)");
+        assert_eq!(hits(&p, "kick", 0).iter().map(|h| h.0).collect::<Vec<_>>(), vec![0, 375, 750]);
+        let hat: Vec<Event> = p.schedule_bar(0).into_iter().filter(|e| e.voice == "hat").collect();
+        assert_eq!(hat.len(), 3);
+        assert!(hat[0].vel > 1.0);
+        // invalide ou non fermée : silence ; un jeton `=x` n'est pas un programme
+        let p = Program::parse("key: c major\nm: =(i+) =(i 1 =(i)");
+        assert_eq!(hits(&p, "m", 0).len(), 0);
+        assert!(step_program("=x", false, true, 0, 1, 0).is_none());
+        // dans un groupe [..] : i et n sont ceux du groupe ; en poly : l'indice de jeton
+        let p = Program::parse("key: c major\nm: [=(i) =(i) =(n)] . | saw\nq: =(i) =(i+2) | poly 4");
+        assert_eq!(hits(&p, "m", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["c3", "d3", "f3"]);
+        assert_eq!(hits(&p, "q", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["c3", "f3", "c3", "f3"]);
+        // les verbes s'appliquent avant : rev change la position donc la valeur
+        let p = Program::parse("key: c major\nm: =(i) 5 | rev");
+        assert_eq!(hits(&p, "m", 0).into_iter().map(|h| h.1).collect::<Vec<_>>(), vec!["g3", "d3"]);
+    }
+
+    #[test]
+    fn bars_split_outside_parentheses_only() {
+        assert_eq!(split_bars("a (b|c) | gain 1"), vec!["a (b|c) ", " gain 1"]);
+        assert_eq!(split_bars("a ( | b"), vec!["a ( ", " b"]); // déséquilibré : coupe simple
+        assert_eq!(tokenize_pat("=( i * 3 ) x e(3, 8)"), vec!["=( i * 3 )", "x", "e(3, 8)"]);
     }
 
     #[test]

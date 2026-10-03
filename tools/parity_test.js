@@ -152,6 +152,17 @@ const sync_pieces = {
 };
 Object.assign(pieces, sync_pieces);
 
+// Pas-programmes `=(EXPR)` (B2) : jeton calculé au moment du pas (i, b, n).
+// Même parité stricte onset + hauteur.
+const step_pieces = {
+  'pas-programmes degrés (tonalité)': "key: c major\nlead: =(i*3%7) | segment 8\nm2: =((i+b)%n) =(i) =(i*2) | saw\nm3: =(i - 3) =(7) =(0-8) =(40)",
+  'pas-programmes MIDI (sans tonalité)': "m: =(60+i*5) =(72-b) =(200) =(0-3)\nm2: =( 48 + (i * 7 | 0) % 12 ) | segment 6",
+  'pas-programmes batterie + mods': "kick: =(i%3==0) | segment 16\nhat: =(i&1)! =(1)*2 =(0) =(b%2)?70\nsnare: =(i==4|i==12) | segment 16",
+  'pas-programmes groupes, poly, verbes': "key: a minor\nm: [=(i) =(i) =(n)] . =(b) | every 2 rev\nq: =(i) =(i+2) =(i*4) | poly 5\nj: =(i) 3 =(i+4) | jux rev | off 1\nbad: =(i+) =(i 1 =(x) 5",
+  'pas-programmes + sync + modulation': "key: c minor\nkey@b: e minor\nsong: a*2 b*2\nm: =(i*2) =(i) =(b) | poly 4 | sync k\nk: x . . | poly 4\nt2: =(i) =(i+1) | in b",
+};
+Object.assign(pieces, step_pieces);
+
 // ── ANALYSER PARITY (offline teacher analysis) ─────────────────────────────
 // The Rust analyser (loom-core::prof, now the web's default via analyze_json)
 // must agree line-for-line with the JS analyzePiece (the long-tested fallback):
@@ -180,6 +191,7 @@ const an_pieces = {
   'attente résolue 7→1 (prog V→I)': 'key: c major\nprog: G7 C\nlead: 7 1',
   'attente suspendue sur la note de tête (7)': 'key: c major\nlead: 1 2 3 5 7',
   'mélodie étroite dans une 3ce + conseils': 'key: d minor\nlead: 1 2 3 1 2 3',
+  'pas-programmes + sync (jetons calculés)': 'key: d dorian\nlead: =(i*3%7) | segment 8\nkick: =(i%3==0) | segment 16\narp: 1 3 5 | poly 16 | sync kick',
   'bytebeat + mélodie (la voix t: ne compte pas comme notes)': 'key: c minor\nkick: x . x .\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4\nlead: 1 3 5',
   'mode lydien (ethos — ambience par couleur)': 'key: f lydian\nlead: 1 2 3 4 5 6',
 };
@@ -424,9 +436,27 @@ for (const [name, src] of Object.entries(sync_pieces)) {
     }
   }
 }
+let sp_total = 0, sp_bad = 0;
+for (const [name, src] of Object.entries(step_pieces)) {
+  for (let bar = 0; bar < 4; bar++) {
+    // la tonalité de la section (key@b) pour résoudre les degrés côté JS
+    const capt = L.scheduleBar(src, bar), km = L.parseKeyMap(src);
+    let key = L.parseKey(src);
+    const sm = /^song:(.*)$/m.exec(src);
+    if (sm) { let acc = 0; for (const w of sm[1].trim().split(/\s+/)) { const [nm, k] = w.split('*'); acc += +(k || 1); if (bar < acc) { if (km[nm]) key = km[nm]; break; } } }
+    const js = notesOf(capt, e => jsMidi(e.tok, key, e.drum));
+    const rs = notesOf(JSON.parse(W.schedule_bar_json(src, bar)), rsMidi);
+    for (const v of new Set([...Object.keys(js), ...Object.keys(rs)])) {
+      sp_total++;
+      const a = (js[v] || []).join(' '), b = (rs[v] || []).join(' ');
+      if (a !== b) { sp_bad++; if (sp_bad <= 8) console.log(`  STEP DIFF [${name} bar${bar} ${v}]\n    JS  : ${a}\n    Rust: ${b}`); }
+    }
+  }
+}
+console.log(`\nSTEP parity (pas-programmes =(EXPR), onset + jeton): ${sp_total - sp_bad}/${sp_total} voice×bar  ${sp_bad === 0 ? '✅' : '⚠️ ' + sp_bad + ' diffs'}`);
 console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/${sy_total} voice×bar  ${sy_bad === 0 ? '✅' : '⚠️ ' + sy_bad + ' diffs'}`);
 
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

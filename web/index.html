@@ -1618,11 +1618,14 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       return(w.startsWith("vert")||w.startsWith("port")||w==="9:16")?"vertical":(w.startsWith("squ")||w==="1:1")?"square":"wide";}}return "wide";}
 
   // split a pattern on whitespace but keep groups [a b] and {a b} (nested, mixed) as one token
-  function tokenizePat(str){const out=[];let depth=0,cur="";
+  // (les parenthèses gardent aussi leurs espaces : `=(i * 3)`, `e(3, 8)`, sans couper avant elles)
+  function tokenizePat(str){const out=[];let depth=0,paren=0,cur="";
     for(const ch of str){
-      if(ch==="["||ch==="{"){if(depth===0&&cur){out.push(cur);cur="";}depth++;cur+=ch;}
+      if(ch==="("){paren++;cur+=ch;}
+      else if(ch===")"){if(paren>0)paren--;cur+=ch;}
+      else if(ch==="["||ch==="{"){if(depth===0&&cur){out.push(cur);cur="";}depth++;cur+=ch;}
       else if(ch==="]"||ch==="}"){if(depth>0)depth--;cur+=ch;if(depth===0){out.push(cur);cur="";}}
-      else if(/\s/.test(ch)){if(depth===0){if(cur){out.push(cur);cur="";}}else cur+=ch;}
+      else if(/\s/.test(ch)){if(depth===0&&paren===0){if(cur){out.push(cur);cur="";}}else cur+=ch;}
       else cur+=ch;}
     if(cur)out.push(cur);
     return out.filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"));}
@@ -1690,6 +1693,26 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     const s=ctx.createBufferSource();s.buffer=buf;const g=ctx.createGain();g.gain.value=v.gain!=null?v.gain:0.22;
     let out=g;if(typeof v.pan==="number"&&v.pan&&ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,v.pan));g.connect(p);out=p;}
     s.connect(g);out.connect(v.bus?busFor(v.bus):bus);connectFx(out,v);s.start(barT);}
+  // coupe une ligne de voix sur les `|` hors parenthèses (`=(i|b)`, `xys(…|…)`) ;
+  // parenthèses déséquilibrées : coupe simple (miroir de loom-core split_bars)
+  function splitBars(str){const out=[];let d=0,from=0;
+    for(let k=0;k<str.length;k++){const c=str[k];if(c==="(")d++;else if(c===")")d--;else if(c==="|"&&d===0){out.push(str.slice(from,k));from=k+1;}}
+    if(d!==0)return str.split("|");out.push(str.slice(from));return out;}
+  // pas-programme `=(EXPR)` + modificateurs : le jeton calculé au moment du pas
+  // (miroir de loom-core step_program). i = position du pas dans sa ligne (dans
+  // un groupe : dans le groupe ; en poly : indice du jeton), b = mesure, n = pas
+  // de la ligne. Avec tonalité : degré compté depuis 0 (0 = 1, 7 = 1'), borné ±35 ;
+  // sans : note MIDI 0..127 ; batterie : non nul = coup. Invalide : silence.
+  function stepProg(tok,drum,keyed,i,n,bar){if(tok[0]!=="="||tok[1]!=="(")return null;let d=0,close=-1;
+    for(let k=1;k<tok.length;k++){const c=tok[k];if(c==="(")d++;else if(c===")"){d--;if(d===0){close=k;break;}}}
+    if(close<0)return ".";let e;try{e=exprCompile(tok.slice(2,close),["i","b","n"]);}catch(_){return ".";}
+    const cl=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
+    const v=exprEval(e,[cl(i,-2147483648,2147483647),cl(bar,-2147483648,2147483647),cl(n,0,2147483647)]);
+    let base;
+    if(drum)base=v!==0?"x":".";
+    else if(keyed){const ix=cl(v,-35,35),oc=Math.floor(ix/7);base=String(((ix%7)+7)%7+1);for(let j=0;j<Math.abs(oc);j++)base+=oc>0?"'":",";}
+    else base=midiToName(cl(v,0,127));
+    return base==="."?base:base+tok.slice(close+1);}
   // macros: "def riff: 1 2 3 5" defines a reusable fragment, used as $riff anywhere in a pattern
   function expandMacros(text){const defs={};
     const lines=text.split("\n").filter(l=>{const m=/^\s*def\s+([A-Za-z_][\w]*)\s*:\s*(.+)$/.exec(l);if(m){defs[m[1]]=m[2].trim();return false;}return true;});
@@ -1706,7 +1729,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     // voix bytebeat `nom: t: EXPR | verbes` (voir bytebeatSplit) ; expression invalide = voix ignorée
     let rest=line.slice(i+1),bytebeat=null;const tb=/^\s*t:/.exec(rest);
     if(tb){const sp=bytebeatSplit(rest.slice(tb[0].length));try{bytebeat=exprCompile(sp[0],["t"]);}catch(_){continue;}rest="~"+sp[1];}
-    const segs=rest.split("|").map(s=>s.trim());
+    const segs=splitBars(rest).map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
       for(const t of tokenizePat(piece)){const e=(t.startsWith("[")||t.startsWith("{"))?null:expandGen(t);if(e)toks.push(...e);else toks.push(t);}
@@ -2392,7 +2415,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       // drifts against the bar grid when its length != N (Reich-style phasing).
       // `| poly m:n` = explicit polyrhythm (triolet): n windows of m steps each.
       if(v.poly){if(typeof v.poly==="object"&&v.poly.m>0&&v.poly.n>0){const m=v.poly.m,n=v.poly.n,total=n*m,gstep=cycleLen/total,toks=v.tokens,nn=toks.length;
-        if(nn)for(let g=0;g<total;g++){const s=bar*total+g,ls=v.syncv?syncLocal(s,total,v.syncv):s;let tok=toks[((ls%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
+        if(nn)for(let g=0;g<total;g++){const s=bar*total+g,ls=v.syncv?syncLocal(s,total,v.syncv):s;let tok=toks[((ls%nn)+nn)%nn];{const sp=stepProg(tok,v.type==="drum",!!key,((ls%nn)+nn)%nn,nn,bar);if(sp!==null)tok=sp;}if(tok==="."||tok==="~")continue;
           const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
           const base=tm[0];if(base===""||base==="."||base==="~")continue;
           let t0=barT+g*gstep,vel=1;if(g%2===1)t0+=(v.swing!=null?v.swing:sw)*gstep;
@@ -2400,7 +2423,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
           for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*gstep/tm[2],gstep/tm[2],vel*tm[3]*rampF(j,tm[2],tm[4]));}
         continue;}
       const spb=(typeof v.poly==="number"&&v.poly>0)?v.poly:16,gstep=cycleLen/spb,toks=v.tokens,nn=toks.length;
-        if(nn)for(let i=0;i<spb;i++){const s=bar*spb+i,ls=v.syncv?syncLocal(s,spb,v.syncv):s;let tok=toks[((ls%nn)+nn)%nn];if(tok==="."||tok==="~")continue;
+        if(nn)for(let i=0;i<spb;i++){const s=bar*spb+i,ls=v.syncv?syncLocal(s,spb,v.syncv):s;let tok=toks[((ls%nn)+nn)%nn];{const sp=stepProg(tok,v.type==="drum",!!key,((ls%nn)+nn)%nn,nn,bar);if(sp!==null)tok=sp;}if(tok==="."||tok==="~")continue;
           const tm=tokenMods(tok);if(tm[1]!==null&&rng(seed,bar,v.name,s)>=tm[1])continue;
           const base=tm[0];if(base===""||base==="."||base==="~")continue;
           let t0=barT+i*gstep,vel=1;if(i%2===1)t0+=(v.swing!=null?v.swing:sw)*gstep;
@@ -2429,7 +2452,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   // schedule one token sequence for a voice within a bar (shared by normal/jux/off)
   function scheduleSeq(v,eff,barT,bar,shift,velScale){const sw=v.swing!=null?v.swing:+$("swing").value/100,n=eff.length;if(!n)return;const step=cycleLen/n,sh=(shift||0)*step;
       const tieN=(idx)=>{let c=0;for(let j=idx+1;j<n&&eff[j]==="_";j++)c++;return c;};  // note tie: `_` extends the previous note
-      for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);if(tok==="."||tok==="~"||tok==="_")continue;
+      for(let i=0;i<n;i++){let tok=pickAlt(eff[i],bar,v.name+"#"+i);if(prog.length&&tok[0]==="^")tok=resolveProg(tok,v,bar);
+        {const sp=stepProg(tok,v.type==="drum",!!key,i,n,bar);if(sp!==null)tok=sp;}  // =(EXPR) : pas-programme
+        if(tok==="."||tok==="~"||tok==="_")continue;
         if(v.degrade&&rng(seed,bar,v.name+"dg",i)<v.degrade)continue;  // degrade N: randomly drop a fraction of hits
         let t0=barT+i*step+sh+(v.nudge||0)*step,vel=(velScale!=null?velScale:1);if(i%2===1)t0+=sw*step;  // nudge: per-voice microtiming (push/lay-back)
         {const fa=v.humanize!=null?v.humanize:feelAmt;if(fa){t0+=(rng(seed,bar,v.name,i*3+7)-0.5)*fa*0.016;vel=1+(rng(seed,bar,v.name,i*3+11)-0.5)*fa*0.5;}}
@@ -2452,7 +2477,8 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
         else for(let j=0;j<tm[2];j++)trigger(v,base,t0+j*step/tm[2],null,vel*tm[3]*rampF(j,tm[2],tm[4]));}}
   // recursively schedule a [a b ...] sub-sequence inside [t0, t0+dur)
   function scheduleGroup(v,tok,bar,t0,dur,vel){const inner=tokenizePat(tok.slice(1,-1)),m=inner.length;if(!m)return;const sub=dur/m;
-    for(let i=0;i<m;i++){let ct=pickAlt(inner[i],bar,v.name+"g"+i);if(prog.length&&ct[0]==="^")ct=resolveProg(ct,v,bar);if(ct==="."||ct==="~")continue;const ct0=t0+i*sub;
+    for(let i=0;i<m;i++){let ct=pickAlt(inner[i],bar,v.name+"g"+i);if(prog.length&&ct[0]==="^")ct=resolveProg(ct,v,bar);
+      {const sp=stepProg(ct,v.type==="drum",!!key,i,m,bar);if(sp!==null)ct=sp;}if(ct==="."||ct==="~")continue;const ct0=t0+i*sub;
       if(ct.startsWith("[")){scheduleGroup(v,ct,bar,ct0,sub,vel);continue;}
       const e=expandGen(ct);if(e){if(e.length)scheduleGroup(v,"[ "+e.join(" ")+" ]",bar,ct0,sub,vel);continue;}
       const tm=tokenMods(ct);if(tm[1]!==null&&rng(seed,bar,v.name,Math.floor(ct0*997)%9973)>=tm[1])continue;
@@ -2543,10 +2569,13 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   let codeView=[],showCode=true;  // live "code playhead": boxes the active token in each voice line
   // tokenize a pattern string but record each token's absolute COLUMN in the source line
   // (so the box aligns with the real text in the <textarea>). Mirrors tokenizePat's rules.
-  function tokenizeWithCols(str,base){const out=[];let depth=0,cur="",start=-1;
+  function tokenizeWithCols(str,base){const out=[];let depth=0,paren=0,cur="",start=-1;
     const push=()=>{if(cur&&cur!==";"&&!cur.startsWith("@")&&!cur.startsWith(">"))out.push({text:cur,col:base+start});cur="";start=-1;};
     for(let i=0;i<str.length;i++){const ch=str[i];
-      if(ch==="["||ch==="{"){if(depth===0&&cur)push();if(start<0)start=i;depth++;cur+=ch;}
+      if(ch==="("){if(start<0)start=i;paren++;cur+=ch;}
+      else if(ch===")"){if(paren>0)paren--;cur+=ch;}
+      else if(/\s/.test(ch)&&paren>0){cur+=ch;}
+      else if(ch==="["||ch==="{"){if(depth===0&&cur)push();if(start<0)start=i;depth++;cur+=ch;}
       else if(ch==="]"||ch==="}"){if(depth>0)depth--;cur+=ch;if(depth===0)push();}
       else if(/\s/.test(ch)){if(depth===0)push();else cur+=ch;}
       else{if(start<0)start=i;cur+=ch;}}
@@ -6129,6 +6158,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Verbes (génératif)","| mutate N   | stutter N","mutate = fait évoluer le motif chaque mesure (N% de changement) ; stutter = beat-repeat (boucle le 1/N)"],
     ["Bytebeat","nom: t: EXPR","voix-formule : t compte à 8000 Hz depuis le début, sortie = octet bas de la valeur ; entiers 32 bits, + - * / % & | ^ << >> ~ < > ==, division par 0 = 0 · ex. crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3"],
     ["Sync","| sync AUTRE","le motif repart de son premier jeton à chaque reprise du cycle de la voix AUTRE (poly N : L/N mesure, voix simple : 1 mesure, slow K : K) · ex. arp: 1 3 5 | poly 16 | sync kick · | sync 3 (un nombre) = hard sync"],
+    ["Pas-programmes","=(EXPR)","jeton calculé au moment du pas : i = position du pas, b = mesure, n = nombre de pas ; degré compté depuis 0 avec key:, note MIDI sans, coup si non nul en batterie · ex. lead: =(i*3%7) | segment 8 · kick: =(i%3==0) | segment 16"],
     ["Verbes Tidal","| ply N  | linger F  | segment N  | range A B  | loopAt N","ply = chaque coup répété N fois dans son pas ; linger = boucle la fraction F de la mesure ; segment = rééchantillonne en N pas ; range = recadre les degrés sur A..B ; loopAt = sample étiré sur N mesures"],
     ["Son","| tape N","macro lo-fi cassette : wow + saturation + souffle en un seul réglage (0-1)"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
@@ -6452,6 +6482,7 @@ const THEME_AA={
     "- Generative variation: | mutate N evolves a pattern over time — each bar it randomly nudges about N% of the notes (transposes degrees, fills rests), seeded so it's reproducible. | stutter N is a beat-repeat: it loops the first 1/N of the pattern. e.g. lead: 1 2 3 5 | mutate 30 , drums: x . x . | stutter 4.",
     "- Bytebeat voice: a voice whose body starts with t: is a formula of t, the sample counter at 8000 Hz since the song started (crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3). Integers only, 32-bit wrapping, operators + - * / % & | ^ << >> ~ and comparisons < > == (0 or 1), C precedence, parentheses; division by zero gives 0. Output = low byte of the value (0..255) as a waveform. It plays no notes: only gain, pan, reverb, delay, send, bus, mute, solo, chance and in apply. Keep gain at 0.2..0.4 (it is loud) and use one bytebeat voice at most, as texture or lo-fi lead (classics: t*(42&t>>10), t*((t>>12|t>>8)&63&t>>4)).",
     "- | sync OTHER (OTHER = a voice name): this voice's pattern restarts from its first token every time voice OTHER's cycle restarts (like Sonic Pi live_loop sync). Cycle of OTHER: | poly N with L tokens = L/N bar, | poly m:n = L/(m*n), a plain voice = 1 bar (K bars with | slow K). Use it to re-align a polymeter on the bar or on another loop: arp: 1 3 5 | poly 16 | sync kick (the 3-note loop restarts every bar instead of drifting). A number (| sync 3) is still the oscillator hard sync.",
+    "- Step programs: a pattern token =(EXPR) is computed when its step plays. Variables: i = position of the step in its line (after verbs), b = bar number, n = number of steps in the line. With key:/scale: the value is a scale degree counted from 0 (0 = degree 1, 2 = degree 3, 7 = 1 an octave up, -1 = 7 below); without a key it is a MIDI note (60 = c4); on drums non-zero = hit, 0 = rest. Same integer operators as bytebeat (+ - * / % & | ^ << >> ~ < > ==). Mods go after the parenthesis (=(i%3)! , =(1)?60). One token repeated with | segment N gives N computed steps: lead: =(i*3%7) | segment 8 (a cycling melody), kick: =(i%3==0) | segment 16 (a 3-against-16 pulse), bass: =((i+b)%5) | segment 4 (shifts every bar).",
     "- Tidal verbs: | ply N repeats every event N times inside its own step (hat: x . x . | ply 2 = rolls). | linger F loops only the first fraction F of the bar (0.25 = first quarter; negative = the last part, linger -0.25). | segment N resamples the line into N even steps (lead: 1 3 5 | segment 6 = 1 1 3 3 5 5). | range A B rescales the pattern's lowest..highest degree onto degrees A..B (lead: walk(8) | range 3 6 , or range 1 1'' to stretch a motif over two octaves; integers above 7 mean higher octaves, 8 = 1'). | loopAt N stretches a sample (warp, pitch kept) over N bars: break: x . . . | sample amen | loopAt 2. For rhythmic echoes use | echo DIV FB or | off N (not stut, which in LOOM is the stutter beat-repeat); for strummed chords use | strum.",
     "- Tape macro: | tape N (0-1) is a one-knob lo-fi cassette character — wow-and-flutter + gentle saturation + a touch of hiss. Lovely on keys/pads/whole voices for nostalgia.",
     "- Additive synthesis: | partials A B C ... builds a sound from the amplitude of each harmonic (1 = fundamental, 2 = octave, 3 = fifth above...). e.g. | partials 1 0 0.5 0 0.33 (odd harmonics = hollow/clarinet-ish). | organ 888650000 is a Hammond drawbar shortcut (9 digits 0-8). Pure, clean tones.",

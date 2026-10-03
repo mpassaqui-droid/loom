@@ -1,0 +1,24 @@
+# ================================================================
+#  LOOM : pas-programmes, des jetons calculés au moment de jouer.
+#    =(EXPR)   i = position du pas dans sa ligne, b = mesure,
+#              n = nombre de pas de la ligne
+#    avec key: : un degré compté depuis 0 (0 = 1, 2 = 3, 7 = 1')
+#    sans key: : une note MIDI (60 = c4)
+#    batterie : non nul = coup, 0 = silence
+#    Les modificateurs viennent après la parenthèse : =(i%4)!  =(1)?60
+#    Pourquoi =( ) : les accolades { } sont déjà le choix au hasard,
+#    les crochets [ ] les sous-pas, < > l'alternance ; le signe = dit
+#    « ce pas vaut… » et les parenthèses gardent espaces et | dans l'expression.
+# ================================================================
+
+title:  Pas
+key:    d dorian
+bpm:    104
+
+# une mélodie qui tourne en septièmes de cycle
+lead:   =(i*3%7) | segment 8 | pluck | gain 0.12
+# une basse qui se décale d'un degré à chaque mesure
+bass:   =((i+b)%5) . =(i) . | oct 2 | saw | lp 600 | gain 0.18
+# 3 contre 16, puis un coup de plus une mesure sur deux
+kick:   =(i%3==0 | (b&1)*(i==14)) | segment 16
+hat:    =(i&1)! | segment 8 | gain 0.07
