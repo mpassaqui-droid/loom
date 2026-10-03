@@ -461,7 +461,10 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   const LOOKAHEAD=0.18,TICK=25;
   const DRUMS=new Set(["kick","bd","snare","sd","hat","hh","clap","cp","tom","cowbell","cow","rim","rimshot"]);
   const WAVES={sine:"sine",square:"square",saw:"sawtooth",sawtooth:"sawtooth",tri:"triangle",triangle:"triangle",pulse:"square"};
-  function log(m,c){con.innerHTML=c?'<span class="'+c+'">'+m+'</span>':m;}
+  // le texte (code, réponse de l'IA, noms) est échappé : seules les balises de mise en forme passent
+  function htmlSur(m){return String(m).replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/&lt;(\/?(?:br|b|i|em|strong|code)\s*\/?)&gt;/gi,"<$1>");}
+  function esc(t){return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+  function log(m,c){con.innerHTML=c?'<span class="'+c+'">'+htmlSur(m)+'</span>':htmlSur(m);}
 
   // lusher reverb impulse: noise tail + a few early reflections, decorrelated L/R
   function makeImpulse(sec,decay){const r=ctx.sampleRate,len=Math.floor(r*sec),b=ctx.createBuffer(2,len,r);
@@ -2110,7 +2113,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   function buildTimeline(){const el=$("timeline");if(!el)return;
     if(!song.length){el.style.display="none";el.innerHTML="";return;}
     el.style.display="flex";
-    el.innerHTML=song.map((s,i)=>{const h=voiceHue(s[0]);return '<div class="seg" data-i="'+i+'" title="'+s[0]+' · '+s[1]+' mes. — clique pour sauter" style="flex-grow:'+s[1]+';cursor:pointer;background:hsla('+h+',60%,45%,0.22)">'+s[0]+'</div>';}).join("")
+    el.innerHTML=song.map((s,i)=>{const h=voiceHue(s[0]);return '<div class="seg" data-i="'+i+'" title="'+esc(s[0])+' · '+s[1]+' mes. — clique pour sauter" style="flex-grow:'+s[1]+';cursor:pointer;background:hsla('+h+',60%,45%,0.22)">'+esc(s[0])+'</div>';}).join("")
       +'<div class="ph" id="tph" style="left:0"></div>';
     for(const seg of (el.querySelectorAll?el.querySelectorAll(".seg"):[]))seg.addEventListener("click",()=>jumpToSection(+seg.dataset.i));}
   // arrangement scrub: jump playback to a section's start bar (DAW-style) + select it for editing
@@ -5815,7 +5818,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   function setProjects(p){try{localStorage.setItem("loom_projects",JSON.stringify(p));}catch(_){log("[ save ] stockage plein/indisponible","err");}}
   let curProject="";
   function buildProjectMenu(){const el=$("projectSel");if(!el)return;const ps=getProjects(),names=Object.keys(ps).sort();
-    el.innerHTML='<option value="">— mes morceaux ('+names.length+') —</option>'+names.map(n=>'<option value="'+n.replace(/"/g,"&quot;")+'">'+n+'</option>').join("");}
+    el.innerHTML='<option value="">— mes morceaux ('+names.length+') —</option>'+names.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join("");}
   buildProjectMenu();
   $("saveBtn").addEventListener("click",()=>{const def=curProject||("morceau "+(Object.keys(getProjects()).length+1));
     const n=(prompt("Nom du morceau :",def)||"").trim();if(!n)return;const ps=getProjects();ps[n]=editor.value;setProjects(ps);curProject=n;buildProjectMenu();$("projectSel").value=n;log("[ save ] « "+n+" » sauvé ("+Object.keys(ps).length+" morceaux)","ai");});
