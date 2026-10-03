@@ -796,7 +796,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       .then(b=>{sbuf[name]=b;}).catch(()=>{sload[name]=null;});return sload[name];}
     if(!SAMPLES[name])return Promise.resolve();
     // local first (web/samples/<name>.wav, shipped with the app), CDN fallback (offline-proof)
-    sload[name]=fetch("samples/"+name+".wav").then(r=>{if(!r.ok)throw 0;return r.arrayBuffer();})
+    sload[name]=fetch("samples/"+name+".wav").then(r=>{if(!r.ok||/html/.test(r.headers.get("content-type")||""))throw 0;return r.arrayBuffer();})  // un hébergeur qui renvoie sa page pour un fichier absent : direction le CDN
       .catch(()=>fetch(SDIRT+SAMPLES[name]).then(r=>r.arrayBuffer()))
       .then(a=>ctx.decodeAudioData(a))
       .then(b=>{sbuf[name]=b;}).catch(()=>{sload[name]=null;});
