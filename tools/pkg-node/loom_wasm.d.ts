@@ -66,6 +66,12 @@ export function mix_json(src: string): string;
 export function program_info_json(src: string): string;
 
 /**
+ * Réharmonise la ligne `prog:` (`jazz`, `tritone`, `iiv`). Renvoie le morceau
+ * réécrit, ou `ERR:` suivi de la raison.
+ */
+export function reharm(src: string, how: string): string;
+
+/**
  * Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
  * P6-1 note engine (dry) + note inserts (`| echo/flange/phaser`) + sends
  * (`| reverb`/`| delay`) into the master reverb + ping-pong + duck + warmth

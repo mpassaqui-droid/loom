@@ -216,6 +216,31 @@ function program_info_json(src) {
 exports.program_info_json = program_info_json;
 
 /**
+ * Réharmonise la ligne `prog:` (`jazz`, `tritone`, `iiv`). Renvoie le morceau
+ * réécrit, ou `ERR:` suivi de la raison.
+ * @param {string} src
+ * @param {string} how
+ * @returns {string}
+ */
+function reharm(src, how) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(how, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.reharm(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+exports.reharm = reharm;
+
+/**
  * Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
  * P6-1 note engine (dry) + note inserts (`| echo/flange/phaser`) + sends
  * (`| reverb`/`| delay`) into the master reverb + ping-pong + duck + warmth

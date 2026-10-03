@@ -70,7 +70,7 @@ pub enum EditKey {
 }
 
 /// The TRANSFORME chips, in the order the popup shows them.
-const TRANSFORMS: [Kind; 7] = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove];
+const TRANSFORMS: [Kind; 9] = loom_app::teacher::transform::CHIPS;
 
 /// The teacher's keys in the editor: Alt+letters, F3, and Shift+F3 or Ctrl+Y (some
 /// terminals send Shift+F3 as F15, others as a code crossterm can't read).

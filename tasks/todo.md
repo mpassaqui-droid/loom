@@ -825,7 +825,7 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 4. Export : WAV 24 bits par défaut, --16 (dither TPDF), --32f, --sr ; .flac .mp3 .m4a .aiff .ogg par afconvert/ffmpeg ; REC et stems suivent ; relus par afinfo
 - [x] 5. Loudness : studio/bs1770.rs (intégré à deux portes, LRA, court/moment max, crête vraie 4x), limiteur en crête vraie, --target spotify|apple|… et --lufs, loom loudness ; écart à ffmpeg ebur128 : I 0,0, TP 0,0, LRA 0,2
 - [x] 1. Partition : loom-app/src/score.rs, MusicXML 4.0 et LilyPond (loom bake x.loom x.musicxml|.ly, Alt+X), grille par temps (double croche ou triolet), liaisons aux barres, accords, armure, batterie, repères de section, tempo ; ouvert et imprimé par MuseScore 4 (PDF vérifié à l'œil)
-- [ ] 2. Harmonie : V/V, emprunts (bVII, iv), renversements, napolitaine ; modulations détectées ; réharmonisation
+- [x] 2. Harmonie : V7/V, vii°7/ii, emprunts (bVII, iv, ♯iv°), renversements (6 64 65 43 42), N6 It6 Fr6 Ger6 ; prof : lignes couleur et modulation ; réharmo jazz/triton (TRANSFORME, `loom reharm`, bouton web). Parité romain 252/252, analyse 30/30, onsets 490/490, workspace 485
 - [ ] 8. Contrepoint : quintes et octaves parallèles, tessitures, croisements ; dans le prof
 - [ ] 6. Automation : courbes à points (`0 .2 1@exp`) et automation du master et des envois
 - [ ] 7. Micro-tons et traditions : vrai N-EDO, import Scala (.scl), ajnas/sayr maqam, aroha/avaroha raga

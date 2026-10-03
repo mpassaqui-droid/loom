@@ -40,6 +40,8 @@ usage :
                                                .ly pour LilyPond)
   loom loudness son.wav [cible]                LUFS intégré, LRA, crête vraie
                                                (cibles : spotify youtube apple deezer club)
+  loom reharm morceau.loom [jazz|tritone|iiv]  réharmonise prog: (ii-V, substitution de
+                                               triton) et écrit le résultat sur la sortie
   loom-gui [morceau.loom]                      la même chose dans une fenêtre
 ";
 
@@ -73,6 +75,7 @@ enum Command {
     Render { file: String, out: String, bars: Option<u32>, stems: bool, format: Option<loom_audio::WavFormat>, sr: u32, target: Option<(f64, f64)> },
     /// Mastering report of an audio file, against a platform if named.
     Loudness { file: String, target: Option<String> },
+    Reharm { file: String, how: String },
     /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
     Bake { file: String, out: String, bars: Option<u32> },
     Tui(Option<PathBuf>),
@@ -132,6 +135,8 @@ fn parse(args: &[&str]) -> Result<Command, String> {
         },
         ["loudness", file] => Command::Loudness { file: file.to_string(), target: None },
         ["loudness", file, t] => Command::Loudness { file: file.to_string(), target: Some(t.to_string()) },
+        ["reharm", file] => Command::Reharm { file: file.to_string(), how: "jazz".into() },
+        ["reharm", file, how] => Command::Reharm { file: file.to_string(), how: how.to_string() },
         [] => Command::Tui(None),
         [file] if !file.starts_with('-') => Command::Tui(Some(PathBuf::from(file))),
         _ => return Err(format!("arguments non reconnus\n\n{USAGE}")),
@@ -152,6 +157,7 @@ fn main() -> ExitCode {
             if stems { render_stems(&file, &out, bars, sr) } else { render(&file, &out, bars, sr, target) }
         }
         Command::Loudness { file, target } => loudness(&file, target.as_deref()),
+        Command::Reharm { file, how } => reharm(&file, &how),
         Command::Bake { file, out, bars } => bake(&file, &out, bars),
         Command::Tui(path) => tui(path),
     });
@@ -232,6 +238,15 @@ fn render(file: &str, out: &str, bars: Option<u32>, sr: u32, target: Option<(f64
 }
 
 /// `loudness`: the mastering report of any audio file (WAV, or anything afconvert/ffmpeg reads).
+/// Réharmonise la ligne `prog:` et écrit le morceau sur la sortie standard.
+fn reharm(file: &str, how: &str) -> Result<(), String> {
+    use loom_core::harmony::{reharm_source, Reharm};
+    let how = Reharm::from_name(how).ok_or(format!("réharmonisation inconnue : {how} (jazz, tritone, iiv)"))?;
+    let src = std::fs::read_to_string(file).map_err(|e| format!("{file} : {e}"))?;
+    print!("{}", reharm_source(&src, how)?);
+    Ok(())
+}
+
 fn loudness(file: &str, target: Option<&str>) -> Result<(), String> {
     use loom_app::studio::bs1770;
     let data = loom_audio::sample::SampleData::from_file(std::path::Path::new(file))
@@ -325,6 +340,7 @@ mod tests {
         assert_eq!(render_args(&["a.loom", "a.wav", "16", "--32f", "--sr", "96000", "--target", "apple"]),
             Ok(Command::Render { file: "a.loom".into(), out: "a.wav".into(), bars: Some(16), stems: false, format: Some(loom_audio::WavFormat::Float32), sr: 96_000, target: Some((-16.0, -1.0)) }));
         assert!(render_args(&["a.loom", "a.wav", "--target", "radio"]).is_err());
+        assert_eq!(parse(&["reharm", "a.loom"]), Ok(Command::Reharm { file: "a.loom".into(), how: "jazz".into() }));
         assert_eq!(parse(&["loudness", "a.wav", "club"]), Ok(Command::Loudness { file: "a.wav".into(), target: Some("club".into()) }));
         assert!(render_args(&["a.loom", "a.wav", "--sr", "12"]).is_err());
         assert_eq!(parse(&["bake", "a.loom", "a.json"]), Ok(Command::Bake { file: "a.loom".into(), out: "a.json".into(), bars: None }));

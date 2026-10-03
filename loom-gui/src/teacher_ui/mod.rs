@@ -152,9 +152,8 @@ pub fn teacher_bar(ui: &mut egui::Ui, teacher: &Teacher, theme: &Theme, actions:
                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                 ui.label(RichText::new("TRANSFORME").size(13.0).strong().color(color(theme.note)))
                     .on_hover_text("Le prof modifie ton morceau (hors-ligne) pour te faire ENTENDRE une idée — ↩ Annuler (F3) rend ton code.");
-                use loom_app::teacher::transform::Kind;
-                let kinds = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove];
-                for kind in kinds {
+                use loom_app::teacher::transform::CHIPS;
+                for kind in CHIPS {
                     let chip = ui.selectable_label(false, kind.label());
                     if chip.on_hover_text(kind.explanation()).clicked() {
                         actions.push(TeacherAction::Transform(kind));

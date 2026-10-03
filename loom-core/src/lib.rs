@@ -559,7 +559,7 @@ fn expand_euclid(tokens: Vec<String>) -> Vec<String> {
 /// Parse LOOM source text into voices.
 /// Strip an end-of-line comment: a `#` preceded by whitespace (or at line start)
 /// begins a comment. Preserves `7#`/`f#` accidentals (no space before the `#`).
-fn decomment(s: &str) -> &str {
+pub(crate) fn decomment(s: &str) -> &str {
     let b = s.as_bytes();
     for i in 0..b.len() {
         if b[i] == b'#' && (i == 0 || b[i - 1] == b' ' || b[i - 1] == b'\t') { return &s[..i]; }

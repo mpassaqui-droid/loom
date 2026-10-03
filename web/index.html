@@ -276,6 +276,7 @@
       <button class="tiny go" data-ai="continue et développe ce morceau avec une suite cohérente (nouvelle section)">&#9654; continuer</button>
       <button class="tiny go" data-ai="corrige les erreurs et améliore ce morceau pour qu'il sonne bien">&#129657; corriger</button>
       <span style="color:var(--cyan);font-size:15px;margin:0 2px 0 8px;align-self:center">outils &#9656;</span>
+      <button class="tiny" id="reharmBtn" title="réharmonise prog: à la jazz (chaque dominante préparée par son ii, puis substitution de triton : G7 devient Dm7 Db7). Maj+clic : triton seul">&#9839; réharmo</button>
       <button class="tiny" id="explainBtn" title="le prof IA explique ton morceau (pourquoi ça sonne ainsi)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10067; explique</button>
       <button class="tiny" id="developBtn" title="développe le morceau HORS-LIGNE : ajoute du développement aux mélodies, varie les batteries, change le seed (annulable)" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#10024; développe</button>
       <button class="tiny" id="earBtn" title="entraînement de l'oreille : le prof joue un intervalle, devine-le en l'écrivant dans VIBE" style="border-color:var(--cyan);color:var(--cyan);font-weight:bold">&#128066; oreille</button>
@@ -7278,6 +7279,14 @@ const THEME_AA={
   // one-slot undo for big destructive actions (develop, later: preset/AI)
   let _undo=null;
   function pushUndo(){_undo=editor.value;const u=$("undoBtn");if(u)u.style.display="";}
+  // RÉHARMO : la transformée de loom-core (harmony::reharm_source), via WASM
+  {const rb=$("reharmBtn");if(rb)rb.addEventListener("click",e=>{
+    const W=window.__loomRustMod;if(!W||!W.reharm){log("[ prof ] la réharmonisation a besoin du moteur Rust (WASM)","err");return;}
+    const r=W.reharm(editor.value,e.shiftKey?"tritone":"jazz");
+    if(r.startsWith("ERR:")){log("[ prof ] "+r.slice(4),"err");return;}
+    pushUndo();editor.value=r;liveEdit();if(playing)recompile();
+    const pl=r.split("\n").find(l=>/^\s*prog\s*:/i.test(l))||"";
+    log("[ prof ] "+pl.trim()+" · "+(e.shiftKey?"chaque dominante remplacée par celle à un triton : même tension, la basse glisse d'un demi-ton":"chaque dominante préparée par son ii puis substituée au triton : la basse descend par demi-tons")+" · ↩ annule","ai");});}
   function doUndo(){if(_undo==null)return;editor.value=_undo;_undo=null;const u=$("undoBtn");if(u)u.style.display="none";
     liveEdit();if(playing)run();log("[ ↩ ] action annulée","ai");}
   // OFFLINE "develop the whole piece": add motivic development to melodic voices,
@@ -8064,6 +8073,7 @@ const THEME_AA={
         info:        (src)      => JSON.parse(w.program_info_json(src)),
         analyze:     (src)      => w.analyze_json(src),
       };
+      window.__loomRustMod = w;
       console.log('%c[LOOM] moteur Rust (WASM) chargé — il pilote maintenant le rythme (défaut). Décoche pour le moteur JS.',
                   'color:#6f6');
       // reveal the badge now that the engine is available; the RUST engine is the

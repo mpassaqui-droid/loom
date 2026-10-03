@@ -216,6 +216,110 @@ pub fn analyze_chord(root: i32, minor: bool, dim: bool, seventh: Option<i32>, ke
     format!("{acc}{}{suffix}", case(num))
 }
 
+/// How to reharmonize a `prog:` line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reharm {
+    /// Every dominant seventh becomes its tritone substitute (G7 → Db7, V7 → bII7).
+    Tritone,
+    /// Every dominant seventh is prepared by its ii (G7 → Dm7 G7).
+    TwoFive,
+    /// Both: ii then tritone substitute (G7 → Dm7 Db7), the jazz cliché.
+    Jazz,
+}
+
+impl Reharm {
+    pub fn from_name(s: &str) -> Option<Reharm> {
+        match s.to_lowercase().as_str() {
+            "tritone" | "triton" => Some(Reharm::Tritone),
+            "iiv" | "ii-v" | "twofive" => Some(Reharm::TwoFive),
+            "jazz" => Some(Reharm::Jazz),
+            _ => None,
+        }
+    }
+}
+
+const FLAT_SPELL: [&str; 12] = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const RN_UP: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
+
+/// A numeral (with `b` when needed) for a pitch class above the tonic.
+fn numeral_for(rel: i32) -> String {
+    let rel = rel.rem_euclid(12);
+    match MAJOR.iter().position(|m| *m == rel) {
+        Some(d) => RN_UP[d].to_string(),
+        None => format!("b{}", RN_UP[MAJOR.iter().position(|m| *m == rel + 1).unwrap_or(0)]),
+    }
+}
+
+/// A dominant-seventh chord: `G7`, `Db9`, `V7`, `bII7/V`. Returns how to rewrite it:
+/// (its tritone substitute, its ii chord).
+fn dominant_parts(tok: &str) -> Option<(String, String)> {
+    // chord symbol
+    let mut ch = tok.chars();
+    if let Some(r @ 'A'..='G') = ch.next() {
+        let mut pc: i32 = match r { 'C' => 0, 'D' => 2, 'E' => 4, 'F' => 5, 'G' => 7, 'A' => 9, _ => 11 };
+        let rest: &str = &tok[1..];
+        let rest = if let Some(x) = rest.strip_prefix('#') { pc += 1; x } else if let Some(x) = rest.strip_prefix('b') { pc -= 1; x } else { rest };
+        if !matches!(rest, "7" | "9" | "13") { return None; }
+        let sub = format!("{}{rest}", FLAT_SPELL[(pc + 6).rem_euclid(12) as usize]);
+        let two = format!("{}m7", FLAT_SPELL[(pc + 7).rem_euclid(12) as usize]);
+        return Some((sub, two));
+    }
+    // roman: uppercase numeral + 7, maybe secondary
+    let (num, target) = match tok.split_once('/') { Some((a, b)) => (a, Some(b)), None => (tok, None) };
+    let n = parse_numeral(num)?;
+    if !n.upper || n.quality.is_some() || n.maj7 || !n.seventh || n.inversion != 0 || !num.ends_with('7') { return None; }
+    let rel = MAJOR[(n.degree - 1) as usize] + n.accidental;
+    let tail = target.map(|t| format!("/{t}")).unwrap_or_default();
+    Some((format!("{}7{tail}", numeral_for(rel + 6)), format!("{}7{tail}", numeral_for(rel + 7).to_lowercase())))
+}
+
+/// Reharmonize the chords of a `prog:` list (with `X*n` repeats kept).
+pub fn reharmonize(prog: &[String], how: Reharm) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for tok in prog {
+        let (name, n) = match tok.split_once('*') {
+            Some((a, b)) => (a, b.parse::<usize>().unwrap_or(1).max(1)),
+            None => (tok.as_str(), 1),
+        };
+        let Some((sub, two)) = dominant_parts(name) else { out.push(tok.clone()); continue };
+        let dom = if how == Reharm::TwoFive { name.to_string() } else { sub };
+        let rep = |c: &str, k: usize| if k == 1 { c.to_string() } else { format!("{c}*{k}") };
+        if how == Reharm::Tritone {
+            out.push(rep(&dom, n));
+        } else if n >= 2 {
+            out.push(rep(&two, n / 2));
+            out.push(rep(&dom, n - n / 2));
+        } else {
+            // already prepared by its ii? then only swap the dominant
+            if out.last().map(|l| l.split('*').next().unwrap_or(l)) != Some(two.as_str()) { out.push(two); }
+            out.push(dom);
+        }
+    }
+    out
+}
+
+/// Rewrite the `prog:` line of a source, keeping its label and end-of-line comment.
+pub fn reharm_source(src: &str, how: Reharm) -> Result<String, String> {
+    let mut done = false;
+    let mut lines: Vec<String> = Vec::new();
+    for line in src.split('\n') {
+        let code = crate::decomment(line);
+        let comment = &line[code.len()..];
+        match code.split_once(':') {
+            Some((label, rest)) if !done && label.trim().eq_ignore_ascii_case("prog") => {
+                let prog: Vec<String> = rest.split_whitespace().map(str::to_string).collect();
+                let new = reharmonize(&prog, how);
+                if new == prog { return Err("rien à réharmoniser : aucun accord de dominante (G7, V7, V7/V…) dans prog".into()); }
+                done = true;
+                let sp = if comment.is_empty() { "" } else { "  " };
+                lines.push(format!("{label}: {}{sp}{}", new.join(" "), comment.trim_start()));
+            }
+            _ => lines.push(line.to_string()),
+        }
+    }
+    if done { Ok(lines.join("\n")) } else { Err("pas de ligne prog: à réharmoniser".into()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,6 +337,22 @@ mod tests {
         let a = key("a minor");
         assert_eq!(pcs(&roman_chord("i", &a).unwrap()), vec![9, 0, 4]);
         assert_eq!(pcs(&roman_chord("VI", &a).unwrap()), vec![5, 9, 0]);
+    }
+
+    #[test]
+    fn reharmonisation() {
+        let p = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(reharmonize(&p("C A7 Dm7 G7 C"), Reharm::Tritone), p("C Eb7 Dm7 Db7 C"));
+        assert_eq!(reharmonize(&p("C A7 Dm7 G7 C"), Reharm::TwoFive), p("C Em7 A7 Dm7 G7 C"));
+        assert_eq!(reharmonize(&p("C G7*2 C"), Reharm::Jazz), p("C Dm7 Db7 C"));
+        assert_eq!(reharmonize(&p("I V7/V V7 I"), Reharm::Jazz), p("I ii7/V bII7/V ii7 bII7 I"));
+        assert_eq!(reharmonize(&p("C F G C"), Reharm::Jazz), p("C F G C"), "pas de dominante 7, rien");
+        // la substitution sonne : bII7 en do = réb fa lab dob
+        let c = key("c major");
+        assert_eq!(pcs(&roman_chord("bII7", &c).unwrap()), vec![1, 5, 8, 11]);
+        let src = "key: c major\nprog: C G7 # la base\nlead: 1";
+        assert_eq!(reharm_source(src, Reharm::Tritone).unwrap(), "key: c major\nprog: C Db7  # la base\nlead: 1");
+        assert!(reharm_source("key: c major\nprog: C F", Reharm::Jazz).is_err());
     }
 
     #[test]

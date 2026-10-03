@@ -339,3 +339,14 @@ pub fn clip_to_loom(nom: &str, notes_json: &str, longueur: f64, meter_beats: f64
         .map(|(p, d, l, v)| (p as i32, d, l, v.clamp(0.0, 127.0) as u8)).collect();
     loom_core::live::clip_to_loom(nom, &notes, longueur, meter_beats, batterie)
 }
+
+/// Réharmonise la ligne `prog:` (`jazz`, `tritone`, `iiv`). Renvoie le morceau
+/// réécrit, ou `ERR:` suivi de la raison.
+#[wasm_bindgen]
+pub fn reharm(src: &str, how: &str) -> String {
+    use loom_core::harmony::{reharm_source, Reharm};
+    match Reharm::from_name(how).ok_or_else(|| format!("réharmonisation inconnue : {how}")).and_then(|h| reharm_source(src, h)) {
+        Ok(s) => s,
+        Err(e) => format!("ERR:{e}"),
+    }
+}

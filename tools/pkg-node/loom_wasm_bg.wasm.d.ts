@@ -11,6 +11,7 @@ export const expr_eval: (a: number, b: number, c: number, d: number, e: number, 
 export const live_json: (a: number, b: number, c: number) => [number, number];
 export const mix_json: (a: number, b: number) => [number, number];
 export const program_info_json: (a: number, b: number) => [number, number];
+export const reharm: (a: number, b: number, c: number, d: number) => [number, number];
 export const render_fx_json: (a: number, b: number, c: number, d: number) => [number, number];
 export const render_json: (a: number, b: number, c: number, d: number) => [number, number];
 export const render_wav: (a: number, b: number, c: number, d: number) => [number, number];

@@ -19,7 +19,7 @@ use ratatui::Frame;
 const SPIN: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /// The TRANSFORME chips, in the order the popup shows them.
-const TRANSFORMS: [Kind; 7] = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove];
+const TRANSFORMS: [Kind; 9] = loom_app::teacher::transform::CHIPS;
 
 /// Display width of a text in terminal cells (accents count 1, emoji 2).
 fn width(text: &str) -> usize {

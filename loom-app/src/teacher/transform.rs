@@ -35,7 +35,14 @@ pub enum Kind {
     Groove,
     /// Add variation through the existing `develop` engine.
     Develop,
+    /// Jazz reharmonization of `prog:` (each dominant prepared by its ii, then tritone-substituted).
+    Jazz,
+    /// Tritone substitution of every dominant seventh in `prog:`.
+    Tritone,
 }
+
+/// The chips every app shows, in this order.
+pub const CHIPS: [Kind; 9] = [Kind::Transpose(1), Kind::Transpose(-1), Kind::Dark, Kind::Bright, Kind::Dense, Kind::Open, Kind::Groove, Kind::Jazz, Kind::Tritone];
 
 impl Kind {
     /// The short label shown on the chip.
@@ -50,6 +57,8 @@ impl Kind {
             Kind::Open => "plus d'air",
             Kind::Groove => "groove",
             Kind::Develop => "varier",
+            Kind::Jazz => "réharmo jazz",
+            Kind::Tritone => "substitution triton",
         }
     }
 
@@ -64,6 +73,8 @@ impl Kind {
             Kind::Dense => "j'ai épaissi les voix (| unison 3) — des copies légèrement désaccordées remplissent le spectre, comme plusieurs violons au lieu d'un.".into(),
             Kind::Open => "j'ai ouvert l'espace (| reverb 0.4) — chaque note respire dans une pièce plus grande, le rythme se dilate.".into(),
             Kind::Groove => "j'ai mis du swing (| swing 0.25) sur les percussions — les contretemps glissent un peu, le rythme « balance » comme joué par un humain.".into(),
+            Kind::Jazz => "j'ai réharmonisé prog: à la jazz : chaque dominante est préparée par son ii, puis remplacée par sa substitution de triton (G7 devient Dm7 Db7). La basse descend par demi-tons vers la tonique.".into(),
+            Kind::Tritone => "j'ai remplacé chaque accord de dominante par celui qui est à un triton (G7 devient Db7) : ils partagent le même triton (si et fa), la tension reste, la basse glisse d'un demi-ton vers la tonique.".into(),
             Kind::Develop => "j'ai développé les voix qui étaient figées (| develop) et changé le seed — les motifs bougent d'une mesure à l'autre.".into(),
         }
     }
@@ -100,6 +111,13 @@ pub fn transform(src: &str, kind: Kind, seed: u64) -> Result<Transformed, String
         Kind::Dense => add_verb_to_voices(src, "unison 3", &WANTS_DENSE, false),
         Kind::Open => add_verb_to_voices(src, "reverb 0.4", &WANTS_AIR, false),
         Kind::Groove => add_verb_to_voices(src, "swing 0.25", &WANTS_SWING, true),
+        Kind::Jazz | Kind::Tritone => {
+            use loom_core::harmony::{reharm_source, Reharm};
+            let how = if kind == Kind::Jazz { Reharm::Jazz } else { Reharm::Tritone };
+            let code = reharm_source(src, how)?;
+            let line = code.lines().find(|l| l.trim_start().to_lowercase().starts_with("prog")).unwrap_or("").trim().to_string();
+            Ok(Transformed { code, touches: vec![line] })
+        }
     }
 }
 
@@ -303,5 +321,16 @@ lead: 1 . 3 . 5 . 4' . | pulse | gain 0.18\n";
         assert_eq!(Kind::Transpose(2).label(), "transposer");
         assert_eq!(Kind::Transpose(-1).label(), "plus grave");
         assert!(Kind::Groove.explanation().contains("swing"));
+    }
+
+    #[test]
+    fn reharmonise_prog() {
+        let src = "key: c major\nprog: C A7 Dm7 G7\nkeys: ^ | sine";
+        let j = transform(src, Kind::Jazz, 0).unwrap();
+        assert!(j.code.contains("prog: C Em7 Eb7 Dm7 Db7"), "{}", j.code);
+        let t = transform(src, Kind::Tritone, 0).unwrap();
+        assert!(t.code.contains("prog: C Eb7 Dm7 Db7"), "{}", t.code);
+        assert!(transform("key: c major\nlead: 1 2 3", Kind::Jazz, 0).is_err());
+        assert_eq!(CHIPS.len(), 9);
     }
 }
