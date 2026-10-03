@@ -28,6 +28,27 @@ pub const MODEL_ENV: &str = "LOOM_VIBE_MODEL";
 /// How long Claude may think before we give up and kill the process.
 pub const TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Les puces de VIBE, comme les boutons du web : (étiquette, demande envoyée à Claude).
+/// Dans le terminal : F2 puis le chiffre (1..9, 0 pour la dixième).
+pub const CHIPS: [(&str, &str); 10] = [
+    ("+ batterie", "ajoute une batterie qui groove"),
+    ("+ basse", "ajoute une basse qui suit l'harmonie"),
+    ("+ nappe", "ajoute une nappe douce en fond"),
+    ("+ triste", "rends ce morceau plus triste et mélancolique"),
+    ("+ énergie", "rends ce morceau plus énergique et rapide"),
+    ("+ exotique", "rends ce morceau plus exotique et oriental"),
+    ("varier", "crée une variation de ce morceau en gardant l'esprit"),
+    ("simplifier", "simplifie ce morceau, enlève le superflu"),
+    ("continuer", "continue et développe ce morceau avec une suite cohérente (nouvelle section)"),
+    ("corriger", "corrige les erreurs et améliore ce morceau pour qu'il sonne bien"),
+];
+
+/// La puce d'une touche chiffre : '1' = la première … '0' = la dixième.
+pub fn chip_for_key(c: char) -> Option<&'static str> {
+    let i = match c { '1'..='9' => c as usize - '1' as usize, '0' => 9, _ => return None };
+    CHIPS.get(i).map(|(_, ask)| *ask)
+}
+
 const MISSING_CLI: &str = "la commande « claude » est introuvable — installe Claude Code (mise use -g claude), \
 lance « claude » une fois pour te connecter avec ton abonnement, puis réessaie";
 #[cfg(test)]
@@ -435,6 +456,15 @@ pub fn summary(changes: &[Change]) -> String {
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)] // Keep the long composition prompt at the end of the file.
 mod tests {
+
+    #[test]
+    fn puces_comme_le_web() {
+        assert_eq!(chip_for_key('1'), Some("ajoute une batterie qui groove"));
+        assert_eq!(chip_for_key('0'), Some(CHIPS[9].1));
+        assert_eq!(chip_for_key('a'), None);
+        assert!(CHIPS.iter().all(|(l, a)| !l.is_empty() && a.len() > 10));
+    }
+
     use super::*;
 
     const OLD: &str = "bpm: 120\nkick: x . x .\nhat: x x x x\nbass: c2 . eb2 .\n";

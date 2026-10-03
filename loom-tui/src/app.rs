@@ -433,6 +433,12 @@ impl App {
                     KeyCode::Esc | KeyCode::F(2) => self.mode = Mode::Edit,
                     KeyCode::Backspace => { input.pop(); }
                     KeyCode::Char('u') if ctrl => input.clear(),
+                    // invite vide : un chiffre = une puce (comme les boutons du web)
+                    KeyCode::Char(c) if !ctrl && !alt && input.is_empty() && loom_app::vibe::chip_for_key(c).is_some() => {
+                        let ask = loom_app::vibe::chip_for_key(c).unwrap_or_default();
+                        self.mode = Mode::Edit;
+                        self.send_vibe(ask);
+                    }
                     KeyCode::Char(c) if !ctrl && !alt => input.push(c),
                     _ => {}
                 }

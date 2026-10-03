@@ -256,7 +256,12 @@ fn draw_status(f: &mut Frame, app: &App, area: Rect) {
         let help = "   Entrée envoie · ?question = le prof · Échap ferme";
         let mut spans = vec![Span::styled(label, accent), Span::raw(input.clone())];
         if input.is_empty() {
-            spans.push(Span::styled("décris la musique, ex. fais un groove afro plus sombre", Style::new().fg(c(t.dim))));
+            // les puces du web, une touche chacune
+            for (i, (label, _)) in loom_app::vibe::CHIPS.iter().enumerate() {
+                spans.push(Span::styled(format!("{}", (i + 1) % 10), accent));
+                spans.push(Span::styled(format!(" {label}  "), Style::new().fg(c(t.dim))));
+            }
+            spans.push(Span::styled("· ou décris la musique", Style::new().fg(c(t.dim))));
         }
         spans.push(Span::styled(help, Style::new().fg(c(t.dim))));
         f.render_widget(Paragraph::new(Line::from(spans)).style(Style::new().bg(c(t.panel))), area);
@@ -347,6 +352,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         Line::from(""),
         section("IA — VIBE"),
         key("F2", "décrire la musique en mots, Claude écrit le code"),
+        key("F2 puis 1..0", "les puces : + batterie, + basse, + nappe, + triste, + énergie, + exotique, varier, simplifier, continuer, corriger"),
         key("  Entrée · Échap", "envoyer · fermer (Échap annule s'il réfléchit)"),
         key("F2 ?question", "demander au prof : ?quinte ?raga ?pourquoi c'est triste"),
         key("F3 · Ctrl+Y", "annuler · rétablir VIBE/GÉNÉRER/DÉVELOPPE/HUM/leçon"),

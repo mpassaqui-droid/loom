@@ -805,3 +805,15 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] D. Build de vente installé dans Live (sans port UDP)
 - [x] E. LISEZ-MOI, lessons, BUS, mémoire, fiche de reprise
 - Review : tout fait, portes 440 Rust / device 34/34 / web 4/4 / parité 0 écart. Lien Live stagé, à valider à la main (faux positif du hook). Test souris dans Live à faire par Munay.
+
+## 3 octobre (nuit) : le Loom terminal complet comme le web
+- [ ] 1. VIBE : les 10 puces d'un chiffre (F2 puis 1..0)
+- [ ] 2. Export .mid standard (Ctrl+M)
+- [ ] 3. Mes sons : importer / vider ses samples depuis l'appli
+- [ ] 4. Correcteur : erreurs soulignées dans l'éditeur
+- [ ] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur
+- [ ] 6. Lien Live : chaque RUN écrit le .loom lié
+- [ ] 7. Scènes : plus de visuels terminal
+- [ ] 8. Partition (notation.rs) à l'écran
+- [ ] 9. Thèmes intégrés hors Omarchy
+- [ ] 10. Dictée vocale dans VIBE (whisper local)
