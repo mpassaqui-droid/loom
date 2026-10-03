@@ -351,6 +351,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         key("Ctrl+Q", "quitter"),
         Line::from(""),
         section("IA — VIBE"),
+        key("Alt+X", "exporter un fichier MIDI standard (.mid) à côté du morceau, pour un DAW"),
         key("F2", "décrire la musique en mots, Claude écrit le code"),
         key("F2 puis 1..0", "les puces : + batterie, + basse, + nappe, + triste, + énergie, + exotique, varier, simplifier, continuer, corriger"),
         key("  Entrée · Échap", "envoyer · fermer (Échap annule s'il réfléchit)"),

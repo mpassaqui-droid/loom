@@ -177,6 +177,7 @@ impl App {
             KeyCode::Char('p' | 'P') => self.export_share(),
             KeyCode::Char('i' | 'I') => self.mode = Mode::Import { input: String::new() },
             KeyCode::Char('d' | 'D') => self.start_demo(),
+            KeyCode::Char('x' | 'X') => self.export_midi(),
             _ => return false,
         }
         true

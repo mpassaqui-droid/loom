@@ -148,8 +148,124 @@ impl Baked {
     }
 }
 
+/// Ticks par noire du fichier MIDI.
+pub const PPQ: u32 = 480;
+
+fn vlq(mut v: u32, out: &mut Vec<u8>) {
+    let mut pile = vec![(v & 0x7f) as u8];
+    v >>= 7;
+    while v > 0 { pile.push((v & 0x7f) as u8 | 0x80); v >>= 7; }
+    out.extend(pile.iter().rev());
+}
+
+fn piste(evts: &mut [(u32, u8, Vec<u8>)]) -> Vec<u8> {
+    // à tick égal : les fins de notes avant les débuts (ordre 0), puis le reste
+    evts.sort_by_key(|(t, o, _)| (*t, *o));
+    let mut corps = Vec::new();
+    let mut avant = 0;
+    for (t, _, e) in evts.iter() {
+        vlq(t - avant, &mut corps);
+        corps.extend(e);
+        avant = *t;
+    }
+    corps.extend([0x00, 0xff, 0x2f, 0x00]);
+    let mut o = b"MTrk".to_vec();
+    o.extend((corps.len() as u32).to_be_bytes());
+    o.extend(corps);
+    o
+}
+
+fn nom_meta(nom: &str) -> Vec<u8> {
+    let b = nom.as_bytes();
+    let mut e = vec![0xff, 0x03];
+    vlq(b.len() as u32, &mut e);
+    e.extend(b);
+    e
+}
+
+impl Baked {
+    /// Fichier MIDI standard (type 1) : une piste de tempo (tempo de chaque mesure, mesure,
+    /// sections en marqueurs) puis une piste par voix, batterie sur le canal 10.
+    pub fn to_midi(&self) -> Vec<u8> {
+        let tick = |beat: f64| (beat.max(0.0) * PPQ as f64).round() as u32;
+        let mut tempo = Vec::new();
+        // mesure : 4/4, ou 7/8 pour 3.5 noires
+        let (num, den_pow) = if (self.meter_beats.fract()).abs() < 1e-9 { (self.meter_beats as u8, 2u8) }
+            else { ((self.meter_beats * 2.0).round() as u8, 3u8) };
+        tempo.push((0, 1, vec![0xff, 0x58, 0x04, num.max(1), den_pow, 24, 8]));
+        let mut dernier = 0.0;
+        for (b, bpm) in self.bar_bpm.iter().enumerate() {
+            if b > 0 && (*bpm - dernier).abs() < 1e-9 { continue; }
+            dernier = *bpm;
+            let us = (60_000_000.0 / bpm.max(1.0)).round() as u32;
+            let [_, a, bb, c] = us.to_be_bytes();
+            tempo.push((tick(b as f64 * self.meter_beats), 1, vec![0xff, 0x51, 0x03, a, bb, c]));
+        }
+        for (nom, debut, _) in &self.sections {
+            let mut e = nom_meta(nom);
+            e[1] = 0x06; // marqueur
+            tempo.push((tick(*debut as f64 * self.meter_beats), 1, e));
+        }
+        let mut fichier = b"MThd".to_vec();
+        fichier.extend(6u32.to_be_bytes());
+        fichier.extend(1u16.to_be_bytes());
+        fichier.extend(((self.tracks.len() + 1) as u16).to_be_bytes());
+        fichier.extend((PPQ as u16).to_be_bytes());
+        fichier.extend(piste(&mut tempo));
+        let mut canal = 0u8;
+        for t in &self.tracks {
+            let ch = if t.drum { 9 } else {
+                let c = canal; canal = (canal + 1) % 15; if c >= 9 { c + 1 } else { c }
+            };
+            let mut ev = vec![(0, 1, nom_meta(&t.name))];
+            for n in &t.notes {
+                let (a, b) = (tick(n.beat), tick(n.beat + n.dur).max(tick(n.beat) + 1));
+                ev.push((a, 1, vec![0x90 | ch, n.pitch.min(127), n.vel.clamp(1, 127)]));
+                ev.push((b, 0, vec![0x80 | ch, n.pitch.min(127), 0]));
+            }
+            fichier.extend(piste(&mut ev));
+        }
+        fichier
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn fichier_midi_standard() {
+        let b = bake("bpm: 120\nkick: x . x .\nbass: c2 . . .\nsong: a 1 b 1", 2);
+        let m = b.to_midi();
+        assert_eq!(&m[0..4], b"MThd");
+        assert_eq!(u16::from_be_bytes([m[10], m[11]]) as usize, b.tracks.len() + 1, "piste de tempo + une par voix");
+        assert_eq!(u16::from_be_bytes([m[12], m[13]]), 480);
+        // autant de « note on » que de notes cuites, batterie sur le canal 10
+        let ons = m.windows(1).filter(|w| w[0] & 0xf0 == 0x90).count();
+        assert!(ons >= b.tracks.iter().map(|t| t.notes.len()).sum::<usize>());
+        assert!(m.windows(3).any(|w| w[0] == 0x99 && w[1] == b.tracks.iter().find(|t| t.drum).unwrap().notes[0].pitch));
+        // tempo 120 = 500 000 µs par noire ; les marqueurs des sections
+        assert!(m.windows(6).any(|w| w == [0xff, 0x51, 0x03, 0x07, 0xa1, 0x20]));
+        assert!(m.windows(3).any(|w| w == [0xff, 0x06, 0x01]));
+        // chaque bloc de piste a la bonne longueur
+        let mut i = 14;
+        let mut n = 0;
+        while i < m.len() {
+            assert_eq!(&m[i..i + 4], b"MTrk");
+            let l = u32::from_be_bytes([m[i + 4], m[i + 5], m[i + 6], m[i + 7]]) as usize;
+            assert_eq!(&m[i + 8 + l - 3..i + 8 + l], [0xff, 0x2f, 0x00]);
+            i += 8 + l;
+            n += 1;
+        }
+        assert_eq!(n, b.tracks.len() + 1);
+    }
+
+    #[test]
+    fn vlq_midi() {
+        let mut o = Vec::new();
+        for v in [0u32, 0x7f, 0x80, 0x3fff, 0x4000] { vlq(v, &mut o); }
+        assert_eq!(o, [0x00, 0x7f, 0x81, 0x00, 0xff, 0x7f, 0x81, 0x80, 0x00]);
+    }
+
     use super::*;
 
     #[test]

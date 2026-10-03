@@ -35,6 +35,7 @@ usage :
   loom render --help                           détails de l'export
   loom bake morceau.loom sortie.json [N]       cuire en notes MIDI par voix (pour Ableton Live,
                                                voir tools/bake_live.py)
+  loom bake morceau.loom sortie.mid [N]        fichier MIDI standard (une piste par voix)
   loom-gui [morceau.loom]                      la même chose dans une fenêtre
 ";
 
@@ -188,7 +189,9 @@ fn bake(file: &str, out: &str, bars: Option<u32>) -> Result<(), String> {
     if program.voices.is_empty() { return Err(format!("{file} ne contient aucune voix")); }
     let bars = bars.unwrap_or_else(|| loom_audio::bake::default_bars(&program));
     let baked = loom_audio::bake::bake(&src, bars);
-    std::fs::write(out, baked.to_json()).map_err(|e| format!("impossible d'écrire {out} : {e}"))?;
+    // .mid = fichier MIDI standard pour n'importe quel DAW ; sinon le JSON de bake_live.py
+    let octets = if out.to_lowercase().ends_with(".mid") { baked.to_midi() } else { baked.to_json().into_bytes() };
+    std::fs::write(out, octets).map_err(|e| format!("impossible d'écrire {out} : {e}"))?;
     let notes: usize = baked.tracks.iter().map(|t| t.notes.len()).sum();
     println!("{bars} mesures · {} pistes · {notes} notes{} → {out}",
         baked.tracks.len(), if baked.ascl.is_some() { " · accordage" } else { "" });

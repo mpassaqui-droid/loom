@@ -807,8 +807,8 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - Review : tout fait, portes 440 Rust / device 34/34 / web 4/4 / parité 0 écart. Lien Live stagé, à valider à la main (faux positif du hook). Test souris dans Live à faire par Munay.
 
 ## 3 octobre (nuit) : le Loom terminal complet comme le web
-- [ ] 1. VIBE : les 10 puces d'un chiffre (F2 puis 1..0)
-- [ ] 2. Export .mid standard (Ctrl+M)
+- [x] 1. VIBE : les 10 puces d'un chiffre (F2 puis 1..0)
+- [x] 2. Export .mid standard (Alt+X, et loom bake x.loom x.mid)
 - [ ] 3. Mes sons : importer / vider ses samples depuis l'appli
 - [ ] 4. Correcteur : erreurs soulignées dans l'éditeur
 - [ ] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur

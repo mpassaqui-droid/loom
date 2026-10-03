@@ -230,6 +230,22 @@ impl App {
         }
     }
 
+    /// Alt+X: the song as a standard MIDI file next to it (one track per voice), for any DAW.
+    pub fn export_midi(&mut self) {
+        let text = self.editor.text();
+        let program = Program::parse(&text);
+        if program.voices.is_empty() { self.error("MIDI : aucune voix à exporter"); return; }
+        let bars = loom_audio::bake::default_bars(&program);
+        let baked = loom_audio::bake::bake(&text, bars);
+        let path = self.path.clone().unwrap_or_else(Library::new_song_path).with_extension("mid");
+        let result = path.parent().map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|_| std::fs::write(&path, baked.to_midi()));
+        match result {
+            Ok(()) => self.info(format!("MIDI : {bars} mesures · {} pistes → {}", baked.tracks.len(), path.display())),
+            Err(e) => self.error(format!("échec de l'export MIDI : {e}")),
+        }
+    }
+
     /// Mute/unmute the n-th voice (1-based, as numbered on the grid).
     pub fn toggle_mute(&mut self, n: usize) {
         let mut names: Vec<String> = Vec::new();
