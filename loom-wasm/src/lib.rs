@@ -44,6 +44,35 @@ struct SynthV1 {
     reverb: Option<f32>,
     /// `| delay N` — level 0..1 of the send to the master ping-pong (None = none).
     delay: Option<f32>,
+    // --- P6-3A rich sources & note inserts ---
+    // These carry the SAME resolved forms `render::NoteParam::of` uses, so the JS
+    // `noteSample` mirror reads plain numbers (no re-clamping) and can't diverge.
+    /// `| fm RATIO INDEX FB` — `[ratio, index, feedback]` (None = no FM).
+    fm: Option<[f32; 3]>,
+    /// `| partials a1 a2 …` / `| organ` — additive amplitudes (None = none).
+    partials: Option<Vec<f32>>,
+    /// `| wt organ|warm|rich|soft` — raw table name (JS mirrors `WtKind::from_str`).
+    wt: Option<String>,
+    /// `| pwm N` — resolved duty depth (0 = off; a present pwm is clamped 0.05..1).
+    pwm: f32,
+    /// `| sync RATIO` — resolved slave ratio (0 = off; a present sync is `max(1.2)`).
+    sync: f32,
+    /// `| bell` — modal struck-metal source.
+    bell: bool,
+    /// `| noise N` — resolved air-layer level 0..1 (0 = off).
+    noise: f32,
+    /// `| am HZ` — amplitude-modulation rate in Hz (0 = off).
+    am: f32,
+    /// `| ring HZ` — ring-modulation rate in Hz (0 = off).
+    ring: f32,
+    /// `| drive N` — resolved saturator amount 0..1 (0 = off; `base()` of a sweep).
+    drive: f32,
+    /// `| fold N` — resolved wavefolder mix 0..1 (0 = off).
+    fold: f32,
+    /// `| crush BITS` — raw bit depth (None = off; JS derives scale `2^(bits-1)`).
+    crush: Option<u32>,
+    /// `| redux N` — raw rate 0..1 (0 = off; JS derives sample-hold `round(1+20N)`).
+    redux: f32,
 }
 
 #[derive(Serialize)]
@@ -82,6 +111,20 @@ fn synth_v1(s: &loom_core::Synth) -> SynthV1 {
         phaser: s.phaser,
         reverb: s.reverb,
         delay: s.delay,
+        // P6-3A rich sources & inserts — mirror `render::NoteParam::of` exactly.
+        fm: s.fm.map(|f| [f.ratio, f.index, f.fb]),
+        partials: s.partials.clone(),
+        wt: s.wt.clone(),
+        pwm: s.pwm.map(|x| x.clamp(0.05, 1.0)).unwrap_or(0.0),
+        sync: s.sync.map_or(0.0, |r| r.max(1.2)),
+        bell: s.bell,
+        noise: s.noise.unwrap_or(0.0).clamp(0.0, 1.0),
+        am: s.am.unwrap_or(0.0),
+        ring: s.ring.unwrap_or(0.0),
+        drive: s.drive.map_or(0.0, |d| d.base().clamp(0.0, 1.0)),
+        fold: s.fold.unwrap_or(0.0).clamp(0.0, 1.0),
+        crush: s.crush,
+        redux: s.redux.unwrap_or(0.0),
     }
 }
 
