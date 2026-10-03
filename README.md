@@ -25,8 +25,13 @@ bass:  c2 . eb2 . g2 . eb2 . | saw | every 8 rev
 ./install.sh --uninstall
 ```
 - **`loom-gui`**: a window with the editor, a live step grid, transport, volume, and the song library.
-- **`loom`**: the same thing in the terminal. Also `loom play song.loom` (headless) and
-  `loom render song.loom out.wav [bars]` (offline bounce).
+- **`loom`**: the same thing in the terminal, with the web version's features: VIBE chips
+  (F2 then 1..0) and voice dictation (Alt+V, local whisper), the linter (faulty lines
+  underlined on RUN), your own samples (Alt+U), sheet music (Alt+F), the 24 stage scenes
+  (F12), the 62 web colour themes (Alt+C), next/random song (Alt+N/Alt+Z), MIDI export
+  (Alt+X) and the Ableton Live link (Alt+K). F1 lists every key. Also
+  `loom play song.loom` (headless), `loom render song.loom out.wav [bars]` (offline bounce)
+  and `loom bake song.loom out.mid` (standard MIDI file).
 - Both play sound natively through PipeWire/ALSA. Code edits hot-swap at the next bar
   line, so the music never stops while you type.
 - On [Omarchy](https://omarchy.org) the apps appear in the Super+Space menu, take their

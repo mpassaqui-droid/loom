@@ -817,3 +817,5 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] 8. Partition à l'écran : Alt+F, grande portée (sol et fa), lignes supplémentaires, ♯/♭, tête de lecture ; vérifiée dans tmux sur ballade.loom
 - [x] 9. Thèmes intégrés hors Omarchy : Alt+C fait défiler les 62 thèmes du web (copiés par tools/gen_themes.py, une seule source), choix gardé dans ~/.local/state/loom/theme
 - [x] 10. Dictée VIBE : Alt+V (ou Ctrl+D dans VIBE), micro puis whisper-cli en local (large-v3-turbo, français), le texte arrive dans VIBE ; test bout en bout avec say : « basse » relu en 4,5 s. Micro réel à essayer par Munay
+
+Review (3 octobre, 17h) : les 10 faits, poussés sur frankenstein (41e09db → 97a360f). Portes : 455 tests Rust (5 ignorés), clippy --all-targets propre, check_web ok, parité 490/490. `loom` réinstallé. Laissés de côté (faible valeur) : export film, traduction de l'interface. Le terminal a 24 scènes, le web 56 (les 32 en plus sont des shaders WebGL).
