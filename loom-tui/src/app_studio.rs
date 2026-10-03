@@ -178,6 +178,8 @@ impl App {
             KeyCode::Char('i' | 'I') => self.mode = Mode::Import { input: String::new() },
             KeyCode::Char('d' | 'D') => self.start_demo(),
             KeyCode::Char('x' | 'X') => self.export_midi(),
+            KeyCode::Char('n' | 'N') => self.other_song(false),
+            KeyCode::Char('z' | 'Z') => self.other_song(true),
             _ => return false,
         }
         true

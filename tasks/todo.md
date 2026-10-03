@@ -811,7 +811,7 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] 2. Export .mid standard (Alt+X, et loom bake x.loom x.mid)
 - [ ] 3. Mes sons : importer / vider ses samples depuis l'appli
 - [ ] 4. Correcteur : erreurs soulignées dans l'éditeur
-- [ ] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur
+- [x] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur
 - [ ] 6. Lien Live : chaque RUN écrit le .loom lié
 - [ ] 7. Scènes : plus de visuels terminal
 - [ ] 8. Partition (notation.rs) à l'écran

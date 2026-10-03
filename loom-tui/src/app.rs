@@ -50,7 +50,7 @@ pub enum Mode {
 }
 
 #[derive(Clone)]
-pub enum Pending { Quit, Open(PathBuf), New, Import(String) }
+pub enum Pending { Quit, Open(PathBuf), New, Import(String), Trash(PathBuf) }
 
 pub struct App {
     pub editor: Editor,
@@ -359,12 +359,16 @@ impl App {
 
     /// Run `action` now, or ask first if it would throw away unsaved edits.
     pub(crate) fn guarded(&mut self, action: Pending) {
-        if self.editor.dirty {
+        // la corbeille demande toujours (elle ne touche pas au morceau ouvert s'il est différent)
+        if let Pending::Trash(p) = &action {
+            let question = format!("Mettre « {} » à la corbeille ?", p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+            self.mode = Mode::Confirm { question, then: action };
+        } else if self.editor.dirty {
             let question = match &action {
                 Pending::Quit => "Quitter sans enregistrer ?",
                 Pending::Open(_) => "Ouvrir sans enregistrer les changements ?",
                 Pending::New => "Nouveau morceau sans enregistrer ?",
-                Pending::Import(_) => "Importer sans enregistrer les changements ?",
+                Pending::Import(_) | Pending::Trash(_) => "Importer sans enregistrer les changements ?",
             }.to_string();
             self.mode = Mode::Confirm { question, then: action };
         } else {
@@ -379,6 +383,24 @@ impl App {
             Pending::Open(p) => self.open(p),
             Pending::New => self.new_song(),
             Pending::Import(text) => self.import(&text),
+            Pending::Trash(p) => match Library::trash(&p) {
+                Ok(dest) => {
+                    if self.path.as_deref() == Some(p.as_path()) { self.path = None; self.editor.dirty = true; }
+                    self.info(format!("à la corbeille : {}", dest.display()));
+                }
+                Err(e) => self.error(format!("corbeille : {e}")),
+            },
+        }
+    }
+
+    /// Alt+N / Alt+Z: the next song of the picker, or one at random (like the web's presets).
+    pub fn other_song(&mut self, random: bool) {
+        let all = Library::all();
+        let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
+        let next = if random { Library::random_in(&all, self.path.as_deref(), seed) } else { Library::step_in(&all, self.path.as_deref(), 1) };
+        match next {
+            Some(p) => self.guarded(Pending::Open(p)),
+            None => self.error("aucun morceau à ouvrir"),
         }
     }
 
@@ -434,6 +456,12 @@ impl App {
                         let path = items[*selected].1.clone();
                         self.mode = Mode::Edit;
                         self.guarded(Pending::Open(path));
+                    }
+                    // Suppr : à la corbeille (tes morceaux seulement, après confirmation)
+                    KeyCode::Delete | KeyCode::Backspace => {
+                        let path = items[*selected].1.clone();
+                        self.mode = Mode::Edit;
+                        self.guarded(Pending::Trash(path));
                     }
                     _ => self.mode = Mode::Edit,
                 }
