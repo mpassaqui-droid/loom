@@ -15,6 +15,7 @@
 //!             └── bus_only (chorus / echo taps: bus, not sends)
 //! ```
 
+use crate::bytebeat::ByteBeat;
 use crate::clock::Clock;
 use crate::drums::Drum;
 use crate::inserts::prims::Panner;
@@ -87,6 +88,8 @@ enum Source {
     Drum(Drum),
     Tone(Tone),
     Sample(SampleVoice),
+    /// Une mesure de voix bytebeat (`t: EXPR`).
+    Byte(ByteBeat),
 }
 
 /// One sounding note: a source, its insert chain, and its routing.
@@ -135,6 +138,21 @@ impl Note {
         }
     }
 
+    /// Une mesure de bytebeat. Comme un sample (et comme le web) : pan fixe,
+    /// envois et bus, pas de chaîne d'inserts.
+    pub fn bytebeat(src: ByteBeat, spec: &NoteSpec, route: Route) -> Note {
+        Note {
+            source: Source::Byte(src),
+            inserts: None,
+            pan: panner(spec.pan),
+            route,
+            name: spec.name.to_string(),
+            visual: None,
+            trim: (1.0, 1.0),
+            tail_elapsed: 0.0,
+        }
+    }
+
     pub fn is_kick(&self) -> bool { matches!(&self.source, Source::Drum(d) if d.is_kick()) }
 
     fn source_done(&self) -> bool {
@@ -142,6 +160,7 @@ impl Note {
             Source::Drum(d) => d.done(),
             Source::Tone(t) => t.done(),
             Source::Sample(s) => s.done(),
+            Source::Byte(b) => b.done(),
         }
     }
 
@@ -165,6 +184,10 @@ impl Note {
                     self.pan.map_or(x, |p| p.apply(x, x.l == x.r))
                 }
                 Source::Tone(t) => t.render(clock),
+                Source::Byte(b) => {
+                    let m = Stereo::mono(b.render());
+                    self.pan.map_or(m, |p| p.apply(m, true))
+                }
             }
         };
         match &mut self.inserts {

@@ -125,6 +125,7 @@ const pieces = {
   'send returns (no-op onsets)': 'send: tails echo 4 0.5\nsend: airy reverb hall 0.85 4500\nsend: wash flange 0.4 0.6\nkick: x . x . | send tails 0.6\nsnare: . . x . | send tails 0.4\nlead: 1 3 5 1\' | send airy 0.7\npad: 1 5 3 7 | send wash 0.3 | send airy 0.2',
   'l-sys custom': "seed: 5\nlead: l-sys(16,1>1.2,2>1.3,5>3.1) | pluck | gain 0.1\nkick: x . . x . . x .",
   'xys xenakis (markov seedé)': 'seed: 3\nlead: xys(16,1,1>2:2|3:1,2>1:1,5>1.5:2,3>2:1) | sine | gain 0.1\nkick: e(3,8)',
+  'bytebeat (aucune note, le reste joue)': "kick: x . x .\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4\nlead: 1 3 5 | saw",
   'evolve (génétique seedée)': 'seed: 3\nlead: evolve(16) | pluck | gain 0.1\nkick: x . . x . . x .',
 };
 
@@ -139,6 +140,28 @@ const tidal_pieces = {
   'tidal combinés + loopAt': "seed: 2\nkey: e minor\nlead: 1 3 5 7 | range 1 5' | ply 2 | linger 0.5\nm2: 5 3 1 | segment 4 | rev\nbreak: x . . . | sample amen | loopAt 2",
 };
 Object.assign(pieces, tidal_pieces);
+
+// `| sync AUTRE` (B5) : le cycle repart avec celui d'une autre voix. Parité
+// stricte onset + jeton (seuls les jetons tournent), sur 4 mesures.
+const sync_pieces = {
+  'sync poly sur voix simple': "key: c minor\nlead: 1 3 5 | poly 4 | sync kick\nkick: x . x .\nfree: 1 3 5 | poly 4",
+  'sync sur meneur poly qui dérive': "key: d dorian\narp: 1 2 3 | poly 16 | sync lead\nlead: 5 . . . 1 | poly 16\nhat: x . x | poly 8 | sync lead",
+  'sync voix simple tournée en cours de mesure': "key: a minor\nm: 1 2 3 4 | sync l\nl: 1 . 5 | poly 4\nm2: 1 [3 5] . 7 | every 2 rev | sync l | jux rev",
+  'sync meneur slow 2 + poly m:n': "key: c major\na: 1 2 3 | poly 4 | sync b\nb: x . | slow 2\nc: 1 3 5 7 5 | poly 3:2 | sync l2\nl2: x x x | poly 4",
+  'sync inconnu, soi-même, hard sync': "key: c major\na: 1 2 3 | poly 4 | sync nobody\nb: 1 2 3 | poly 4 | sync b\nc: 1 3 | saw | sync 3",
+};
+Object.assign(pieces, sync_pieces);
+
+// Pas-programmes `=(EXPR)` (B2) : jeton calculé au moment du pas (i, b, n).
+// Même parité stricte onset + hauteur.
+const step_pieces = {
+  'pas-programmes degrés (tonalité)': "key: c major\nlead: =(i*3%7) | segment 8\nm2: =((i+b)%n) =(i) =(i*2) | saw\nm3: =(i - 3) =(7) =(0-8) =(40)",
+  'pas-programmes MIDI (sans tonalité)': "m: =(60+i*5) =(72-b) =(200) =(0-3)\nm2: =( 48 + (i * 7 | 0) % 12 ) | segment 6",
+  'pas-programmes batterie + mods': "kick: =(i%3==0) | segment 16\nhat: =(i&1)! =(1)*2 =(0) =(b%2)?70\nsnare: =(i==4|i==12) | segment 16",
+  'pas-programmes groupes, poly, verbes': "key: a minor\nm: [=(i) =(i) =(n)] . =(b) | every 2 rev\nq: =(i) =(i+2) =(i*4) | poly 5\nj: =(i) 3 =(i+4) | jux rev | off 1\nbad: =(i+) =(i 1 =(x) 5",
+  'pas-programmes + sync + modulation': "key: c minor\nkey@b: e minor\nsong: a*2 b*2\nm: =(i*2) =(i) =(b) | poly 4 | sync k\nk: x . . | poly 4\nt2: =(i) =(i+1) | in b",
+};
+Object.assign(pieces, step_pieces);
 
 // ── ANALYSER PARITY (offline teacher analysis) ─────────────────────────────
 // The Rust analyser (loom-core::prof, now the web's default via analyze_json)
@@ -168,6 +191,8 @@ const an_pieces = {
   'attente résolue 7→1 (prog V→I)': 'key: c major\nprog: G7 C\nlead: 7 1',
   'attente suspendue sur la note de tête (7)': 'key: c major\nlead: 1 2 3 5 7',
   'mélodie étroite dans une 3ce + conseils': 'key: d minor\nlead: 1 2 3 1 2 3',
+  'pas-programmes + sync (jetons calculés)': 'key: d dorian\nlead: =(i*3%7) | segment 8\nkick: =(i%3==0) | segment 16\narp: 1 3 5 | poly 16 | sync kick',
+  'bytebeat + mélodie (la voix t: ne compte pas comme notes)': 'key: c minor\nkick: x . x .\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4\nlead: 1 3 5',
   'mode lydien (ethos — ambience par couleur)': 'key: f lydian\nlead: 1 2 3 4 5 6',
 };
 // force: the acoustic consonance % is a float measurement (Plomp–Levelt) —
@@ -359,7 +384,79 @@ for (const [name, src] of Object.entries(tidal_pieces)) {
     }
   }
 }
+// ── BYTEBEAT parity (B3) : l'évaluateur d'expressions et le signal ──────────
+// Même expression, mêmes t : valeur entière identique (ou erreur des deux côtés),
+// puis le PCM échantillonné-bloqué bit pour bit (Float32), à 44,1 et 48 kHz.
+const bb_exprs = ['t', 't*(42&t>>10)', 't*((t>>12|t>>8)&63&t>>4)', '(t*5&t>>7)|(t*3&t>>10)',
+  't/(t>>8)', 't%0', '-t>>3', '~t^t<<3', 't*t*t', '2147483647+t', '0xffffffff&t', 't>>33',
+  '(t<4096)*t+(t>=4096)*(t>>2)', 't==8000', 't!=0', '1+2*3-4/2%3', '-(-t)', '(0-2147483647-1)/(0-1)',
+  '', '1+', '(t', 'tt', 'x', 't 2', '1||2', '99999999999', '0x', '12ab'];
+const bb_ts = [0, 1, 255, 1024, 4096, 8000, 12345, 65535, 1000000, 2147483647, -5];
+let bb_total = 0, bb_bad = 0;
+for (const ex of bb_exprs) {
+  let ce = null; try { ce = L.exprCompile(ex, ['t']); } catch (_) {}
+  for (const t of bb_ts) {
+    bb_total++;
+    const js = ce ? String(L.exprEval(ce, [t])) : 'ERR';
+    const rs = W.expr_eval(ex, 't', Int32Array.from([t]));
+    if (js !== rs) { bb_bad++; if (bb_bad <= 8) console.log(`  BYTEBEAT EXPR DIFF [${ex} t=${t}] JS ${js} Rust ${rs}`); }
+  }
+}
+for (const [ex, start, len, sr] of [['(t*5&t>>7)|(t*3&t>>10)', 0, 4410, 44100], ['t*((t>>12|t>>8)&63&t>>4)', 123457, 9600, 48000],
+  ['t*(42&t>>10)', 44100 * 7, 22050, 44100], ['t', 5, 100, 16000]]) {
+  bb_total++;
+  const js = L.bytebeatFill(L.exprCompile(ex, ['t']), start, len, sr), rs = W.bytebeat_pcm(ex, start, len, sr);
+  let same = js.length === rs.length;
+  for (let k = 0; same && k < rs.length; k++) same = Object.is(js[k], rs[k]);
+  if (!same) { bb_bad++; console.log(`  BYTEBEAT PCM DIFF [${ex} @${start} sr ${sr}]`); }
+}
+// la coupe expression | verbes et le parse de la voix des deux côtés : même
+// expression retenue (évaluée en t=777), aucun événement côté Rust.
+for (const line of ['crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4 | pan -0.5', 'b: t:t|t>>8|lp 900', 'c: t: (t | gain) | gain 0.3', 'bad: t: t*(2+']) {
+  bb_total++;
+  const jv = L.parse(line)[0];
+  const jsrc = jv ? String(L.exprEval(jv.bytebeat, [777])) : 'ERR';
+  const sp = L.bytebeatSplit(line.slice(line.indexOf('t:') + 2));
+  const rsrc = W.expr_eval(sp[0], 't', Int32Array.from([777]));
+  const rv = JSON.parse(W.schedule_bar_json(line + '\nkick: x', 0)).filter(e => e.voice !== 'kick');
+  if (rv.length !== 0 || rsrc !== jsrc) { bb_bad++; console.log(`  BYTEBEAT PARSE DIFF [${line}] JS ${jsrc} Rust ${rsrc} events ${rv.length}`); }
+}
+console.log(`\nBYTEBEAT parity (expressions + PCM + coupe, JS <-> Rust): ${bb_total - bb_bad}/${bb_total}  ${bb_bad === 0 ? '✅' : '⚠️ ' + bb_bad + ' diffs'}`);
+
+let sy_total = 0, sy_bad = 0;
+for (const [name, src] of Object.entries(sync_pieces)) {
+  const key = L.parseKey(src);
+  for (let bar = 0; bar < 4; bar++) {
+    const js = notesOf(L.scheduleBar(src, bar), e => jsMidi(e.tok, key, e.drum));
+    const rs = notesOf(JSON.parse(W.schedule_bar_json(src, bar)), rsMidi);
+    for (const v of new Set([...Object.keys(js), ...Object.keys(rs)])) {
+      sy_total++;
+      const a = (js[v] || []).join(' '), b = (rs[v] || []).join(' ');
+      if (a !== b) { sy_bad++; if (sy_bad <= 8) console.log(`  SYNC DIFF [${name} bar${bar} ${v}]\n    JS  : ${a}\n    Rust: ${b}`); }
+    }
+  }
+}
+let sp_total = 0, sp_bad = 0;
+for (const [name, src] of Object.entries(step_pieces)) {
+  for (let bar = 0; bar < 4; bar++) {
+    // la tonalité de la section (key@b) pour résoudre les degrés côté JS
+    const capt = L.scheduleBar(src, bar), km = L.parseKeyMap(src);
+    let key = L.parseKey(src);
+    const sm = /^song:(.*)$/m.exec(src);
+    if (sm) { let acc = 0; for (const w of sm[1].trim().split(/\s+/)) { const [nm, k] = w.split('*'); acc += +(k || 1); if (bar < acc) { if (km[nm]) key = km[nm]; break; } } }
+    const js = notesOf(capt, e => jsMidi(e.tok, key, e.drum));
+    const rs = notesOf(JSON.parse(W.schedule_bar_json(src, bar)), rsMidi);
+    for (const v of new Set([...Object.keys(js), ...Object.keys(rs)])) {
+      sp_total++;
+      const a = (js[v] || []).join(' '), b = (rs[v] || []).join(' ');
+      if (a !== b) { sp_bad++; if (sp_bad <= 8) console.log(`  STEP DIFF [${name} bar${bar} ${v}]\n    JS  : ${a}\n    Rust: ${b}`); }
+    }
+  }
+}
+console.log(`\nSTEP parity (pas-programmes =(EXPR), onset + jeton): ${sp_total - sp_bad}/${sp_total} voice×bar  ${sp_bad === 0 ? '✅' : '⚠️ ' + sp_bad + ' diffs'}`);
+console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/${sy_total} voice×bar  ${sy_bad === 0 ? '✅' : '⚠️ ' + sy_bad + ' diffs'}`);
+
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && td_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

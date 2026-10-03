@@ -7,6 +7,7 @@
 //! [`Master`]. Nothing here touches a sound card, so the same code drives live
 //! output (cpal) and offline WAV rendering, and is unit-testable.
 
+use crate::bytebeat::ByteBeat;
 use crate::clock::{name_salt, Clock};
 use crate::drums::Drum;
 use crate::master::{Master, MixInput};
@@ -483,7 +484,10 @@ impl Sequencer {
         // by time, then voice, so a chord's notes sit next to each other
         events.sort_by(|a, b| a.phase.total_cmp(&b.phase).then_with(|| a.voice.cmp(&b.voice)));
         let mixer_solo = self.channels.iter().any(|c| c.solo);
-        let any_solo = mixer_solo || events.iter().any(|e| e.synth.solo);
+        // voix bytebeat (`t: EXPR`) : pas d'événements, une note continue par mesure
+        let bytebeats: Vec<loom_core::Voice> = self.program.active_voices(self.song_bar)
+            .into_iter().filter(|v| v.bytebeat.is_some()).collect();
+        let any_solo = mixer_solo || events.iter().any(|e| e.synth.solo) || bytebeats.iter().any(|v| v.synth.solo);
         // the SWING knob: push odd steps late on voices without their own swing
         if self.swing > 0.0 {
             for e in events.iter_mut() {
@@ -505,6 +509,15 @@ impl Sequencer {
             if ev.synth.mute || (any_solo && !soloed) || self.muted.contains(&ev.voice) { continue; }
             if self.stem.as_ref().is_some_and(|s| *s != ev.voice) { continue; }
             self.trigger(&group, bar_sec);
+        }
+        for v in &bytebeats {
+            let soloed = v.synth.solo || self.channels.iter().any(|c| c.solo && c.name == v.name);
+            if v.synth.mute || (any_solo && !soloed) || self.muted.contains(&v.name) || v.synth.midi.is_some() { continue; }
+            if self.stem.as_ref().is_some_and(|s| *s != v.name) { continue; }
+            if let Some(c) = v.chance {
+                if rng01(self.program.seed, self.song_bar, &format!("{}chc", v.name), 0) >= c { continue; }
+            }
+            self.trigger_bytebeat(v, bar_sec);
         }
         self.queue.sort_by_key(|a| std::cmp::Reverse(a.start));
     }
@@ -643,6 +656,27 @@ impl Sequencer {
                 self.queue.push(Queued { start, note });
             }
         }
+    }
+
+    /// Une mesure de voix bytebeat, de `bar_start` à la barre suivante, sur
+    /// l'horloge absolue du morceau (`t` continue d'une mesure à l'autre).
+    fn trigger_bytebeat(&mut self, v: &loom_core::Voice, bar_sec: f32) {
+        let Some(expr) = v.bytebeat.clone() else { return };
+        let s = &v.synth;
+        let route = Route {
+            bus: self.master.bus_index(s.bus.as_deref()),
+            reverb: s.reverb.unwrap_or(0.0).min(1.0),
+            delay: s.delay.unwrap_or(0.0).min(1.0),
+            sends: self.master.send_routes(&s.sends),
+        };
+        self.seed = self.seed.wrapping_mul(1664525).wrapping_add(1013904223);
+        let spec = NoteSpec {
+            name: &v.name, synth: s, wave: v.wave, freq: 0.0, dur: bar_sec, peak: v.gain,
+            pan: v.pan, prev_freq: None, sr: self.sr, bar_sec, seed: self.seed ^ name_salt(&v.name),
+        };
+        let src = ByteBeat::new(expr, self.bar_start, self.bar_len, self.sr, v.gain);
+        let note = Note::bytebeat(src, &spec, route);
+        self.queue.push(Queued { start: self.bar_start, note });
     }
 
     fn spec<'a>(&mut self, ev: &'a Event, freq: f32, dur: f32, peak: f32, bar_sec: f32) -> NoteSpec<'a> {
@@ -880,6 +914,25 @@ mod tests {
         let mut buf = vec![0.0; (n * 2.0 * SR) as usize * 2];
         seq.render(&mut buf, 2);
         buf
+    }
+
+    #[test]
+    fn bytebeat_voice_sounds_and_follows_mute() {
+        let src = "bpm: 120\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4";
+        let mut s = seq();
+        s.set_program(Program::parse(src));
+        s.play();
+        let out = bars(&mut s, 1.0);
+        let peak = out.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        let changes = out.windows(2).filter(|w| w[0] != w[1]).count();
+        assert!(peak > 0.05 && out.iter().all(|x| x.is_finite()), "peak {peak}");
+        assert!(changes > 1000, "le signal doit bouger, {changes} changements");
+        // mute : silence
+        let mut m = seq();
+        m.set_program(Program::parse(src));
+        m.set_muted("crunch", true);
+        m.play();
+        assert!(bars(&mut m, 1.0).iter().all(|x| *x == 0.0));
     }
 
     #[test]

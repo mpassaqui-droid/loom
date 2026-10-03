@@ -410,12 +410,16 @@ pub fn novelty_report(text: &str) -> Vec<String> {
     let bars: Vec<i64> = (0..n).map(|i| (i as i64) * total / n as i64).collect();
 
     let mut per_voice: HashMap<String, Vec<String>> = HashMap::new();
+    // ordre de première apparition (comme les clés d'objet du web) : la liste
+    // des voix qui bouclent sort dans le même ordre que le JS, pas au hasard du HashMap
+    let mut order: Vec<String> = Vec::new();
     let mut mel: Vec<String> = Vec::new();
     let mut onsets: Vec<String> = Vec::new();
     for bar in bars {
         let events = program.schedule_bar(bar);
         let mut by_voice: HashMap<String, Vec<String>> = HashMap::new();
         for e in &events {
+            if !order.contains(&e.voice) { order.push(e.voice.clone()); }
             // the web fingerprints each hit as (phase in ms):token
             let phase = format!("{:.3}", (e.phase * 1000.0).round() / 1000.0);
             by_voice.entry(e.voice.clone()).or_default().push(format!("{phase}:{}", e.token));
@@ -433,7 +437,8 @@ pub fn novelty_report(text: &str) -> Vec<String> {
     let mut var_sum = 0.0;
     let mut vc = 0usize;
     let mut repeats: Vec<String> = Vec::new();
-    for (voice, sigs) in &per_voice {
+    for voice in &order {
+        let Some(sigs) = per_voice.get(voice) else { continue };
         let uniq: HashSet<&String> = sigs.iter().collect();
         var_sum += uniq.len() as f64 / sigs.len().max(1) as f64;
         vc += 1;

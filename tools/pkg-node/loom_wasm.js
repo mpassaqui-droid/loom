@@ -73,6 +73,55 @@ function bar_seconds(src, bar) {
 exports.bar_seconds = bar_seconds;
 
 /**
+ * Bytebeat : `len` échantillons de la formule `expr` (variable `t`) à partir de
+ * l'échantillon absolu `start`, à `sr` Hz (`loom_core::expr::bytebeat_fill`).
+ * Expression invalide : tableau vide. Sert à la parité avec le miroir JS.
+ * @param {string} expr
+ * @param {number} start
+ * @param {number} len
+ * @param {number} sr
+ * @returns {Float32Array}
+ */
+function bytebeat_pcm(expr, start, len, sr) {
+    const ptr0 = passStringToWasm0(expr, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.bytebeat_pcm(ptr0, len0, start, len, sr);
+    var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v2;
+}
+exports.bytebeat_pcm = bytebeat_pcm;
+
+/**
+ * Évalue une expression entière (`vars` = les lettres des variables, dans
+ * l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
+ * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
+ * @param {string} src
+ * @param {string} vars
+ * @param {Int32Array} vals
+ * @returns {string}
+ */
+function expr_eval(src, vars, vals) {
+    let deferred4_0;
+    let deferred4_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(vars, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray32ToWasm0(vals, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.expr_eval(ptr0, len0, ptr1, len1, ptr2, len2);
+        deferred4_0 = ret[0];
+        deferred4_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+    }
+}
+exports.expr_eval = expr_eval;
+
+/**
  * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
  * consumes these on top of the `schedule_bar_json` events — same Rust defaults.
  * @param {string} src
@@ -265,12 +314,27 @@ function getStringFromWasm0(ptr, len) {
     return decodeText(ptr >>> 0, len);
 }
 
+let cachedUint32ArrayMemory0 = null;
+function getUint32ArrayMemory0() {
+    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
+        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
+    }
+    return cachedUint32ArrayMemory0;
+}
+
 let cachedUint8ArrayMemory0 = null;
 function getUint8ArrayMemory0() {
     if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
         cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer);
     }
     return cachedUint8ArrayMemory0;
+}
+
+function passArray32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {

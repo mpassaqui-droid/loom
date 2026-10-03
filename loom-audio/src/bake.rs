@@ -69,6 +69,8 @@ pub fn bake(src: &str, bars: u32) -> Baked {
         if !names.contains(&v.name) { names.push(v.name.clone()); }
     }
     let tracks = names.iter().filter_map(|name| {
+        // une voix bytebeat (`t: EXPR`) n'a pas de notes : rien à cuire
+        if program.voices.iter().any(|v| v.name == *name && v.bytebeat.is_some()) { return None; }
         let mut p = Program::parse(src);
         let drum = p.voices.iter().any(|v| v.name == *name && v.is_drum);
         for v in p.voices.iter_mut().filter(|v| v.name == *name) {
@@ -181,6 +183,13 @@ mod tests {
         p.sort();
         assert_eq!(p.len(), 4);
         assert!(b.tracks[0].notes.iter().all(|n| n.beat.abs() < 1e-6));
+    }
+
+    #[test]
+    fn bytebeat_voices_are_skipped() {
+        let b = bake("bpm: 120\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4\nkick: x . x .", 1);
+        assert_eq!(b.tracks.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), vec!["kick"]);
+        assert!(b.to_json().contains("\"kick\"") && !b.to_json().contains("crunch"));
     }
 
     #[test]

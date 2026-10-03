@@ -1,0 +1,21 @@
+# ================================================================
+#  LOOM : | sync AUTRE, une voix repart avec le cycle d'une autre.
+#    Le motif rejoue son premier jeton à chaque reprise de AUTRE.
+#    Cycle de AUTRE : poly N avec L jetons = L/N mesure,
+#    voix simple = 1 mesure (K mesures avec slow K).
+#    (| sync 3, un nombre, reste le hard sync d'oscillateur.)
+# ================================================================
+
+title:  Sync
+key:    e minor
+bpm:    112
+
+kick:   x . . . x . . . x . . . x . . .
+# 5 pas en poly 16 : un cycle de 5/16 de mesure qui dérive
+clave:  1'' . 1'' . . | poly 16 | bell | gain 0.06
+# 3 notes qui dériveraient : recalées sur chaque mesure
+arp:    1 3 5 | poly 16 | sync kick | pluck | gain 0.1
+# même boucle, mais elle repart avec la clave (tous les 5 pas)
+ombre:  5' 3' 1' | poly 16 | sync clave | tri | lp 2200 | gain 0.06
+# libre, pour entendre la différence
+drift:  1 3 5 | poly 16 | sine | oct 2 | gain 0.12
