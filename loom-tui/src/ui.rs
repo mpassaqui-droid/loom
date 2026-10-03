@@ -51,6 +51,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Mode::Hum => teacher_view::draw_hum(f, app),
         Mode::Lessons { .. } => teacher_view::draw_lessons(f, app),
         Mode::Transform { .. } => teacher_view::draw_transforms(f, app),
+        Mode::Sounds { .. } => draw_sounds(f, app),
         Mode::Edit | Mode::Vibe { .. } | Mode::Stage | Mode::Mixer { .. } | Mode::Timeline { .. } | Mode::Import { .. } => {}
     }
 }
@@ -366,6 +367,7 @@ fn draw_help(f: &mut Frame, app: &mut App) {
         key("Alt+N / Alt+Z", "morceau suivant / au hasard (comme les presets du web)"),
         key("Ctrl+O puis Suppr", "mettre un de tes morceaux à la corbeille"),
         key("RUN", "le correcteur souligne en rouge les lignes fautives (n° suivi de !) et explique en bas"),
+        key("Alt+U", "mes sons : importe tes fichiers audio (glisser-déposer), | sample <nom>, Suppr, Ctrl+X vide"),
         key("Alt+F", "partition : la mesure en cours sur une grande portée (clé de sol et de fa)"),
         key("Alt+C", "thème suivant : les 62 thèmes du web, gardé au prochain lancement"),
         key("Alt+K", "lien Live : chaque RUN enregistre le fichier, le device Loom de Live le suit"),
@@ -419,6 +421,33 @@ fn draw_browser(f: &mut Frame, app: &App) {
     let list = List::new(list_items).highlight_style(Style::new().bg(c(t.accent)).fg(c(t.background)).add_modifier(Modifier::BOLD));
     let mut state = ListState::default().with_selected(Some(index_of_selected));
     f.render_stateful_widget(list, inner, &mut state);
+}
+
+/// « Mes sons » (Alt+U).
+fn draw_sounds(f: &mut Frame, app: &App) {
+    let Mode::Sounds { input, selected, mine } = &app.mode else { return };
+    let t = &app.theme;
+    let dim = Style::new().fg(c(t.dim));
+    let h = (mine.len() as u16 + 9).clamp(12, f.area().height.saturating_sub(4));
+    let inner = popup(f, app, "mes sons · tes propres samples", 72, h);
+    let [head, list, foot] = Layout::vertical([Constraint::Length(3), Constraint::Min(1), Constraint::Length(3)]).areas(inner);
+    let cursor = if input.is_empty() { Span::styled("glisse un fichier audio ici, ou tape son chemin", dim) } else { Span::raw(input.clone()) };
+    f.render_widget(Paragraph::new(vec![
+        Line::from(vec![Span::styled(" fichier ▸ ", Style::new().fg(c(t.accent))), cursor]),
+        Line::styled(format!(" fournis : {}", app.builtin_sounds().join(" ")), dim),
+    ]).wrap(ratatui::widgets::Wrap { trim: false }), head);
+    if mine.is_empty() {
+        f.render_widget(Paragraph::new(Line::styled(" aucun pour l'instant : WAV, AIFF, MP3, M4A… puis | sample <nom>", dim)), list);
+    } else {
+        let items: Vec<ListItem> = mine.iter().map(|n| ListItem::new(format!("  ★ {n}"))).collect();
+        let l = List::new(items).highlight_style(Style::new().bg(c(t.accent)).fg(c(t.background)).add_modifier(Modifier::BOLD));
+        let mut state = ListState::default().with_selected(Some(*selected));
+        f.render_stateful_widget(l, list, &mut state);
+    }
+    f.render_widget(Paragraph::new(vec![
+        Line::styled(" Entrée : importe, ou ajoute | sample <nom> à la ligne du curseur", dim),
+        Line::styled(" Suppr : ce son à la corbeille · Ctrl+X : VIDER · Échap : fermer", dim),
+    ]), foot);
 }
 
 fn draw_confirm(f: &mut Frame, app: &App, question: &str) {

@@ -38,6 +38,8 @@ enum Cmd {
     SendLevel(String, f32),
     /// Start (Some) or stop (None) copying the output to a recorder thread.
     Record(Option<Sender<Vec<f32>>>),
+    /// A re-scanned sample bank (sounds imported or thrown away).
+    Bank(Arc<SampleBank>),
 }
 
 /// A WAV recording in progress: the thread writing it, and where.
@@ -53,6 +55,9 @@ pub struct Engine {
     sample_rate: u32,
     device_name: String,
     samples: usize,
+    /// The banks recently handed to the audio thread: the old ones are freed
+    /// here, never on the audio thread.
+    banks: Mutex<Vec<Arc<SampleBank>>>,
     midi: Result<MidiIo, String>,
     follow: Arc<AtomicBool>,
     recording: Mutex<Option<Recording>>,
@@ -79,8 +84,9 @@ impl Engine {
         let (tx, rx) = channel();
         let status = Arc::new(Status::default());
         // samples are decoded here, never on the audio thread
-        let bank = Arc::new(SampleBank::load_default());
+        let bank = Arc::new(crate::sample::merged_bank());
         let samples = bank.names().len();
+        let bank_keep = bank.clone();
 
         // MIDI: keyboard notes play live; an external clock can drive the transport
         let follow = Arc::new(AtomicBool::new(false));
@@ -119,7 +125,7 @@ impl Engine {
             other => return Err(format!("format audio non géré : {other}")),
         }?;
         stream.play().map_err(|e| e.to_string())?;
-        Ok(Engine { tx, status, sample_rate: config.sample_rate, device_name, samples, midi, follow, recording: Mutex::new(None), _stream: stream })
+        Ok(Engine { tx, status, sample_rate: config.sample_rate, device_name, samples, banks: Mutex::new(vec![bank_keep]), midi, follow, recording: Mutex::new(None), _stream: stream })
     }
 
     /// Parse and load LOOM source. Hot-swaps at the next bar while playing.
@@ -136,6 +142,20 @@ impl Engine {
     pub fn device_name(&self) -> &str { &self.device_name }
     /// How many samples were found (`bd`, `amen`…).
     pub fn sample_count(&self) -> usize { self.samples }
+
+    /// Re-scan the sample folders (after an import or a delete) and hand the
+    /// new bank to the audio thread. Returns how many sounds it now knows.
+    pub fn reload_samples(&self) -> usize {
+        crate::sample::reload_bank();
+        let bank = Arc::new(crate::sample::merged_bank());
+        let n = bank.names().len();
+        let _ = self.tx.send(Cmd::Bank(bank.clone()));
+        let mut kept = self.banks.lock().unwrap();
+        kept.push(bank);
+        let extra = kept.len().saturating_sub(3);
+        kept.drain(..extra);
+        n
+    }
 
     /// Send MIDI clock + start/stop so a DAW or drum machine follows LOOM.
     pub fn set_midi_clock(&self, on: bool) { let _ = self.tx.send(Cmd::MidiClock(on)); }
@@ -245,6 +265,7 @@ where
                         Cmd::Eq(l, m, h) => seq.set_eq(l, m, h),
                         Cmd::SendLevel(n, l) => seq.set_send_level(&n, l),
                         Cmd::Record(r) => recorder = r,
+                        Cmd::Bank(b) => seq.set_bank(b),
                     }
                 }
                 let start = seq.transport_seconds();

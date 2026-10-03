@@ -809,7 +809,7 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 ## 3 octobre (nuit) : le Loom terminal complet comme le web
 - [x] 1. VIBE : les 10 puces d'un chiffre (F2 puis 1..0)
 - [x] 2. Export .mid standard (Alt+X, et loom bake x.loom x.mid)
-- [ ] 3. Mes sons : importer / vider ses samples depuis l'appli
+- [x] 3. Mes sons (Alt+U) : importer (glisser-déposer, WAV direct, AIFF/MP3/M4A via afconvert ou ffmpeg), | sample <nom> inséré, Suppr et Ctrl+X VIDER vers la corbeille ; le moteur recharge sa banque sans redémarrer (Cmd::Bank) ; vérifié dans tmux
 - [x] 4. Correcteur : loom-app/src/lint.rs (fautes de frappe avec suggestion, degrés sans key:, ^ sans prog:, sections absentes de song:, sample inconnu), lignes soulignées en rouge au RUN ; 5 tests, 0 faux positif sur les 66 exemples (1 vrai : studio.loom l.35, ^1 sans prog:)
 - [x] 5. Preset suivant / au hasard, supprimer un morceau du sélecteur
 - [x] 6. Lien Live : chaque RUN écrit le .loom lié

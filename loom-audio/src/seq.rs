@@ -243,6 +243,9 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
+    /// New sounds (imported or deleted) heard from the next note on.
+    pub fn set_bank(&mut self, bank: Arc<SampleBank>) { self.bank = bank; }
+
     pub fn new(sample_rate: f32, bank: Arc<SampleBank>) -> Sequencer {
         let mut master = Master::new(sample_rate);
         let program = Program::parse("");

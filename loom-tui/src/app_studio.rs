@@ -9,6 +9,7 @@
 //! | Alt+S    | STEMS: one WAV per voice in `<song>-stems/`                   |
 //! | Alt+P    | share: `LOOM1:` code in the status line and `<song>.share.txt`|
 //! | Alt+I    | import a code, a link or LOOM code                            |
+//! | Alt+U    | MES SONS: import your own audio files, insert, trash, empty  |
 //! | Alt+D    | DÉMO: tour of the example songs (any key stops it)           |
 //!
 //! This file is a child module of `app.rs`, so it can use the app's state directly.
@@ -161,6 +162,7 @@ impl App {
             Mode::Mixer { .. } => { self.mixer_key(key, ctrl, alt); true }
             Mode::Timeline { .. } => { self.timeline_key(key, alt); true }
             Mode::Import { .. } => { self.import_key(key, ctrl); true }
+            Mode::Sounds { .. } => { self.sounds_key(key, ctrl); true }
             Mode::Edit if alt => self.studio_shortcut(key.code),
             _ => false,
         }
@@ -185,6 +187,7 @@ impl App {
             KeyCode::Char('z' | 'Z') => self.other_song(true),
             KeyCode::Char('k' | 'K') => self.toggle_lien(),
             KeyCode::Char('c' | 'C') => self.next_theme(),
+            KeyCode::Char('u' | 'U') => self.open_sounds(),
             KeyCode::Char('f' | 'F') => {
                 self.studio.show_notation = !self.studio.show_notation;
                 self.info(if self.studio.show_notation { "partition (Alt+F pour revenir)" } else { "grille" });

@@ -19,6 +19,10 @@ pub use studio_app::{MixRow, Studio};
 mod teacher_app;
 pub use teacher_app::Teacher;
 
+/// « Mes sons » (Alt+U) : importer, insérer, jeter ses propres samples.
+#[path = "app_sounds.rs"]
+mod sounds_app;
+
 pub enum Mode {
     Edit,
     /// The keyboard help (F1), scrolled by this many lines.
@@ -37,6 +41,8 @@ pub enum Mode {
     Timeline { selected: usize },
     /// The one-line import prompt (Alt+I): a `LOOM1:` code, a link or LOOM code.
     Import { input: String },
+    /// « Mes sons » (Alt+U) : le chemin tapé ou déposé, le son choisi, mes sons.
+    Sounds { input: String, selected: usize, mine: Vec<String> },
     /// The teacher's answer (Alt+E, or `?question` in F2), scrolled by this many lines.
     Prof { scroll: usize },
     /// OREILLE (Alt+O): ear training.
@@ -50,7 +56,7 @@ pub enum Mode {
 }
 
 #[derive(Clone)]
-pub enum Pending { Quit, Open(PathBuf), New, Import(String), Trash(PathBuf) }
+pub enum Pending { Quit, Open(PathBuf), New, Import(String), Trash(PathBuf), TrashSound(String), EmptySounds }
 
 pub struct App {
     pub editor: Editor,
@@ -389,12 +395,19 @@ impl App {
         if let Pending::Trash(p) = &action {
             let question = format!("Mettre « {} » à la corbeille ?", p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
             self.mode = Mode::Confirm { question, then: action };
+        } else if let Pending::TrashSound(n) = &action {
+            let question = format!("Mettre le son « {n} » à la corbeille ?");
+            self.mode = Mode::Confirm { question, then: action };
+        } else if let Pending::EmptySounds = &action {
+            let n = loom_app::samples::list().len();
+            let question = format!("Vider mes sons ({n} fichier{} à la corbeille) ?", if n > 1 { "s" } else { "" });
+            self.mode = Mode::Confirm { question, then: action };
         } else if self.editor.dirty {
             let question = match &action {
                 Pending::Quit => "Quitter sans enregistrer ?",
                 Pending::Open(_) => "Ouvrir sans enregistrer les changements ?",
                 Pending::New => "Nouveau morceau sans enregistrer ?",
-                Pending::Import(_) | Pending::Trash(_) => "Importer sans enregistrer les changements ?",
+                Pending::Import(_) | Pending::Trash(_) | Pending::TrashSound(_) | Pending::EmptySounds => "Importer sans enregistrer les changements ?",
             }.to_string();
             self.mode = Mode::Confirm { question, then: action };
         } else {
@@ -416,6 +429,8 @@ impl App {
                 }
                 Err(e) => self.error(format!("corbeille : {e}")),
             },
+            Pending::TrashSound(n) => self.trash_sound(&n),
+            Pending::EmptySounds => self.empty_sounds(),
         }
     }
 
@@ -514,7 +529,7 @@ impl App {
                 }
                 return;
             }
-            Mode::Edit | Mode::Mixer { .. } | Mode::Timeline { .. } | Mode::Import { .. }
+            Mode::Edit | Mode::Mixer { .. } | Mode::Timeline { .. } | Mode::Import { .. } | Mode::Sounds { .. }
             | Mode::Prof { .. } | Mode::Ear | Mode::Hum | Mode::Lessons { .. } | Mode::Transform { .. } => {}
         }
 
@@ -571,6 +586,7 @@ impl App {
             Mode::Edit => self.editor.insert_str(&text.replace("\r\n", "\n").replace('\r', "\n")),
             Mode::Vibe { input } => input.push_str(&text.replace(['\r', '\n'], " ")),
             Mode::Import { input } => input.push_str(&text.replace("\r\n", "\n").replace('\r', "\n")),
+            Mode::Sounds { input, .. } => input.push_str(&text.replace(['\r', '\n'], " ")),
             Mode::Lessons { query, .. } => query.push_str(&text.replace(['\r', '\n'], " ")),
             Mode::Ear => if let Some(ear) = &mut self.teacher.ear { ear.input.push_str(text.trim()) },
             _ => {}
