@@ -829,7 +829,7 @@ Ordre : vite utiles d'abord, puis prof, puis gros chantiers. Un commit par point
 - [x] 8. Contrepoint : quintes et octaves parallèles, tessitures, croisements ; dans le prof quand au moins 2 voix ont des noms de chœur (sinon trop de bruit : 59/66 morceaux électro signalés), `loom contrepoint` pour forcer. Workspace 489
 - [x] 6. Automation : courbes à points `lp 200..4000@exp..800` (8 points, @lin @exp @log @step @smooth) sur tout param balayable, `auto: master …` et `auto: send NOM …` (natif lissé 10 ms, web 8 rampes par mesure). Bug corrigé au passage : après un export web, les `send:` restaient branchés sur le graphe hors-ligne. Workspace 492, onsets 498/498, rendu 10/10.
 - [x] 7. Micro-tons et traditions : vrai N-EDO, import Scala (.scl), ajnas/sayr maqam, aroha/avaroha raga
-- [ ] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
+- [x] 9. Sampler : AIFF/FLAC/MP3, zones de touches, couches de vélocité, round-robin
 - [ ] 10. Time-stretch : vocodeur de phase qui garde les attaques, suit le tempo
 - [ ] 3. Enregistrer : entrée micro en piste audio, overdub, capture du clavier MIDI dans un motif
 - [ ] 11. Visuels en code : petit langage de visuel lié aux bandes du son

@@ -18,6 +18,7 @@ pub mod prof;
 pub mod expr;
 pub mod live;
 pub mod harmony;
+pub mod zones;
 pub use expr::Expr;
 
 use std::sync::Arc;

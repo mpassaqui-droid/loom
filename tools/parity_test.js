@@ -490,6 +490,43 @@ for (const k of tu_keys) for (const t of tu_tunes) for (const tok of tu_toks) {
   if (!(c < 0.05)) { tu_bad++; if (tu_bad <= 8) console.log(`  TUNE DIFF [${k} | ${t || 'equal'} | ${tok}]  JS: ${js}  Rust: ${ev && ev.freq}`); }
 }
 L.setTuning('equal');
+// ── ZONES parity : instruments multi-échantillons (zone, couche de vélocité, prise), JS <-> loom-core ──
+const zn_names = ['piano_c3_v1', 'piano_c3_v2', 'piano_g3_v1', 'piano_g3_v2', 'piano_c5', 'pianola', 'bd', 'bd_rr2', 'bd_rr3',
+  'grand-piano-F#4-rr2-v1', 'grand-piano-F#4-rr1-v1', 'grand_piano_a2', 'cello_cs2', 'amen_break', 'snare_v1_rr1', 'snare_v1_rr2', 'snare_v2', 'x_c+3'];
+let zn_total = 0, zn_bad = 0;
+for (const nm of zn_names) {
+  const z = L.parseZone(nm), rs = W.sample_zone(zn_names.join('\n'), z ? z.inst : nm, NaN, 1, 0);
+  zn_total++;
+  // chaque nom : même lecture (instrument reconnu ou non) des deux côtés
+  if (!!z !== (rs !== '' && (z ? true : false))) { zn_bad++; if (zn_bad <= 8) console.log(`  ZONE DIFF parse [${nm}] JS: ${JSON.stringify(z)} Rust: ${rs}`); }
+}
+for (const inst of ['piano', 'bd', 'grand-piano', 'grand_piano', 'cello', 'snare', 'amen', 'x'])
+  for (const midi of [NaN, 30, 37, 48, 51.5, 52, 55, 60, 66, 72, 90])
+    for (const vel of [0.1, 0.5, 0.51, 1, 1.4])
+      for (const ctr of [0, 1, 2, 3]) {
+        const z = L.pickZone(L.zonesOf(zn_names, inst), isNaN(midi) ? null : midi, vel, ctr);
+        const js = z ? z.name + ' ' + (z.root === null ? '-' : z.root) : '';
+        const rs = W.sample_zone(zn_names.join('\n'), inst, midi, vel, ctr);
+        zn_total++;
+        if (js !== rs) { zn_bad++; if (zn_bad <= 8) console.log(`  ZONE DIFF [${inst} ${midi} ${vel} ${ctr}] JS: ${js} Rust: ${rs}`); }
+      }
+// fuzz déterministe : étiquettes ordinaires et nombres démesurés
+{ let seed = 7; const rnd = n => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
+  const tags = ['c3', 'f#4', 'cs2', 'bb1', 'g9', 'c999999999', 'v1', 'v2', 'v3', 'v1000', 'rr1', 'rr2', 'rr4294967296', 'x', 'a0', 'c+3'];
+  for (let k = 0; k < 400; k++) {
+    const names = Array.from({ length: 1 + rnd(8) }, () => ['inst', ...Array.from({ length: rnd(3) + 1 }, () => tags[rnd(tags.length)])].join(rnd(2) ? '_' : '-'));
+    if (rnd(3) === 0) names.push('inst');
+    const midi = rnd(4) === 0 ? NaN : rnd(1300) / 10, vel = rnd(15) / 10, ctr = rnd(6);
+    const z = L.pickZone(L.zonesOf(names, 'inst'), isNaN(midi) ? null : midi, vel, ctr);
+    const js = z ? z.name + ' ' + (z.root === null ? '-' : z.root) : '';
+    const rs = W.sample_zone(names.join('\n'), 'inst', midi, vel, ctr);
+    zn_total++;
+    if (js !== rs) { zn_bad++; if (zn_bad <= 8) console.log(`  ZONE DIFF fuzz ${names.join(',')} ${midi} ${vel} ${ctr} JS: ${js} Rust: ${rs}`); }
+  } }
+const zn_sn = [['Piano C#3.wav', 'piano_cs3'], ['bd-rr2.flac', 'bd_rr2'], ['My Kick.WAV', 'mykick'], ['Kick 1.wav', 'kick1']];
+for (const [f, want] of zn_sn) { zn_total++; if (L.sampName(f) !== want) { zn_bad++; console.log(`  ZONE DIFF sampName ${f} -> ${L.sampName(f)}`); } }
+console.log(`\nZONES parity (multi-échantillons : zone, vélocité, round-robin): ${zn_total - zn_bad}/${zn_total}  ${zn_bad === 0 ? '✅' : '⚠️ ' + zn_bad + ' diffs'}`);
+
 // ── RAGA parity : aroha / avaroha (khamaj, desh, mélodique, forme écrite « / »), jeton + hauteur ──
 const rg_pieces = {
   'khamaj': "key: c khamaj\nl: 5 6 7 1' 7 6 5 4",
@@ -520,4 +557,4 @@ console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/$
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && zn_bad === 0 && rg_bad === 0 && td_bad === 0 && bb_bad === 0 && sy_bad === 0 && sp_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

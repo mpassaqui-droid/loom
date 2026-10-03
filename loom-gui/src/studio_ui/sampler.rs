@@ -109,7 +109,7 @@ pub fn show(
 
 /// A tiny folder navigator to load your OWN WAV files at runtime.
 ///
-/// Folders are entered with a click (‹ also goes up), `wav` files load into
+/// Folders are entered with a click (‹ also goes up), audio files (wav, aiff, flac, mp3) load into
 /// the session bank `| sample NAME` and arm the chosen voice. No file-dialog
 /// dependency: this is a fast, keyboard-able path list (the path is editable).
 fn file_navigator(
@@ -180,7 +180,8 @@ fn file_navigator(
                 }
             } else if p
                 .extension()
-                .is_some_and(|x| x.eq_ignore_ascii_case("wav"))
+                .and_then(|x| x.to_str())
+                .is_some_and(|x| loom_audio::sample::SAMPLE_EXTENSIONS.contains(&x.to_ascii_lowercase().as_str()))
             {
                 rows.push((false, name));
             }
@@ -224,7 +225,7 @@ fn file_navigator(
         ui.label(
             RichText::new(
                 "dossier par défaut : ~/.local/share/loom/samples · \
-                 colle un .wav dedans puis « recharger la banque ».",
+                 colle un .wav, .aiff, .flac ou .mp3 dedans (piano_c3_v2… = zones) puis « recharger la banque ».",
             )
             .small()
             .color(color(theme.dim)),

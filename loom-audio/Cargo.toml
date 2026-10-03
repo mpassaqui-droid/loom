@@ -11,6 +11,7 @@ loom-core = { path = "../loom-core" }
 cpal = { version = "0.18", optional = true }
 # MIDI in/out (ALSA sequencer) for `| midi N` voices, clock sync and live keyboards.
 midir = { version = "0.11", optional = true }
+symphonia = { version = "0.5", default-features = false, features = ["flac", "mp3"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # priorité du fil MIDI (QoS « user interactive »)

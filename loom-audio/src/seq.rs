@@ -581,10 +581,12 @@ impl Sequencer {
                 // `| loopAt N`: the warped sample spans N bars instead of the step
                 let ddur = s.loop_at.map_or(step_sec, |n| n * bar_sec);
                 let spec = self.spec(ev, 0.0, ddur, vm, bar_sec);
-                if s.sample.is_some() {
+                if let Some(inst) = s.sample.as_deref() {
                     let gain = (ev.gain * 4.0 * vm).min(1.0);
                     let chop = self.next_chop(&ev.voice);
-                    if let Some(v) = SampleVoice::new(&self.bank, &spec, gain, 1.0, chop) {
+                    // une zone (couche de vélocité, prise suivante) ou l'échantillon tel quel
+                    let name = self.bank.resolve(inst, None, vm, chop - 1).map_or(inst, |r| r.0);
+                    if let Some(v) = SampleVoice::new_named(&self.bank, name, &spec, gain, 1.0, chop) {
                         self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
                         continue;
                     }
@@ -629,19 +631,26 @@ impl Sequencer {
                 // whatever the chord or pitch. `| loopAt N` stretches it over N bars.
                 let wdur = s.loop_at.map_or(dur, |n| n * bar_sec);
                 let spec = self.spec(ev, freqs[0], wdur, ev.gain * vm, bar_sec);
-                if let Some(v) = SampleVoice::new(&self.bank, &spec, ev.gain * vm, 1.0, 0) {
+                let inst = s.sample.as_deref().unwrap_or_default();
+                let midi = 69.0 + 12.0 * (freqs[0] / 440.0).log2();
+                let name = self.bank.resolve(inst, Some(midi), vm, 0).map_or(inst, |r| r.0);
+                if let Some(v) = SampleVoice::new_named(&self.bank, name, &spec, ev.gain * vm, 1.0, 0) {
                     let start = at(self, dt);
                     self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
                 }
                 continue;
             }
-            if s.sample.is_some() {
+            if let Some(inst) = s.sample.as_deref() {
                 let root = s.root.as_deref().and_then(note_to_freq).or_else(|| note_to_freq("c3")).unwrap_or(130.81);
                 let gain = (ev.gain * 3.0 * vm).min(1.0);
                 for f in &freqs {
                     let spec = self.spec(ev, *f, dur, gain, bar_sec);
                     let chop = self.next_chop(&ev.voice);
-                    if let Some(v) = SampleVoice::new(&self.bank, &spec, gain, f / root, chop) {
+                    // multi-échantillon : la zone la plus proche, transposée depuis SA racine
+                    let midi = 69.0 + 12.0 * (f / 440.0).log2();
+                    let (name, zroot) = self.bank.resolve(inst, Some(midi), vm, chop - 1).unwrap_or((inst, None));
+                    let root = zroot.map_or(root, loom_core::midi_to_freq);
+                    if let Some(v) = SampleVoice::new_named(&self.bank, name, &spec, gain, f / root, chop) {
                         let start = at(self, dt);
                         self.queue.push(Queued { start, note: Note::sample(v, &spec, route.clone()) });
                     }
@@ -997,6 +1006,35 @@ mod tests {
         };
         assert!(tail("warp") < 1e-3, "warp fits one step (0.5 s)");
         assert!(tail("loopAt 1") > 0.05, "loopAt 1 fills the whole bar");
+    }
+
+    #[test]
+    fn multi_echantillon_zones_et_prises() {
+        let dc = |v: f32| crate::sample::SampleData { sample_rate: SR, channels: vec![vec![v; (SR * 0.2) as usize]] };
+        let mut bank = SampleBank::empty();
+        bank.insert("pz_c3", dc(0.01));
+        bank.insert("pz_c5", dc(0.04));
+        bank.insert("hit", dc(0.01));
+        bank.insert("hit_rr2", dc(0.03));
+        let bank = Arc::new(bank);
+        let peak = |src: &str, from: f32, to: f32| {
+            let mut s = Sequencer::new(SR, bank.clone());
+            s.set_space(0.0);
+            s.set_echo(0.0);
+            s.set_program(Program::parse(src));
+            s.play();
+            let buf = bars(&mut s, 1.0);
+            let (a, b) = ((from * SR) as usize * 2, (to * SR) as usize * 2);
+            buf[a..b].iter().fold(0.0f32, |m, x| m.max(x.abs()))
+        };
+        // c3 prend la zone c3, b4 la zone c5 (la plus proche), toutes deux sans transposition
+        let low = peak("bpm: 120\nlead: c3 . . . | sample pz", 0.0, 0.15);
+        let high = peak("bpm: 120\nlead: b4 . . . | sample pz", 0.0, 0.15);
+        assert!(low > 0.0 && (high / low - 4.0).abs() < 0.2, "{low} {high}");
+        // round-robin : hit, puis hit_rr2
+        let a = peak("bpm: 120\nkick: x x . . | sample hit", 0.0, 0.15);
+        let b = peak("bpm: 120\nkick: x x . . | sample hit", 0.5, 0.65);
+        assert!(a > 0.0 && (b / a - 3.0).abs() < 0.2, "{a} {b}");
     }
 
     #[test]

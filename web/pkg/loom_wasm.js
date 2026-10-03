@@ -305,6 +305,34 @@ export function render_wav(src, bars, sr) {
 }
 
 /**
+ * Le fichier d'un instrument multi-échantillon que jouerait le moteur natif :
+ * `names` séparés par des retours à la ligne, `midi` NaN pour une batterie.
+ * Rend `nom racine` (racine `-` sans note), ou une chaîne vide.
+ * @param {string} names
+ * @param {string} inst
+ * @param {number} midi
+ * @param {number} vel
+ * @param {number} counter
+ * @returns {string}
+ */
+export function sample_zone(names, inst, midi, vel, counter) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(names, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(inst, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.sample_zone(ptr0, len0, ptr1, len1, midi, vel, counter);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
  * @param {string} scl
  * @param {string} tonic

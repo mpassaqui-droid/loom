@@ -105,6 +105,13 @@ export function render_json(src: string, bars: number, sr: number): Float32Array
 export function render_wav(src: string, bars: number, sr: number): Uint8Array;
 
 /**
+ * Le fichier d'un instrument multi-échantillon que jouerait le moteur natif :
+ * `names` séparés par des retours à la ligne, `midi` NaN pour une batterie.
+ * Rend `nom racine` (racine `-` sans note), ou une chaîne vide.
+ */
+export function sample_zone(names: string, inst: string, midi: number, vel: number, counter: number): string;
+
+/**
  * Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
  */
 export function scala_key_line(scl: string, tonic: string): string;

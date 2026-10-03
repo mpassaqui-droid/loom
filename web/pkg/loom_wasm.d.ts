@@ -105,6 +105,13 @@ export function render_json(src: string, bars: number, sr: number): Float32Array
 export function render_wav(src: string, bars: number, sr: number): Uint8Array;
 
 /**
+ * Le fichier d'un instrument multi-échantillon que jouerait le moteur natif :
+ * `names` séparés par des retours à la ligne, `midi` NaN pour une batterie.
+ * Rend `nom racine` (racine `-` sans note), ou une chaîne vide.
+ */
+export function sample_zone(names: string, inst: string, midi: number, vel: number, counter: number): string;
+
+/**
  * Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
  */
 export function scala_key_line(scl: string, tonic: string): string;
@@ -133,6 +140,7 @@ export interface InitOutput {
     readonly render_fx_json: (a: number, b: number, c: number, d: number) => [number, number];
     readonly render_json: (a: number, b: number, c: number, d: number) => [number, number];
     readonly render_wav: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly sample_zone: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
     readonly scala_key_line: (a: number, b: number, c: number, d: number) => [number, number];
     readonly schedule_bar_json: (a: number, b: number, c: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;

@@ -363,3 +363,15 @@ pub fn reharm(src: &str, how: &str) -> String {
 pub fn scala_key_line(scl: &str, tonic: &str) -> String {
     loom_core::scala_to_key_line(scl, tonic).unwrap_or_else(|e| format!("ERR:{e}"))
 }
+
+/// Le fichier d'un instrument multi-échantillon que jouerait le moteur natif :
+/// `names` séparés par des retours à la ligne, `midi` NaN pour une batterie.
+/// Rend `nom racine` (racine `-` sans note), ou une chaîne vide.
+#[wasm_bindgen]
+pub fn sample_zone(names: &str, inst: &str, midi: f32, vel: f32, counter: u32) -> String {
+    let zones = loom_core::zones::zones_of(names.lines(), inst);
+    let midi = if midi.is_finite() { Some(midi) } else { None };
+    loom_core::zones::pick_zone(&zones, midi, vel, counter)
+        .map(|z| format!("{} {}", z.name, z.root.map_or("-".into(), |r| r.to_string())))
+        .unwrap_or_default()
+}

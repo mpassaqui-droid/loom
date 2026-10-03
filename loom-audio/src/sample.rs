@@ -9,11 +9,15 @@
 //! list is built once in [`SampleVoice::new`]; `render` only reads it, so the
 //! audio thread never allocates.
 
+mod codec;
 mod wav;
+
+pub use codec::{decode_any, EXTENSIONS as SAMPLE_EXTENSIONS};
 
 pub use wav::decode as decode_wav;
 
 use crate::clock::Clock;
+use loom_core::zones::{parse_zone, pick_zone, Zone};
 use crate::dsp::Noise;
 use crate::note::{NoteSpec, Stereo};
 use std::collections::HashMap;
@@ -29,10 +33,11 @@ pub struct SampleData {
 }
 
 impl SampleData {
-    /// Read and decode a WAV file.
+    /// Read and decode an audio file (WAV, AIFF, FLAC, MP3).
     pub fn from_file(path: &Path) -> Result<SampleData, String> {
         let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-        wav::decode(&bytes)
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        codec::decode_any(&bytes, &ext)
     }
 
     /// Number of sample frames.
@@ -47,6 +52,8 @@ impl SampleData {
 #[derive(Default)]
 pub struct SampleBank {
     samples: HashMap<String, Arc<SampleData>>,
+    /// Les instruments multi-échantillons (`piano_c3_v2`…), par instrument.
+    zones: HashMap<String, Vec<Zone>>,
 }
 
 impl SampleBank {
@@ -93,7 +100,8 @@ impl SampleBank {
             seen.push(canon);
             let Ok(entries) = std::fs::read_dir(dir) else { continue };
             let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.is_file() && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("wav")))
+                .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str())
+                    .is_some_and(|e| codec::EXTENSIONS.contains(&e.to_ascii_lowercase().as_str())))
                 .collect();
             files.sort();
             for path in files {
@@ -108,8 +116,36 @@ impl SampleBank {
     }
 
     /// Add (or replace) one sample.
-    pub fn insert(&mut self, name: &str, data: SampleData) {
-        self.samples.insert(name.to_string(), Arc::new(data));
+    pub fn insert(&mut self, name: &str, data: SampleData) { self.insert_arc(name, Arc::new(data)); }
+
+    /// Ajoute un fichier et tient l'index des zones à jour sans relire toute la
+    /// banque (des milliers de fichiers restent linéaires). Même résultat que
+    /// `zones_of` sur toutes les clés : les tests le vérifient.
+    fn insert_arc(&mut self, name: &str, data: Arc<SampleData>) {
+        self.samples.insert(name.to_string(), data);
+        let plain = |inst: &str| Zone { name: inst.to_string(), inst: inst.to_string(), root: None, vel: 0, rr: 0 };
+        if let Some(z) = parse_zone(name) {
+            let has_plain = self.samples.contains_key(&z.inst);
+            let inst = z.inst.clone();
+            let zs = self.zones.entry(inst.clone()).or_default();
+            if zs.is_empty() && has_plain { zs.push(plain(&inst)); }
+            if !zs.iter().any(|x| x.name == name) { zs.push(z); }
+            zs.sort_by(|a, b| a.name.cmp(&b.name));
+        }
+        // ce fichier est peut-être le fichier nu d'un instrument déjà à zones
+        if let Some(zs) = self.zones.get_mut(name) {
+            if !zs.iter().any(|x| x.name == name) { zs.push(plain(name)); zs.sort_by(|a, b| a.name.cmp(&b.name)); }
+        }
+    }
+
+    /// Le fichier à jouer pour `| sample INST` : une zone de l'instrument (note la
+    /// plus proche de `midi`, couche de `vel`, prise `counter`) avec sa racine MIDI,
+    /// sinon l'échantillon `INST` tel quel.
+    pub fn resolve(&self, inst: &str, midi: Option<f32>, vel: f32, counter: u32) -> Option<(&str, Option<i32>)> {
+        if let Some(z) = self.zones.get(inst).and_then(|zs| pick_zone(zs, midi, vel, counter)) {
+            return Some((z.name.as_str(), z.root));
+        }
+        self.samples.get_key_value(inst).map(|(k, _)| (k.as_str(), None))
     }
 
     pub fn get(&self, name: &str) -> Option<&Arc<SampleData>> { self.samples.get(name) }
@@ -146,9 +182,9 @@ fn session() -> &'static Mutex<SessionBank> {
 /// loaded this session.
 pub fn merged_bank() -> SampleBank {
     let s = session().lock().unwrap();
-    let mut samples = s.fresh.samples.clone();
-    samples.extend(s.session.iter().map(|(k, v)| (k.clone(), v.clone())));
-    SampleBank { samples }
+    let mut bank = SampleBank::empty();
+    for (k, v) in s.fresh.samples.iter().chain(s.session.iter()) { bank.insert_arc(k, v.clone()); }
+    bank
 }
 
 /// Load a user WAV into the session bank. Returns the bank name to write as
@@ -306,8 +342,14 @@ impl SampleVoice {
     /// `rate` the playback-rate (pitch) ratio, `chop_index` the running hit
     /// count of this voice (for `| chop N`). `None` if the sample isn't loaded.
     pub fn new(bank: &SampleBank, spec: &NoteSpec, gain: f32, rate: f32, chop_index: u32) -> Option<SampleVoice> {
+        SampleVoice::new_named(bank, spec.synth.sample.as_deref()?, spec, gain, rate, chop_index)
+    }
+
+    /// Comme [`SampleVoice::new`], mais joue le fichier `name` de la banque (une zone
+    /// choisie par [`SampleBank::resolve`]) au lieu de `| sample`.
+    pub fn new_named(bank: &SampleBank, name: &str, spec: &NoteSpec, gain: f32, rate: f32, chop_index: u32) -> Option<SampleVoice> {
         let s = spec.synth;
-        let data = bank.get(s.sample.as_deref()?)?.clone();
+        let data = bank.get(name)?.clone();
         // nothing to play, or a nonsense sample rate (also catches NaN)
         let rates_ok = data.sample_rate > 0.0 && spec.sr > 0.0;
         if data.frames() == 0 || !rates_ok { return None; }
@@ -489,6 +531,23 @@ pub fn sample_names_in(src: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn index_des_zones_comme_une_relecture_complete() {
+        let names = ["piano_c3_v1", "piano", "piano_g3", "bd_rr2", "bd", "bd_rr3", "pianola", "x_c999999999", "snare_rr1"];
+        // plusieurs ordres d'arrivée, toujours le même index que zones_of sur tout
+        for rot in 0..names.len() {
+            let mut bank = SampleBank::empty();
+            for k in 0..names.len() {
+                let n = names[(k + rot) % names.len()];
+                bank.insert(n, SampleData { sample_rate: 8000.0, channels: vec![vec![0.0; 4]] });
+            }
+            for inst in ["piano", "bd", "snare", "pianola", "x"] {
+                let want = loom_core::zones::zones_of(bank.samples.keys().map(String::as_str), inst);
+                assert_eq!(bank.zones.get(inst).cloned().unwrap_or_default(), want, "{inst} rot {rot}");
+            }
+        }
+    }
     use loom_core::{Synth, Wave};
 
     const OUT_SR: f32 = 48000.0;
