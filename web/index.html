@@ -361,7 +361,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     <button class="tiny" id="delProjBtn" title="supprimer le morceau chargé">&#128465;</button>
     <button class="tiny go" id="fileSaveBtn" title="télécharger ce morceau en fichier .loom">&#11015; .loom</button>
     <button class="tiny go" id="fileLoadBtn" title="ouvrir un fichier .loom">&#128193;</button>
-    <button class="tiny go" id="liveLinkBtn" title="lier à Ableton Live : chaque RUN écrit ce code dans un fichier .loom que le device « LOOM pour Live » surveille">&#127899; Live</button>
+    <button class="tiny go" id="liveLinkBtn" title="lier à Ableton Live : chaque RUN écrit ce code dans un fichier .loom que le device « Loom » surveille">&#127899; Live</button>
     <input type="file" id="fileLoad" accept=".loom,.txt" style="display:none">
   </div>
 
@@ -5792,7 +5792,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
   $("genBtn").addEventListener("click",()=>{editor.value=generateSong();run();log("[ gen ] nouveau morceau généré ✨ (reclique pour un autre)","ai");window.scrollTo({top:0,behavior:"smooth"});});
   // save / load a .loom file to/from disk
   // Lien Ableton Live : un fichier .loom choisi une fois, réécrit à chaque RUN.
-  // Le device Max for Live « LOOM pour Live » le surveille et recuit le clip de sa piste.
+  // Le device Max for Live « Loom » le surveille et recuit le clip de sa piste.
   let liveHandle=null;
   async function liveLinkWrite(){if(!liveHandle)return;
     try{const w=await liveHandle.createWritable();await w.write(editor.value);await w.close();log("[ live ] "+liveHandle.name+" écrit, Live recuit ses clips","ai");}

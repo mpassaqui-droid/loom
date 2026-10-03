@@ -789,3 +789,11 @@ Plan : `~/.claude/plans/synthetic-splashing-frog.md`. Silence total (master Live
 - [x] `origin/verbes-tidal` fusionnée (2d3b3da) : `ply`, `linger`, `segment`, `range`, `loopAt`. Sautés : `stut`, `rolled`, `nudge`, `chop` (déjà là), `striate` (reporté).
 - [x] Portes après fusion : 414 tests, clippy propre, check_web 4/4, RENDER2 16/16, WAV 16/16, ANALYSE 24/24, TIDAL 88/88, onsets 366/366, runtime 41 ticks, device 5/5.
 - [x] Revue sécurité : le port UDP de contrôle (7402) n'est plus dans le device livré, seulement avec `build_device.py --test`.
+
+## Tout finir, produit « Loom » (2026-10-03, demande de Munay)
+- [x] Renommage du produit : device `Loom.amxd`, paquet `dist/Loom/` + `Loom.zip`, clips « Loom · voix ».
+- [ ] B3 · voix bytebeat `t:` (core + audio + JS + prompt + exemple).
+- [ ] B5 · `| sync voix` (une voix repart avec le cycle d'une autre).
+- [ ] B2 · pas-programmes (syntaxe libre, pas `{}`).
+- [ ] MIDI natif : décalage d'un pas intermittent.
+- [ ] Set de démo `.als` dans le paquet.

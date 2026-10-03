@@ -68,7 +68,7 @@ def patch(test=False):
         boite('obj-4', 'newobj', [140, 100, 90, 22], 'prepend fichier', 1, 1, ['']),
         boite('obj-5', 'newobj', [260, 100, 110, 22], 'udpreceive 7402', 1, 1, ['']),
         boite('obj-6', 'newobj', [20, 440, 70, 22], 'prepend set', 1, 1, ['']),
-        boite('obj-7', 'comment', [20, 480, 300, 40], 'LOOM', 1, 0, None,
+        boite('obj-7', 'comment', [20, 480, 300, 40], 'Loom', 1, 0, None,
               presentation=1, presentation_rect=[162, 6, 230, 56], fontsize=11.0,
               linecount=3, textcolor=[0.9, 0.9, 0.9, 1.0]),
         boite('obj-8', 'newobj', [200, 440, 150, 22], 'udpsend 127.0.0.1 7401', 1, 0),
@@ -98,7 +98,7 @@ def patch(test=False):
         # personne sur le réseau ne doit pouvoir charger un chemin ou du code
         boites = [b for b in boites if b['id'] not in ('obj-5', 'obj-8')]
         lignes = [l for l in lignes if 'obj-5' not in (l[0], l[2]) and 'obj-8' not in (l[0], l[2])]
-    return amxd.patcher(boites, lignes, 'LOOM', largeur=400.0)
+    return amxd.patcher(boites, lignes, 'Loom', largeur=400.0)
 
 
 if __name__ == '__main__':
@@ -109,5 +109,5 @@ if __name__ == '__main__':
     print(SORTIE, os.path.getsize(SORTIE) // 1024, 'Ko')
     if '--installe' in sys.argv:
         os.makedirs(BIBLIO, exist_ok=True)
-        shutil.copy(SORTIE, os.path.join(BIBLIO, 'LOOM pour Live.amxd'))
-        print('installé :', os.path.join(BIBLIO, 'LOOM pour Live.amxd'))
+        shutil.copy(SORTIE, os.path.join(BIBLIO, 'Loom.amxd'))
+        print('installé :', os.path.join(BIBLIO, 'Loom.amxd'))

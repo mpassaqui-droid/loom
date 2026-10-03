@@ -1,23 +1,23 @@
-# LOOM pour Live
+# Loom pour Ableton Live
 
-Écris ta musique en LOOM, Live la joue. Le device embarque le moteur de LOOM
+Écris ta musique en Loom, Live la joue. Le device embarque le moteur de Loom
 (le même que l'appli, compilé en WebAssembly) : Live joue les mêmes notes que
-LOOM, au même moment, à l'échantillon près. Le son, ce sont tes instruments Live.
+Loom, au même moment, à l'échantillon près. Le son, ce sont tes instruments Live.
 
 ## Installer
 
-1. Glisse `LOOM pour Live.amxd` dans ta User Library (ou directement sur une piste).
+1. Glisse `Loom.amxd` dans ta User Library (ou directement sur une piste).
 2. Il faut Live 12 Suite (ou Standard avec Max for Live), Live 12.2 ou plus récent.
 
 ## Jouer
 
 1. Crée une piste MIDI avec un instrument (Wavetable, Drift, un Drum Rack…).
 2. Nomme la piste comme une voix de ton morceau : `kick`, `bass`, `pad`…
-   (`LOOM kick` marche aussi).
-3. Pose le device **LOOM pour Live** sur la piste, avant l'instrument.
+   (`Loom kick` marche aussi).
+3. Pose le device **Loom** sur la piste, avant l'instrument.
 4. Glisse ton fichier `.loom` sur le device.
 
-Le device écrit un clip « LOOM · kick » dans la piste, de la longueur du morceau
+Le device écrit un clip « Loom · kick » dans la piste, de la longueur du morceau
 (`song:`), en boucle. Lance-le comme n'importe quel clip.
 
 ## Coder en direct
@@ -25,7 +25,7 @@ Le device écrit un clip « LOOM · kick » dans la piste, de la longueur du mor
 Chaque fois que tu enregistres le fichier `.loom`, le device recuit le clip
 (une demi-seconde environ). Live continue de jouer pendant ce temps.
 
-- **Éditeur web LOOM** (Chrome ou Edge) : bouton **🎛 Live**, choisis le fichier,
+- **Éditeur web Loom** (Chrome ou Edge) : bouton **🎛 Live**, choisis le fichier,
   puis chaque **RUN** l'écrit.
 - **Terminal** : `loom morceau.loom`, puis Ctrl+S.
 - **N'importe quel éditeur de texte** : enregistrer suffit.
@@ -47,7 +47,7 @@ d'accordage Live (`.ascl`) dans `User Library/Tunings`. Glisse-le sur le set.
 
 ## Limites connues
 
-- Les voix « audio » de LOOM (synthèse, effets, samples) ne passent pas dans Live :
+- Les voix « audio » de Loom (synthèse, effets, samples) ne passent pas dans Live :
   le device écrit les notes, tes instruments Live font le son.
 - `tune: 19 edo` et les accordages à plus de 12 notes ne sont pas encore portés.
 - Le tempo de Live est réglé une fois, au premier fichier. Les tempos par section
@@ -55,13 +55,13 @@ d'accordage Live (`.ascl`) dans `User Library/Tunings`. Glisse-le sur le set.
 
 ---
 
-# LOOM for Live (English)
+# Loom for Ableton Live (English)
 
-Write music in LOOM, Live plays it. The device embeds LOOM's engine (the same as the
+Write music in Loom, Live plays it. The device embeds Loom's engine (the same as the
 app, compiled to WebAssembly), so Live plays the same notes at the same time, sample-accurate (your Live instruments make the sound).
 
 1. Make a MIDI track with an instrument, name it after one of your voices (`kick`, `bass`…).
-2. Put **LOOM pour Live** before the instrument and drop your `.loom` file on it.
+2. Put **Loom** before the instrument and drop your `.loom` file on it.
 3. It writes a looping clip of the whole song. Save the file: the clip is rebuilt in
    about half a second while Live keeps playing. A code error keeps the previous clip.
 

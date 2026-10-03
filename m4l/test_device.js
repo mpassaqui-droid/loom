@@ -18,7 +18,7 @@ for (const voix of ['ph1', 'kick', 'pad']) {
     function Task() { this.repeat = function () {}; }
     function LiveAPI(p) { this.unquotedpath = p; this.p = p; }
     LiveAPI.prototype.get = function (k) {
-      if (k === 'name') return this.p.indexOf('canonical_parent') >= 0 ? 'LOOM ' + piste : '';
+      if (k === 'name') return this.p.indexOf('canonical_parent') >= 0 ? 'Loom ' + piste : '';
       return 0;
     };
     LiveAPI.prototype.getcount = function () { return 8; };

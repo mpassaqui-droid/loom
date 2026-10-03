@@ -1,10 +1,10 @@
-// LOOM pour Live : le moteur loom-core (WASM) dans un device Max for Live.
+// Loom : le moteur loom-core (WASM) dans un device Max for Live.
 //
 // Glisse un fichier .loom sur le device : il cuit la voix de cette piste (celle
-// qui porte le nom de la piste, « LOOM » en tête accepté) en notes MIDI, et les
+// qui porte le nom de la piste, « Loom » en tête accepté) en notes MIDI, et les
 // écrit dans un clip de la piste. Live joue le clip à l'échantillon près. Chaque
-// enregistrement du fichier (éditeur LOOM, Ctrl+S) réécrit le clip : on code,
-// Live joue. Le moteur est le même que l'appli LOOM (loom bake), au bit près.
+// enregistrement du fichier (éditeur Loom, Ctrl+S) réécrit le clip : on code,
+// Live joue. Le moteur est le même que l'appli Loom (loom bake), au bit près.
 //
 // Messages : fichier <chemin> · code <texte> · voix <nom> · cuire · bang (init)
 // Sorties  : 0 = texte d'état pour l'interface · 1 = OSC de contrôle (tests)
@@ -31,7 +31,7 @@ function bang() {
             return;
         }
     }
-    dire(etat.fichier ? 'LOOM prêt · ' + etat.fichier : 'LOOM prêt · glisse un fichier .loom');
+    dire(etat.fichier ? 'Loom prêt · ' + etat.fichier : 'Loom prêt · glisse un fichier .loom');
     if (!veille) {
         veille = new Task(surveille, this);
         veille.interval = 500;
@@ -137,7 +137,7 @@ function cuire() {
     dire(choix.name + ' · ' + notes.length + ' notes · ' + cuit.bars + ' mesures · ' + (Date.now() - t0) + ' ms');
 }
 
-// Le clip de LOOM : celui qui porte « LOOM » dans le nom, sinon le premier emplacement vide.
+// Le clip de Loom : celui dont le nom commence par « Loom », sinon le premier emplacement vide.
 function clipLoom(piste, longueur, voix) {
     var n = piste.api.getcount('clip_slots');
     var vide = -1;
@@ -145,8 +145,8 @@ function clipLoom(piste, longueur, voix) {
         var slot = new LiveAPI(piste.api.unquotedpath + ' clip_slots ' + s);
         if (Number(slot.get('has_clip'))) {
             var c = new LiveAPI(slot.unquotedpath + ' clip');
-            if (String(c.get('name')).indexOf('LOOM') === 0) {
-                c.set('name', 'LOOM · ' + voix);
+            if (/^loom\b/i.test(String(c.get('name')))) {
+                c.set('name', 'Loom · ' + voix);
                 return c;
             }
         } else if (vide < 0) vide = s;
@@ -155,7 +155,7 @@ function clipLoom(piste, longueur, voix) {
     var libre = new LiveAPI(piste.api.unquotedpath + ' clip_slots ' + vide);
     libre.call('create_clip', longueur);
     var clip = new LiveAPI(libre.unquotedpath + ' clip');
-    clip.set('name', 'LOOM · ' + voix);
+    clip.set('name', 'Loom · ' + voix);
     clip.set('looping', 1);
     return clip;
 }
