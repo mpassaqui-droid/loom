@@ -1,0 +1,53 @@
+# Une étiquette vX.Y.Z construit les paquets Linux et Windows et les joint à
+# la release GitHub. Le paquet macOS (signé, notarisé) se fait sur le Mac :
+# packaging/macos/make-dmg.sh, puis `gh release upload`.
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - run: cargo install cargo-deb --locked
+      - run: cargo build --release -p loom-tui
+      - run: cargo deb -p loom-tui --no-build
+      - name: archives
+        run: |
+          V=$(sed -n 's/^version = "\(.*\)"/\1/p' loom-tui/Cargo.toml | head -1)
+          mkdir -p out && cp target/debian/*.deb out/
+          tar -C target/release -czf out/loom-$V-linux-x86_64.tar.gz loom
+      - uses: actions/upload-artifact@v4
+        with: { name: linux, path: out/* }
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p loom-tui
+      - name: installateur (Inno Setup, déjà sur l'image)
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path loom-tui/Cargo.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force out | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DVersion=$v /O"out" packaging\windows\loom.iss
+          Compress-Archive -Path target\release\loom.exe -DestinationPath "out\loom-$v-windows-x86_64.zip"
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: out/* }
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: out/*

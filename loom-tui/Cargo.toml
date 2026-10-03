@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "Terminal live-coding client for LOOM — the same engine, native audio, runs in your terminal like a tracker."
 
+[package.metadata.deb]
+name = "loom"
+maintainer = "Munay Passaqui"
+section = "sound"
+depends = "libasound2"
+extended-description = "LOOM : un langage de live-coding musical, dans le terminal, avec son moteur audio natif."
+assets = [["target/release/loom", "usr/bin/", "755"]]
+
 [[bin]]
 name = "loom"
 path = "src/main.rs"

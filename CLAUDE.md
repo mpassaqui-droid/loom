@@ -73,5 +73,6 @@ quality. The owner has a Max subscription — authenticate Claude Code with that
 Run `cargo test -p loom-core` to confirm the core builds (113 tests as of
 2026-09-25, analyser compris). Roadmap items 1-6 sont faits ; reste du moteur
 unifié la synthèse/FX en Rust. Le prof s'appuie sur `loom_core::prof` (analyse
-unifiée web+natif). La CI se fait sur le Mac du propriétaire via Claude (pas
-GitHub Actions). Check `tasks/todo.md` for current work.
+unifiée web+natif). La CI macOS se fait sur le Mac du propriétaire via Claude ;
+Linux et Windows passent par GitHub Actions (`.github/workflows/`, accord du 03/10/2026).
+Paquets : `packaging/` (DMG signé par `packaging/macos/make-dmg.sh`). Check `tasks/todo.md` for current work.

@@ -1,0 +1,25 @@
+# Vérifie que LOOM se construit et passe ses tests sous Linux et Windows
+# (macOS : sur le Mac de Munay, voir CLAUDE.md).
+name: ci
+on:
+  push:
+    branches: [frankenstein, main]
+  workflow_dispatch:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: ALSA (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: tests (sans l'app fenêtre)
+        run: cargo test -q -p loom-core -p loom-audio -p loom-app -p loom-tui
+      - name: binaire
+        run: cargo build -q --release -p loom-tui
