@@ -14,6 +14,10 @@ pub mod render_fx;
 
 pub mod prof;
 
+/// Expressions entières pures (bytebeat `t:` et pas-programmes `=(…)`).
+pub mod expr;
+pub use expr::Expr;
+
 use std::sync::Arc;
 
 /// Polymeter / explicit polyrhythm on one voice, from `| poly …`.
@@ -75,6 +79,10 @@ pub struct Voice {
     /// How the voice SOUNDS (filters, envelope, FM, samples, effects…). Shared
     /// with every event it produces, so cloning is cheap.
     pub synth: Arc<Synth>,
+    /// Voix bytebeat (`nom: t: EXPR`) : l'expression de `t` (échantillons à
+    /// 8 kHz depuis le début du morceau). Une telle voix ne produit AUCUN
+    /// événement (`tokens` = un silence `~`) : le moteur audio la rend en continu.
+    pub bytebeat: Option<Arc<Expr>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -518,6 +526,20 @@ pub fn parse(src: &str) -> Vec<Voice> {
         // skip directive@section lines too (e.g. key@chorus, scene@drop) — not voices
         if DIRECTIVES.contains(&name.as_str()) { continue; }
         let rest = &line[colon + 1..];
+        // voix bytebeat : `nom: t: EXPR | verbes`. L'expression peut contenir des
+        // `|` (OU binaire), d'où la coupe dédiée (voir `expr::split_bytebeat`).
+        let mut bytebeat = None;
+        let rest = match rest.trim_start().strip_prefix("t:") {
+            Some(body) => {
+                let (ex, tail) = expr::split_bytebeat(body);
+                match Expr::parse(ex, &['t']) {
+                    Ok(e) => bytebeat = Some(Arc::new(e)),
+                    Err(_) => continue, // expression invalide : la voix est ignorée
+                }
+                format!("~{tail}")
+            }
+            None => rest.to_string(),
+        };
         let mut segs = rest.split('|').map(|s| s.trim());
 
         let pattern = segs.next().unwrap_or("");
@@ -607,7 +629,7 @@ pub fn parse(src: &str) -> Vec<Voice> {
             }
         }
         let synth = Arc::new(synth);
-        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance, synth });
+        out.push(Voice { name, tokens, stacks, verbs, wave, gain, is_drum, octave, arp, sections, section, swing, nudge, poly, pan, jux, off, degrade, chance, synth, bytebeat });
     }
     out
 }
@@ -1267,6 +1289,8 @@ fn step_offset(i: usize, n: usize, v: &Voice, groove: &[f32]) -> f32 {
 fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, seed: u64, groove: &[f32]) -> Vec<Event> {
     let mut events = Vec::new();
     for v in voices {
+        // une voix bytebeat ne joue pas de notes : le moteur audio la rend à part
+        if v.bytebeat.is_some() { continue; }
         // `| chance N`: the whole voice sits this bar out on a fraction of bars (seeded).
         if let Some(c) = v.chance {
             if rand01(seed, bar, &format!("{}chc", v.name), 0) >= c { continue; }
@@ -2226,7 +2250,20 @@ impl Program {
     /// a voice plays only if it has no `| in …` tag or its tag includes the
     /// current section. With no `song:`, every voice always plays.
     pub fn schedule_bar(&self, bar: i64) -> Vec<Event> {
-        let active: Vec<Voice> = if self.song.is_empty() {
+        let active = self.active_voices(bar);
+        // modulation: if this section has a key@section, resolve in that key
+        let sec_now = section_at_bar(&self.song, bar);
+        let cur_key = sec_now
+            .and_then(|s| self.key_map.iter().find(|(n, _)| n == s).map(|(_, k)| k))
+            .or(self.key.as_ref());
+        sched_prog(&active, cur_key, &self.prog, bar, self.seed, &self.groove)
+    }
+
+    /// The voices that sound at `bar`: per-section variants (`name@section`)
+    /// resolved and `| in …` applied (every base voice when there is no `song:`).
+    /// The audio engines use it for the voices that are not notes (bytebeat).
+    pub fn active_voices(&self, bar: i64) -> Vec<Voice> {
+        if self.song.is_empty() {
             // no arrangement: play the base voices (section variants need a song)
             self.voices.iter().filter(|v| v.section.is_none()).cloned().collect()
         } else {
@@ -2250,13 +2287,7 @@ impl Program {
                 }
             }
             out
-        };
-        // modulation: if this section has a key@section, resolve in that key
-        let sec_now = section_at_bar(&self.song, bar);
-        let cur_key = sec_now
-            .and_then(|s| self.key_map.iter().find(|(n, _)| n == s).map(|(_, k)| k))
-            .or(self.key.as_ref());
-        sched_prog(&active, cur_key, &self.prog, bar, self.seed, &self.groove)
+        }
     }
 }
 
@@ -2379,6 +2410,27 @@ mod tests {
     }
 
     fn toks(s: &str) -> Vec<String> { s.split_whitespace().map(|x| x.to_string()).collect() }
+
+    #[test]
+    fn bytebeat_voice_parses_and_schedules_nothing() {
+        let p = Program::parse("crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4 | pan -0.5\nkick: x . x .");
+        assert_eq!(p.voices.len(), 2);
+        let v = &p.voices[0];
+        let e = v.bytebeat.as_ref().expect("voix bytebeat");
+        assert_eq!(e.src, "(t*5&t>>7)|(t*3&t>>10)");
+        assert_eq!(e.eval(&[8000]), ((8000 * 5) & (8000 >> 7)) | ((8000 * 3) & (8000 >> 10)));
+        assert_eq!((v.gain, v.pan), (0.4, Some(-0.5)));
+        assert_eq!(v.tokens, vec!["~"]);
+        assert!(v.verbs.is_empty());
+        // aucun événement : seul le kick joue
+        let ev = p.schedule_bar(0);
+        assert!(ev.iter().all(|e| e.voice == "kick") && ev.len() == 2);
+        // expression invalide : la voix est ignorée, le reste joue
+        let p = Program::parse("bad: t: t*(2+\nok: t: t");
+        assert_eq!(p.voices.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), vec!["ok"]);
+        // une voix nommée t reste une voix normale
+        assert!(parse("t: x . x .")[0].bytebeat.is_none());
+    }
 
     #[test]
     fn ply_repeats_each_event_inside_its_step() {

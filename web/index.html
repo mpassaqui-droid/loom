@@ -1626,6 +1626,70 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else cur+=ch;}
     if(cur)out.push(cur);
     return out.filter(t=>t&&!t.startsWith("@")&&!t.startsWith(">"));}
+  // Expressions entières pures (miroir op pour op de loom-core/src/expr.rs) :
+  // voix bytebeat `t:` et pas-programmes `=(…)`. Entiers signés 32 bits qui
+  // bouclent (|0, Math.imul), division et modulo par zéro = 0, décalages masqués
+  // & 31, comparaisons 0/1, précédence du C. Pas d'eval : une pile (notation
+  // polonaise inverse) construite par descente récursive.
+  function exprCompile(src,vars){const s=String(src),ops=[];let i=0,depth=0;
+    const ws=()=>{while(i<s.length&&" \t\n\f\r".includes(s[i]))i++;};
+    const st=w=>{ws();return s.startsWith(w,i);};
+    function bin(l){if(l===8)return un();bin(l+1);
+      for(;;){let op=null,n=1;
+        if(l===0){if(st("|")&&!st("||"))op="|";}
+        else if(l===1){if(st("^"))op="^";}
+        else if(l===2){if(st("&")&&!st("&&"))op="&";}
+        else if(l===3){if(st("=="))op="==",n=2;else if(st("!="))op="!=",n=2;}
+        else if(l===4){if(st("<<")||st(">>")){}else if(st("<="))op="<=",n=2;else if(st(">="))op=">=",n=2;else if(st("<"))op="<";else if(st(">"))op=">";}
+        else if(l===5){if(st("<<"))op="<<",n=2;else if(st(">>"))op=">>",n=2;}
+        else if(l===6){if(st("+"))op="+";else if(st("-"))op="-";}
+        else{if(st("*"))op="*";else if(st("/"))op="/";else if(st("%"))op="%";}
+        if(!op)return;i+=n;bin(l+1);ops.push(op);}}
+    function un(){if(++depth>64)throw new Error("expression trop imbriquée");ws();const c=s[i];
+      if(c==="-"){i++;un();ops.push("neg");}else if(c==="~"){i++;un();ops.push("not");}else if(c==="+"){i++;un();}else atom();depth--;}
+    function atom(){ws();const c=s[i];
+      if(c==="("){i++;bin(0);ws();if(s[i]!==")")throw new Error("« ) » manquante");i++;return;}
+      if(c!==undefined&&c>="0"&&c<="9"){const s0=i,hex=s.startsWith("0x",i)||s.startsWith("0X",i);if(hex)i+=2;
+        while(i<s.length&&/[A-Za-z0-9]/.test(s[i]))i++;const body=s.slice(s0+(hex?2:0),i);
+        if(!(hex?/^[0-9a-fA-F]+$/:/^[0-9]+$/).test(body))throw new Error("nombre invalide");
+        const v=hex?parseInt(body,16):Number(body);if(!(v<=4294967295))throw new Error("nombre trop grand");ops.push({lit:v|0});return;}
+      if(c!==undefined&&/[A-Za-z]/.test(c)){const s0=i;while(i<s.length&&/[A-Za-z0-9]/.test(s[i]))i++;const w=s.slice(s0,i);
+        if(w.length!==1)throw new Error("mot inconnu « "+w+" »");const k=vars.indexOf(w);if(k<0)throw new Error("variable inconnue « "+w+" »");ops.push({v:k});return;}
+      throw new Error(c===undefined?"expression incomplète":"caractère inattendu « "+c+" »");}
+    ws();if(i>=s.length)throw new Error("expression vide");bin(0);ws();if(i<s.length)throw new Error("caractère inattendu « "+s[i]+" »");
+    return{ops,src:s.trim().split(/\s+/).join(" ")};}
+  function exprEval(e,vals){const st=[];
+    for(const o of e.ops){
+      if(typeof o==="object"){st.push(o.v!==undefined?(vals[o.v]|0):o.lit);continue;}
+      if(o==="neg"){st.push((-(st.pop()|0))|0);continue;}
+      if(o==="not"){st.push(~(st.pop()|0));continue;}
+      const b=st.pop()|0,a=st.pop()|0;let r;
+      switch(o){case"*":r=Math.imul(a,b);break;case"/":r=b===0?0:(a/b)|0;break;case"%":r=b===0?0:(a%b)|0;break;
+        case"+":r=(a+b)|0;break;case"-":r=(a-b)|0;break;case"<<":r=a<<b;break;case">>":r=a>>b;break;
+        case"<":r=+(a<b);break;case"<=":r=+(a<=b);break;case">":r=+(a>b);break;case">=":r=+(a>=b);break;
+        case"==":r=+(a===b);break;case"!=":r=+(a!==b);break;case"&":r=a&b;break;case"^":r=a^b;break;default:r=a|b;}
+      st.push(r);}
+    return st.length?st.pop()|0:0;}
+  // bytebeat : t compte à 8 kHz depuis le début du morceau, échantillonné-bloqué
+  // vers la fréquence de la carte ; sortie ((v & 255) / 128) - 1 (comme loom-audio).
+  function bytebeatT(n,sr){return Math.floor(n*8000/sr)|0;}
+  function bytebeatFill(e,start,len,sr){const out=new Float32Array(len);let lt=null,lv=0;
+    for(let k=0;k<len;k++){const t=bytebeatT(start+k,sr);if(t!==lt){lt=t;lv=(exprEval(e,[t])&255)/128-1;}out[k]=lv;}return out;}
+  // `nom: t: EXPR | verbes` : un `|` hors parenthèses appartient à l'expression
+  // (OU binaire) sauf s'il est suivi d'un mot d'au moins deux lettres (un verbe).
+  function bytebeatSplit(body){let d=0;
+    for(let k=0;k<body.length;k++){const c=body[k];if(c==="(")d++;else if(c===")")d--;
+      else if(c==="|"&&d<=0){const r=body.slice(k+1).replace(/^\s+/,"");if(/^[A-Za-z]{2}/.test(r))return[body.slice(0,k),body.slice(k)];}}
+    return[body,""];}
+  // une mesure de voix bytebeat : un AudioBuffer rempli par le même algorithme,
+  // routé comme un sample (gain, pan fixe, envois, bus) ; posé bout à bout.
+  function playBytebeat(v,barT,len){if(_cap||!ctx||!v.bytebeat)return;
+    const sr=Math.round(ctx.sampleRate||44100),n0=Math.max(0,Math.round((barT-transportStart)*sr)),n=Math.max(1,Math.round(len*sr));
+    const buf=ctx.createBuffer(1,n,sr),data=bytebeatFill(v.bytebeat,n0,n,sr);
+    if(buf.copyToChannel)buf.copyToChannel(data,0);else buf.getChannelData(0).set(data);
+    const s=ctx.createBufferSource();s.buffer=buf;const g=ctx.createGain();g.gain.value=v.gain!=null?v.gain:0.22;
+    let out=g;if(typeof v.pan==="number"&&v.pan&&ctx.createStereoPanner){const p=ctx.createStereoPanner();p.pan.value=Math.max(-1,Math.min(1,v.pan));g.connect(p);out=p;}
+    s.connect(g);out.connect(v.bus?busFor(v.bus):bus);connectFx(out,v);s.start(barT);}
   // macros: "def riff: 1 2 3 5" defines a reusable fragment, used as $riff anywhere in a pattern
   function expandMacros(text){const defs={};
     const lines=text.split("\n").filter(l=>{const m=/^\s*def\s+([A-Za-z_][\w]*)\s*:\s*(.+)$/.exec(l);if(m){defs[m[1]]=m[2].trim();return false;}return true;});
@@ -1639,7 +1703,10 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
     // skip directive lines (incl. `directive@section` like key@chorus / scene@drop)
     // so they are never mistaken for voices. meter/accel/groove/loop were missing.
     if(["key","scale","seed","song","arrange","duck","feel","scene","prog","tune","bpm","tempo","meter","accel","groove","loop","warmth","film","title","bus","room","send","morph"].includes(name))continue;
-    const segs=line.slice(i+1).split("|").map(s=>s.trim());
+    // voix bytebeat `nom: t: EXPR | verbes` (voir bytebeatSplit) ; expression invalide = voix ignorée
+    let rest=line.slice(i+1),bytebeat=null;const tb=/^\s*t:/.exec(rest);
+    if(tb){const sp=bytebeatSplit(rest.slice(tb[0].length));try{bytebeat=exprCompile(sp[0],["t"]);}catch(_){continue;}rest="~"+sp[1];}
+    const segs=rest.split("|").map(s=>s.trim());
     // stacks: `;` splits the pattern into independent simultaneous lines on one voice
     const stacks=[];for(const piece of segs[0].split(";")){let toks=[];
       for(const t of tokenizePat(piece)){const e=(t.startsWith("[")||t.startsWith("{"))?null:expandGen(t);if(e)toks.push(...e);else toks.push(t);}
@@ -1740,7 +1807,7 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(p[0]==="chop"){const nn=parseInt(p[1],10);if(!isNaN(nn))chop=Math.max(2,Math.min(64,nn));}
       else if(p[0]==="chord"){chord=({maj:[0,4,7],min:[0,3,7],sus:[0,5,7],sus2:[0,2,7],dim:[0,3,6],aug:[0,4,8],fifth:[0,7],oct:[0,12],maj7:[0,4,7,11],min7:[0,3,7,10],dom7:[0,4,7,10],add9:[0,4,7,14]})[(p[1]||"maj").toLowerCase()]||[0,4,7];}
       else verbs.push(seg);}
-    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
+    out.push({name,section,tokens,verbs,wave,gain,oct,arp,arpoct,sections,cutoff,filterType,q,env,lfo,lfo2,echo,unison,detune,drive,pan,over,sample,root,reverb,dly,ir,irmix,voicing,dyn,revsamp,warp,loopAt,freeze,sbeg,sfin,autopan,haas,partials,harm2,chance,tgate,midi,poly,fm,eq,viz,hue,wt,chorus,crush,jux,off,gate,slide,degrade,nudge,swing,ring,sub,noise,vowel,pluck,bend,bell,spread,fold,grain,phaser,chord,am,flam,orbit,humanize,strum,wow,mute,solo,bus:vbus,sends,comp,double,bow,pwm,fenv,semi,chop,reed,sync,vocode,redux,reson,flange,width,stacks,bytebeat,type:DRUMS.has(name)?"drum":"mel",cells:[]});}return out;}
   // resolve the voices that actually sound this bar (per-section variants + | in)
   function activeVoices(bar){
     if(!song.length)return voices.filter(v=>!v.section);
@@ -2262,6 +2329,9 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       for(let i=0;i<P;i++){const ct=barT+i/P*cycleLen;midiOut.send([0xF8],performance.now()+Math.max(0,(ct-ctx.currentTime)*1000));}}
     const _savedKey=key;if(sec&&keyMap[sec])key=keyMap[sec];  // modulation: this section resolves in its own key (restored at end)
     const anySolo=voices.some(v=>v.solo);  // live mixing: mute / solo per voice
+    // voix bytebeat (`t: EXPR`) : une mesure de signal continu, hors du moteur de notes
+    for(const v of activeVoices(bar)){if(!v.bytebeat||v.mute||(anySolo&&!v.solo)||v.midi||(stemSolo&&v.name!==stemSolo))continue;
+      if(v.chance!=null&&rng(seed,bar,v.name+"chc",0)>=v.chance)continue;playBytebeat(v,barT,cycleLen);}
     // EXPERIMENTAL unified engine: let the shared Rust core (WASM) decide WHICH
     // notes play (degrees, generators, microtonal, structure, groove/swing) and
     // keep JS for the SOUND (every voice's synthesis + FX via trigger()). A/B
@@ -6039,6 +6109,7 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Groove","| cresc   | dim","crescendo / diminuendo : la vélocité monte / descend au fil de la mesure"],
     ["Verbes","| invert   | sequence N","invert = mélodie en miroir ; sequence = motif suivi d'une copie transposée"],
     ["Verbes (génératif)","| mutate N   | stutter N","mutate = fait évoluer le motif chaque mesure (N% de changement) ; stutter = beat-repeat (boucle le 1/N)"],
+    ["Bytebeat","nom: t: EXPR","voix-formule : t compte à 8000 Hz depuis le début, sortie = octet bas de la valeur ; entiers 32 bits, + - * / % & | ^ << >> ~ < > ==, division par 0 = 0 · ex. crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3"],
     ["Verbes Tidal","| ply N  | linger F  | segment N  | range A B  | loopAt N","ply = chaque coup répété N fois dans son pas ; linger = boucle la fraction F de la mesure ; segment = rééchantillonne en N pas ; range = recadre les degrés sur A..B ; loopAt = sample étiré sur N mesures"],
     ["Son","| tape N","macro lo-fi cassette : wow + saturation + souffle en un seul réglage (0-1)"],
     ["IA & voix","VIBE   /   🎤","décris (ou parle) → l'IA écrit le code LOOM"],
@@ -6360,6 +6431,7 @@ const THEME_AA={
     "- Harmonize: | harmonize N [level] adds a parallel layer N semitones away (7 = a fifth → power chords, 4 = a major third, 12 = octave, -12 = octave below). e.g. lead: 1 2 3 | harmonize 7 for power-chord stabs, or | harmonize 4 0.4 for sweet parallel thirds.",
     "- prog: auto also has: cinematic, lofi, edm, house, and random (a fresh random diatonic progression each RUN).",
     "- Generative variation: | mutate N evolves a pattern over time — each bar it randomly nudges about N% of the notes (transposes degrees, fills rests), seeded so it's reproducible. | stutter N is a beat-repeat: it loops the first 1/N of the pattern. e.g. lead: 1 2 3 5 | mutate 30 , drums: x . x . | stutter 4.",
+    "- Bytebeat voice: a voice whose body starts with t: is a formula of t, the sample counter at 8000 Hz since the song started (crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3). Integers only, 32-bit wrapping, operators + - * / % & | ^ << >> ~ and comparisons < > == (0 or 1), C precedence, parentheses; division by zero gives 0. Output = low byte of the value (0..255) as a waveform. It plays no notes: only gain, pan, reverb, delay, send, bus, mute, solo, chance and in apply. Keep gain at 0.2..0.4 (it is loud) and use one bytebeat voice at most, as texture or lo-fi lead (classics: t*(42&t>>10), t*((t>>12|t>>8)&63&t>>4)).",
     "- Tidal verbs: | ply N repeats every event N times inside its own step (hat: x . x . | ply 2 = rolls). | linger F loops only the first fraction F of the bar (0.25 = first quarter; negative = the last part, linger -0.25). | segment N resamples the line into N even steps (lead: 1 3 5 | segment 6 = 1 1 3 3 5 5). | range A B rescales the pattern's lowest..highest degree onto degrees A..B (lead: walk(8) | range 3 6 , or range 1 1'' to stretch a motif over two octaves; integers above 7 mean higher octaves, 8 = 1'). | loopAt N stretches a sample (warp, pitch kept) over N bars: break: x . . . | sample amen | loopAt 2. For rhythmic echoes use | echo DIV FB or | off N (not stut, which in LOOM is the stutter beat-repeat); for strummed chords use | strum.",
     "- Tape macro: | tape N (0-1) is a one-knob lo-fi cassette character — wow-and-flutter + gentle saturation + a touch of hiss. Lovely on keys/pads/whole voices for nostalgia.",
     "- Additive synthesis: | partials A B C ... builds a sound from the amplitude of each harmonic (1 = fundamental, 2 = octave, 3 = fifth above...). e.g. | partials 1 0 0.5 0 0.33 (odd harmonics = hollow/clarinet-ish). | organ 888650000 is a Hammond drawbar shortcut (9 digits 0-8). Pure, clean tones.",
@@ -7783,7 +7855,7 @@ const THEME_AA={
     return bytes;
   }
 
-    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

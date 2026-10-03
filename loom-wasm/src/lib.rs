@@ -282,6 +282,29 @@ pub fn analyze_json(src: &str) -> Vec<String> {
     loom_core::prof::analyze(src)
 }
 
+/// Bytebeat : `len` échantillons de la formule `expr` (variable `t`) à partir de
+/// l'échantillon absolu `start`, à `sr` Hz (`loom_core::expr::bytebeat_fill`).
+/// Expression invalide : tableau vide. Sert à la parité avec le miroir JS.
+#[wasm_bindgen]
+pub fn bytebeat_pcm(expr: &str, start: f64, len: u32, sr: u32) -> Vec<f32> {
+    match loom_core::Expr::parse(expr, &['t']) {
+        Ok(e) => loom_core::expr::bytebeat_fill(&e, start.max(0.0) as u64, len as usize, sr),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Évalue une expression entière (`vars` = les lettres des variables, dans
+/// l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
+/// invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
+#[wasm_bindgen]
+pub fn expr_eval(src: &str, vars: &str, vals: &[i32]) -> String {
+    let names: Vec<char> = vars.chars().collect();
+    match loom_core::Expr::parse(src, &names) {
+        Ok(e) => e.eval(vals).to_string(),
+        Err(_) => "ERR".to_string(),
+    }
+}
+
 /// Top-level program info (tempo, meter, arrangement length) as JSON.
 #[wasm_bindgen]
 pub fn program_info_json(src: &str) -> String {

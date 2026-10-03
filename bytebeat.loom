@@ -1,0 +1,19 @@
+# ================================================================
+#  LOOM : voix bytebeat, une formule de t devient un son.
+#    nom: t: EXPR   t compte à 8000 Hz depuis le début du morceau,
+#                   la sortie est l'octet bas de la valeur (0..255)
+#    entiers 32 bits : + - * / % & | ^ << >> ~ < > ==, division par 0 = 0
+#    seuls gain, pan, reverb, delay, send, bus, mute, solo, chance, in
+#    s'appliquent : une voix bytebeat ne joue pas de notes.
+# ================================================================
+
+title:  Bytebeat
+key:    a minor
+bpm:    120
+song:   intro*2 corps*4
+
+crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.22 | pan -0.3
+viznut: t: t*((t>>12|t>>8)&63&t>>4) | gain 0.16 | pan 0.3 | reverb 0.2 | in corps
+kick:   x . . . x . . . x . . . x . x . | in corps
+hat:    . . x . . . x . . . x . . . x . | gain 0.08
+bass:   1 . . 1 . . 5, . | saw | oct 2 | lp 500 | gain 0.18 | in corps

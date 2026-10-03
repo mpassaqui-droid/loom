@@ -125,6 +125,7 @@ const pieces = {
   'send returns (no-op onsets)': 'send: tails echo 4 0.5\nsend: airy reverb hall 0.85 4500\nsend: wash flange 0.4 0.6\nkick: x . x . | send tails 0.6\nsnare: . . x . | send tails 0.4\nlead: 1 3 5 1\' | send airy 0.7\npad: 1 5 3 7 | send wash 0.3 | send airy 0.2',
   'l-sys custom': "seed: 5\nlead: l-sys(16,1>1.2,2>1.3,5>3.1) | pluck | gain 0.1\nkick: x . . x . . x .",
   'xys xenakis (markov seedé)': 'seed: 3\nlead: xys(16,1,1>2:2|3:1,2>1:1,5>1.5:2,3>2:1) | sine | gain 0.1\nkick: e(3,8)',
+  'bytebeat (aucune note, le reste joue)': "kick: x . x .\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4\nlead: 1 3 5 | saw",
   'evolve (génétique seedée)': 'seed: 3\nlead: evolve(16) | pluck | gain 0.1\nkick: x . . x . . x .',
 };
 
@@ -168,6 +169,7 @@ const an_pieces = {
   'attente résolue 7→1 (prog V→I)': 'key: c major\nprog: G7 C\nlead: 7 1',
   'attente suspendue sur la note de tête (7)': 'key: c major\nlead: 1 2 3 5 7',
   'mélodie étroite dans une 3ce + conseils': 'key: d minor\nlead: 1 2 3 1 2 3',
+  'bytebeat + mélodie (la voix t: ne compte pas comme notes)': 'key: c minor\nkick: x . x .\ncrunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4\nlead: 1 3 5',
   'mode lydien (ethos — ambience par couleur)': 'key: f lydian\nlead: 1 2 3 4 5 6',
 };
 // force: the acoustic consonance % is a float measurement (Plomp–Levelt) —
@@ -359,7 +361,46 @@ for (const [name, src] of Object.entries(tidal_pieces)) {
     }
   }
 }
+// ── BYTEBEAT parity (B3) : l'évaluateur d'expressions et le signal ──────────
+// Même expression, mêmes t : valeur entière identique (ou erreur des deux côtés),
+// puis le PCM échantillonné-bloqué bit pour bit (Float32), à 44,1 et 48 kHz.
+const bb_exprs = ['t', 't*(42&t>>10)', 't*((t>>12|t>>8)&63&t>>4)', '(t*5&t>>7)|(t*3&t>>10)',
+  't/(t>>8)', 't%0', '-t>>3', '~t^t<<3', 't*t*t', '2147483647+t', '0xffffffff&t', 't>>33',
+  '(t<4096)*t+(t>=4096)*(t>>2)', 't==8000', 't!=0', '1+2*3-4/2%3', '-(-t)', '(0-2147483647-1)/(0-1)',
+  '', '1+', '(t', 'tt', 'x', 't 2', '1||2', '99999999999', '0x', '12ab'];
+const bb_ts = [0, 1, 255, 1024, 4096, 8000, 12345, 65535, 1000000, 2147483647, -5];
+let bb_total = 0, bb_bad = 0;
+for (const ex of bb_exprs) {
+  let ce = null; try { ce = L.exprCompile(ex, ['t']); } catch (_) {}
+  for (const t of bb_ts) {
+    bb_total++;
+    const js = ce ? String(L.exprEval(ce, [t])) : 'ERR';
+    const rs = W.expr_eval(ex, 't', Int32Array.from([t]));
+    if (js !== rs) { bb_bad++; if (bb_bad <= 8) console.log(`  BYTEBEAT EXPR DIFF [${ex} t=${t}] JS ${js} Rust ${rs}`); }
+  }
+}
+for (const [ex, start, len, sr] of [['(t*5&t>>7)|(t*3&t>>10)', 0, 4410, 44100], ['t*((t>>12|t>>8)&63&t>>4)', 123457, 9600, 48000],
+  ['t*(42&t>>10)', 44100 * 7, 22050, 44100], ['t', 5, 100, 16000]]) {
+  bb_total++;
+  const js = L.bytebeatFill(L.exprCompile(ex, ['t']), start, len, sr), rs = W.bytebeat_pcm(ex, start, len, sr);
+  let same = js.length === rs.length;
+  for (let k = 0; same && k < rs.length; k++) same = Object.is(js[k], rs[k]);
+  if (!same) { bb_bad++; console.log(`  BYTEBEAT PCM DIFF [${ex} @${start} sr ${sr}]`); }
+}
+// la coupe expression | verbes et le parse de la voix des deux côtés : même
+// expression retenue (évaluée en t=777), aucun événement côté Rust.
+for (const line of ['crunch: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.4 | pan -0.5', 'b: t:t|t>>8|lp 900', 'c: t: (t | gain) | gain 0.3', 'bad: t: t*(2+']) {
+  bb_total++;
+  const jv = L.parse(line)[0];
+  const jsrc = jv ? String(L.exprEval(jv.bytebeat, [777])) : 'ERR';
+  const sp = L.bytebeatSplit(line.slice(line.indexOf('t:') + 2));
+  const rsrc = W.expr_eval(sp[0], 't', Int32Array.from([777]));
+  const rv = JSON.parse(W.schedule_bar_json(line + '\nkick: x', 0)).filter(e => e.voice !== 'kick');
+  if (rv.length !== 0 || rsrc !== jsrc) { bb_bad++; console.log(`  BYTEBEAT PARSE DIFF [${line}] JS ${jsrc} Rust ${rsrc} events ${rv.length}`); }
+}
+console.log(`\nBYTEBEAT parity (expressions + PCM + coupe, JS <-> Rust): ${bb_total - bb_bad}/${bb_total}  ${bb_bad === 0 ? '✅' : '⚠️ ' + bb_bad + ' diffs'}`);
+
 console.log(`\nANALYSE parity (JS analyzePiece <-> Rust analyze_json, ligne à ligne): ${an_total - an_bad}/${an_total}  ${an_perfect ? '✅' : '⚠️ ' + an_bad + ' diffs'}`);
 console.log(`\nTIDAL parity (ply/linger/segment/range/loopAt, onset + jeton): ${td_total - td_bad}/${td_total} voice×bar  ${td_bad === 0 ? '✅' : '⚠️ ' + td_bad + ' diffs'}`);
 console.log(`\nPARITY (JS <-> Rust onset timing): ${total - bad}/${total} voice×bar  ${bad === 0 ? '✅ PERFECT' : '⚠️ ' + bad + ' diffs'}`);
-process.exit((bad === 0 && td_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);
+process.exit((bad === 0 && td_bad === 0 && bb_bad === 0 && an_perfect && rd_bad === 0 && rd2_bad === 0 && wav_bad === 0) ? 0 : 2);

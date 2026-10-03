@@ -29,6 +29,20 @@ export function bar_bpm(src: string, bar: number): number;
 export function bar_seconds(src: string, bar: number): number;
 
 /**
+ * Bytebeat : `len` échantillons de la formule `expr` (variable `t`) à partir de
+ * l'échantillon absolu `start`, à `sr` Hz (`loom_core::expr::bytebeat_fill`).
+ * Expression invalide : tableau vide. Sert à la parité avec le miroir JS.
+ */
+export function bytebeat_pcm(expr: string, start: number, len: number, sr: number): Float32Array;
+
+/**
+ * Évalue une expression entière (`vars` = les lettres des variables, dans
+ * l'ordre de `vals`). Rend la valeur en texte, ou `ERR` si l'expression est
+ * invalide. Sert à la parité avec le miroir JS `exprCompile`/`exprEval`.
+ */
+export function expr_eval(src: string, vars: string, vals: Int32Array): string;
+
+/**
  * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
  * consumes these on top of the `schedule_bar_json` events — same Rust defaults.
  */

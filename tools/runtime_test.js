@@ -151,7 +151,8 @@ try {
     'bnd1: 1 . . . | sine | bend -12 0.12 | oct 2 | gain 0.3',
     'bnd2: 1 3 5 1\' | tri | bend 5 0.06',
     'bel1: 1 . 3 . 5 . 1\' . | bell | reverb 0.5 | gain 0.14',
-    'bel2: Cm7 . Ab . | bell | arp up | reverb 0.4'
+    'bel2: Cm7 . Ab . | bell | arp up | reverb 0.4',
+    'byt: t: (t*5&t>>7)|(t*3&t>>10) | gain 0.3 | pan 0.4 | reverb 0.2'
   ].join('\n');
   // if a .loom file path is passed as an arg, run THAT instead of the mega test
   const fileArg = process.argv[2];
