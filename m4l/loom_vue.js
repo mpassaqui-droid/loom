@@ -74,7 +74,13 @@ function lit() {
         var n = tab(p.n), out = [];
         for (var i = 0; i + 3 < n.length; i += 4) out.push({ p: n[i], b: n[i + 1], d: n[i + 2], v: n[i + 3] });
         p.notes = out;
-        p.teinte = teinte(p.nom);
+    });
+    // couleurs réparties sur le cercle (le hachage du nom seul en groupe plusieurs dans les bleus),
+    // à partir de la teinte de la première voix ; chaque voix à sa place régulière autour du centre
+    var n = vue.data.pistes.length, h0 = n ? teinte(vue.data.pistes[0].nom) : 0;
+    vue.data.pistes.forEach(function (p, i) {
+        p.teinte = (h0 + i * 360 / Math.max(1, n)) % 360;
+        p.angle = -Math.PI / 2 + i * 2 * Math.PI / Math.max(1, n);
     });
     if (vue.data.clip !== vue.clipPath) {
         vue.clipPath = vue.data.clip || '';
@@ -108,13 +114,13 @@ function frappes(avant, apres) {
         if (MODE === 'mini' && p.nom !== vue.data.voix) return;
         var g = 0;
         for (var i = 0; i < p.notes.length; i++) if (dedans(p.notes[i].b % (L || Infinity))) g = Math.max(g, p.notes[i].v / 127);
-        if (g > 0) { eclats[p.nom] = 1; if (MODE === 'scene') rafale(p.teinte, g); }
+        if (g > 0) { eclats[p.nom] = 1; if (MODE === 'scene') rafale(p.teinte, p.angle, g); }
     });
 }
 
-// la rafale de la scène web (emitVoiceBurst) : départ du centre, vers l'angle de la teinte
-function rafale(h, g) {
-    var t = taille(), W = t[0], H = t[1], n = 4 + Math.floor(g * 10), base = h / 360 * 6.2831853,
+// la rafale de la scène web (emitVoiceBurst) : départ du centre, vers la voix qui joue
+function rafale(h, angle, g) {
+    var t = taille(), W = t[0], H = t[1], n = 4 + Math.floor(g * 10), base = angle,
         spd = Math.max(W, H) * (0.006 + g * 0.012), col = hsl(h, 0.9, 0.62);
     for (var k = 0; k < n; k++) {
         var a = base + (Math.random() - 0.5) * 1.1, s = spd * (0.5 + Math.random());
@@ -183,7 +189,7 @@ function peintScene(W, H) {
     var cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.38;
     // les voix, chacune à l'angle de sa couleur (là où partent ses particules)
     d.pistes.forEach(function (p) {
-        var a = p.teinte / 360 * 6.2831853, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R,
+        var a = p.angle, x = cx + Math.cos(a) * R, y = cy + Math.sin(a) * R,
             e = eclats[p.nom] || 0, c = hsl(p.teinte, 0.9, 0.45 + 0.25 * e), r = 5 + 9 * e;
         mgraphics.set_source_rgba(c[0], c[1], c[2], 0.35 + 0.65 * e);
         mgraphics.ellipse(x - r, y - r, 2 * r, 2 * r);
