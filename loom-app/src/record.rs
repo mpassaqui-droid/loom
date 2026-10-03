@@ -21,11 +21,18 @@ pub fn next_take_name(existing: &[String]) -> String {
     (1..).map(|i| format!("take{i}")).find(|n| !existing.contains(n)).unwrap()
 }
 
+/// Un nom de prise sûr : `take` suivi de chiffres (jamais de chemin dans un nom
+/// venu du code, qu'un fichier partagé pourrait écrire).
+pub fn is_take_name(name: &str) -> bool {
+    name.strip_prefix("take").is_some_and(|d| !d.is_empty() && d.len() <= 6 && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// Écrit la prise dans « mes sons » (`NOM.wav`, stéréo flottant), rangée mesure par
 /// mesure (voir [`layout_take`]). Avec `overdub`, la prise du même nom reste dessous ;
 /// si elle est illisible ou à une autre fréquence, rien n'est écrit (on ne l'écrase
 /// jamais). Rend le chemin et le nombre de mesures de la boucle.
 pub fn save_take(name: &str, mono: &[f32], bars: u32, first_bar: i64, sample_rate: u32, overdub_on: bool) -> Result<(PathBuf, u32), String> {
+    if !is_take_name(name) { return Err(format!("« {name} » n'est pas un nom de prise (take1, take2…)")); }
     let dir = crate::samples::user_dir().ok_or("pas de dossier personnel")?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("{name}.wav"));
@@ -66,6 +73,7 @@ mod tests {
     fn superpose_et_nomme() {
         assert_eq!(overdub(&[0.5, 0.8], &[0.25, 0.5, 0.1]), vec![0.75, 1.0, 0.1]);
         assert_eq!(next_take_name(&["take1".into(), "take3".into()]), "take2");
+        assert!(is_take_name("take12") && !is_take_name("take") && !is_take_name("take1/../../x") && !is_take_name("take../a"));
         let l = take_line("take2", 4);
         assert_eq!(l, "take2: x | sample take2 | stretch | loopAt 4 | slow 4");
         let prog = loom_core::Program::parse(&l);

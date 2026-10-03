@@ -526,7 +526,7 @@ impl LoomApp {
         }
         if self.engine.is_none() { return self.warn("Pas de moteur audio : pas de prise."); }
         // la dernière prise du morceau, pour superposer
-        let over_name = overdub.then(|| self.program.voices.iter().rev().find(|v| v.name.starts_with("take")).map(|v| v.name.clone())).flatten();
+        let over_name = overdub.then(|| self.program.voices.iter().rev().find(|v| loom_app::record::is_take_name(&v.name)).map(|v| v.name.clone())).flatten();
         if overdub && over_name.is_none() { return self.warn("Superposer : pas encore de prise takeN dans le morceau."); }
         if !self.is_playing() { self.run(); }
         match loom_audio::input::MicInput::start() {
