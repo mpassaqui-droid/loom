@@ -179,8 +179,8 @@ def patch(test=False):
                                                       'parameter_shortname': 'loomcode',
                                                       'parameter_type': 3, 'parameter_invisible': 1}}),
         boite('obj-22', 'newobj', [200, 640, 110, 22], 'prepend restaurecode', 1, 1, ['']),
-        boite('obj-14', 'newobj', [460, 330, 60, 22], 'pcontrol', 1, 1, ['']),
-        boite('obj-15', 'newobj', [460, 360, 80, 22], 'p Loom', 1, 0, None, patcher=fenetre()),
+        boite('obj-14', 'newobj', [460, 330, 60, 22], 'pcontrol', 1, 1, [''], varname='loompcontrol'),
+        boite('obj-15', 'newobj', [460, 360, 80, 22], 'p Loom', 1, 0, None, patcher=fenetre(), varname='loomfenetre'),
         boite('obj-16', 'newobj', [560, 310, 90, 22], 'prepend /loom/vue', 1, 1, ['']),
         # les liens avec la fenêtre (send/receive propres au device)
         boite('obj-24', 'newobj', [20, 420, 80, 22], 's ---etat', 1, 0),

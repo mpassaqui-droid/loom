@@ -300,6 +300,12 @@ function reponsepont(d) {
     pont.nonce = '';
 }
 
+// ouvre la fenêtre Loom sans clic (build de test : /loom/fenetre)
+function montreFenetre() {
+    try { monPatcher.getnamed('loompcontrol').message('open'); } catch (e) { dire('fenêtre : ' + e); return; }
+    ouvre();
+}
+
 // la page vient de se charger : elle reçoit le jeton du pont (seulement si le pont a prouvé
 // qui il est) et le code du morceau
 function pret() {
@@ -321,6 +327,7 @@ function anything() {
     else if (m === 'cuire') cuire();
     else if (m === 'pret') pret();
     else if (m === 'ouvre') ouvre();
+    else if (m === 'fenetre') montreFenetre();
 }
 
 // ---- le son : lancer les clips Loom de tout le set, ou tout arrêter ----
