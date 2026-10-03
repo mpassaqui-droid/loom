@@ -2,7 +2,7 @@
 // IIFE, then drive run() across several bars with a program that uses every
 // feature. Goal: catch RUNTIME errors that `node --check` (syntax only) misses.
 const fs = require('fs');
-const html = fs.readFileSync('/Users/munaysiwarsylvepassaquiampuero/Downloads/loom/web/index.html', 'utf8');
+const html = fs.readFileSync(require('path').join(__dirname, '../web/index.html'), 'utf8');
 
 // extract the IIFE <script> (the one with the engine), not the puter CDN tag
 let code = null;
@@ -44,7 +44,7 @@ if (typeof globalThis.Blob === 'undefined') globalThis.Blob = class { constructo
 const els = {};
 const makeEl = () => { const o = { value: '', textContent: '', innerHTML: '', className: '', dataset: {},
   style: { setProperty: noop }, classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
-  _h: {}, addEventListener: (e, fn) => { o._h[e] = fn; }, appendChild: noop, removeChild: noop, remove: noop,
+  _h: {}, addEventListener: (e, fn) => { o._h[e] = fn; }, appendChild: noop, removeChild: noop, remove: noop, setAttribute: noop, removeAttribute: noop, getAttribute: () => null,
   click: noop, select: noop, open: false, disabled: false, querySelectorAll: () => [], children: [], focus: noop }; return o; };
 const getEl = id => (els[id] || (els[id] = makeEl()));
 // sensible defaults for the controls run() reads
