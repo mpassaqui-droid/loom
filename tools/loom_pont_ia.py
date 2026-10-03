@@ -11,13 +11,16 @@ passe à la clé API : le device n'a rien d'autre à changer.
 
 Sécurité :
 - n'écoute que 127.0.0.1 ;
-- jeton secret dans ~/Library/Preferences/loom_pont_jeton (dossier fermé aux
-  autres comptes), envoyé par le device dans l'en-tête X-Loom-Jeton : une page
-  web ou un autre compte ne peut pas s'en servir ;
+- jeton secret neuf à chaque lancement, dans ~/Library/Preferences/loom_pont_jeton
+  (fichier 0600, dossier fermé aux autres comptes). Le pont ne le donne JAMAIS par
+  HTTP : le device le lit dans le fichier et le passe à sa page ; la page l'envoie
+  dans l'en-tête X-Loom-Jeton ;
+- /preuve?n=<nombre> rend sha256(jeton:nombre) : le device vérifie ainsi que c'est
+  bien ce pont qui écoute sur le port avant de charger la page ;
 - `claude -p --tools ""` : le modèle ne peut ni lire, ni écrire, ni exécuter ;
 - ANTHROPIC_API_KEY retiré de l'environnement : c'est l'abonnement qui paie.
 """
-import hmac, json, mimetypes, os, secrets, subprocess, sys, tempfile, threading
+import hashlib, hmac, json, re, mimetypes, os, secrets, subprocess, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOTE, PORT = '127.0.0.1', int(os.environ.get('LOOM_PONT_PORT', '7410'))
@@ -30,12 +33,11 @@ VERROU = threading.Lock()          # une composition à la fois
 
 
 def jeton():
-    if os.path.exists(JETON_FICHIER):
-        t = open(JETON_FICHIER).read().strip()
-        if len(t) >= 32:
-            return t
+    """Un jeton neuf à chaque lancement : un jeton volé ne sert plus au lancement suivant."""
     t = secrets.token_hex(24)
-    fd = os.open(JETON_FICHIER, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    if os.path.exists(JETON_FICHIER):
+        os.unlink(JETON_FICHIER)       # recréé en 0600 même si l'ancien avait d'autres droits
+    fd = os.open(JETON_FICHIER, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'w') as f:
         f.write(t)
     return t
@@ -109,9 +111,11 @@ class Pont(BaseHTTPRequestHandler):
         if not self._hote_ok():
             return self._rend(403, {'error': {'message': 'hôte refusé'}})
         chemin = self.path.split('?')[0].split('#')[0]
-        if chemin == '/jeton':
-            # même origine seulement : sans en-tête CORS, une autre page ne peut pas lire la réponse
-            return self._rend(200, {'jeton': self.attendu})
+        if chemin == '/preuve':
+            m = re.search(r'[?&]n=([0-9a-f]{16,64})(?:&|$)', self.path)
+            if not m:
+                return self._rend(400, {'error': {'message': 'nombre attendu'}})
+            return self._rend(200, {'preuve': hashlib.sha256(f'{self.attendu}:{m.group(1)}'.encode()).hexdigest()})
         if chemin == '/':
             chemin = '/index.html'
         vrai = os.path.realpath(os.path.join(WEB, chemin.lstrip('/')))

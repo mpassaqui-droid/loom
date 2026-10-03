@@ -98,20 +98,18 @@ def bouton(id, rect, texte, nom):
                                                          'parameter_mmax': 1}})
 
 
-URL_LOOM = 'http://127.0.0.1:7410/?live=1'
-
-
 def fenetre():
     """La fenêtre Loom, comme l'interface d'un plugin : le VRAI Loom (web/index.html), le même
     que sur le web, servi par le pont local (tools/loom_pont_ia.py) dans le navigateur de Max.
     Elle parle au moteur par send/receive propres au device (« --- » devient l'id du device) :
-    la page envoie « editeur <code> », « lancer », « arreter », « pret » ; le moteur lui renvoie
-    le code du morceau par « code <texte> »."""
+    à l'ouverture le moteur vérifie que le pont est bien le nôtre (preuve sha256 du jeton) avant
+    de charger la page ; la page envoie « editeur <code> », « lancer », « arreter », « pret » ; le
+    moteur lui renvoie le jeton du pont (« jeton ») et le code du morceau (« code <texte> »)."""
     W, H = 1280.0, 800.0
     bx = [
         boite('w-1', 'inlet', [1400, 10, 30, 30], None, 0, 1, ['']),
         boite('w-2', 'jweb', [0, 0, W, H], None, 1, 1, [''], presentation=1, presentation_rect=[0, 0, W, H],
-              url=URL_LOOM, rendermode=0),
+              url='about:blank', rendermode=0),
         boite('w-3', 'newobj', [1400, 60, 200, 22], 'route editeur lancer arreter pret', 1, 5, ['', '', '', '', '']),
         boite('w-4', 'newobj', [1400, 90, 100, 22], 'prepend editeur', 1, 1, ['']),
         boite('w-5', 'newobj', [1400, 120, 90, 22], 's ---loomin', 1, 0),
@@ -119,10 +117,12 @@ def fenetre():
         boite('w-7', 'message', [1560, 90, 50, 22], 'arreter', 2, 1, ['']),
         boite('w-8', 'message', [1620, 90, 40, 22], 'pret', 2, 1, ['']),
         boite('w-9', 'newobj', [1400, 160, 90, 22], 'r ---editeur', 0, 1, ['']),
-        boite('w-10', 'newobj', [1400, 190, 70, 22], 'route set', 1, 2, ['', '']),
+        boite('w-10', 'newobj', [1400, 190, 130, 22], 'route set url jeton', 1, 4, ['', '', '', '']),
         boite('w-11', 'newobj', [1400, 220, 90, 22], 'prepend code', 1, 1, ['']),
-        # le pont pas lancé : on recharge la page à chaque ouverture de la fenêtre
-        boite('w-12', 'message', [1500, 220, 200, 22], 'url ' + URL_LOOM, 2, 1, ['']),
+        # à chaque ouverture, le moteur vérifie le pont puis donne l'adresse (ou une page d'aide)
+        boite('w-12', 'message', [1440, 40, 40, 22], 'ouvre', 2, 1, ['']),
+        boite('w-14', 'newobj', [1500, 220, 70, 22], 'prepend url', 1, 1, ['']),
+        boite('w-15', 'newobj', [1580, 220, 90, 22], 'prepend jeton', 1, 1, ['']),
         boite('w-13', 'newobj', [1400, 40, 30, 22], 't b', 1, 1, ['bang']),
     ]
     li = [
@@ -131,7 +131,8 @@ def fenetre():
         ('w-3', 2, 'w-7', 0), ('w-7', 0, 'w-5', 0),
         ('w-3', 3, 'w-8', 0), ('w-8', 0, 'w-5', 0),
         ('w-9', 0, 'w-10', 0), ('w-10', 0, 'w-11', 0), ('w-11', 0, 'w-2', 0),
-        ('w-1', 0, 'w-13', 0), ('w-13', 0, 'w-12', 0), ('w-12', 0, 'w-2', 0),
+        ('w-1', 0, 'w-13', 0), ('w-13', 0, 'w-12', 0), ('w-12', 0, 'w-5', 0),
+        ('w-10', 1, 'w-14', 0), ('w-14', 0, 'w-2', 0), ('w-10', 2, 'w-15', 0), ('w-15', 0, 'w-2', 0),
     ]
     p = amxd.patcher(bx, li, 'Loom', largeur=W)
     p.update(rect=[60.0, 60.0, W, H], openrect=[0.0, 0.0, W, H], toolbarvisible=0, statusbarvisible=0,

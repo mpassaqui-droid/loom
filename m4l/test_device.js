@@ -165,7 +165,7 @@ for (const k in dicts) delete dicts[k];
     File.prototype.readstring = function () { return fichiers[this.p]; };
     File.prototype.close = function () {};
     ${fs.readFileSync(tmp, 'utf8')}
-    env.bang = bang; env.cle = cle; env.ia = ia; env.reponseia = reponseia; env.editeur = editeur;
+    env.bang = bang; env.cle = cle; env.ia = ia; env.reponseia = reponseia; env.editeur = editeur; env.ouvre = ouvre; env.pret = pret; env.sha256 = sha256;
   `).call(globalThis, env, so, notes, fichiers);
   env.bang();
   env.editeur('text', 'kick: x . x .');
@@ -189,6 +189,31 @@ for (const k in dicts) delete dicts[k];
   dicts.loomia_rep_0 = { body: JSON.stringify({ error: { message: 'invalid x-api-key' } }) };
   env.reponseia('dictionary', 'loomia_rep_0');
   ok(so.slice(-1)[0][2].includes('invalid x-api-key'), 'erreur de l\'API affichée telle quelle');
+  // la fenêtre Loom : le device vérifie le pont avant de charger la page
+  const h = require('crypto').createHash('sha256');
+  ok(env.sha256('jeton:abc') === require('crypto').createHash('sha256').update('jeton:abc').digest('hex') && env.sha256('') === h.update('').digest('hex'),
+    'sha256 du device = sha256 de référence');
+  const J = 'a'.repeat(48);
+  fichiers['/Users/test/Library/Preferences/loom_pont_jeton'] = J;
+  const fenetre = () => so.filter(o => o[0] === 4 && (o[1] === 'url' || o[1] === 'jeton'));
+  so.length = 0; env.ouvre();
+  const dq = dicts.loompont_req_0, n = /n=([0-9a-f]+)$/.exec(dq && dq.url || '');
+  ok(n && n[1].length === 32 && dq.url.indexOf('http://127.0.0.1:7410/preuve?') === 0 && so.some(o => o[0] === 5 && o[2] === 'loompont_req_0'),
+    'ouverture : défi envoyé au pont (nombre de 32 car.), rien n\'est encore chargé');
+  dicts.loompont_rep_0 = { body: JSON.stringify({ preuve: env.sha256('autre:' + n[1]) }) };
+  env.reponseia('dictionary', 'loompont_rep_0'); so.length = 0; env.pret();
+  const f1 = fenetre();
+  ok(f1.length === 0, 'faux pont (mauvaise preuve) : ni la page ni le jeton');
+  so.length = 0; env.ouvre(); const n2 = /n=([0-9a-f]+)$/.exec(dicts.loompont_req_0.url)[1];
+  ok(n2 !== n[1], 'un défi neuf à chaque ouverture');
+  dicts.loompont_rep_0 = { body: JSON.stringify({ preuve: env.sha256(J + ':' + n2) }) };
+  env.reponseia('dictionary', 'loompont_rep_0');
+  const u = so.filter(o => o[0] === 4 && o[1] === 'url').pop();
+  so.length = 0; env.pret();
+  ok(u && u[2] === 'http://127.0.0.1:7410/?live=1' && fenetre().some(o => o[1] === 'jeton' && o[2] === J),
+    'vrai pont : la page se charge et reçoit le jeton du fichier');
+  env.reponseia('dictionary', 'loompont_rep_0');
+  ok(/^data:/.test(so.filter(o => o[0] === 4 && o[1] === 'url').pop()[2]), 'preuve rejouée (défi déjà utilisé) : page d\'aide');
 }
 console.log(echecs ? `${echecs} échec(s)` : 'device : tout passe');
 process.exit(echecs ? 1 : 0);

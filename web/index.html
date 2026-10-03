@@ -5935,11 +5935,14 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     // un autre device Loom, ou le fichier lié, a changé le code : l'éditeur suit
     if(window.max&&window.max.bindInlet)window.max.bindInlet("code",function(){const t=Array.prototype.slice.call(arguments).join(" ");
       if(t&&t!==editor.value){editor.value=t;try{editor.dispatchEvent(new Event("input"));}catch(_){}}});
+    if(window.max&&window.max.bindInlet)window.max.bindInlet("jeton",function(t){jetonPont=String(t||"");});
     if(window.max)window.max.outlet("pret");}
   // VIBE dans Live : par le pont local (claude -p, l'abonnement), si aucune clé n'est saisie
+  // le jeton vient du device (qui l'a lu dans le fichier du pont), jamais du réseau
+  let jetonPont="";
   async function vibePont(SYStxt,userMsg){
-    const j=await (await fetch("/jeton")).json();
-    const res=await fetch("/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","X-Loom-Jeton":j.jeton},
+    if(!jetonPont)throw new Error("pas de jeton du pont : referme et rouvre la fenêtre Loom");
+    const res=await fetch("/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","X-Loom-Jeton":jetonPont},
       body:JSON.stringify({model:"claude-fable-5-1",max_tokens:4000,system:SYStxt,messages:[{role:"user",content:userMsg}]})});
     const data=await res.json();if(data.error)throw new Error(data.error.message||"pont");
     return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n");}

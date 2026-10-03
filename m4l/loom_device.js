@@ -191,6 +191,7 @@ function ia() {
 function reponseia() {
     var a = arrayfromargs(arguments), nom = a[a.length - 1];
     var d = new Dict(String(nom));
+    if (/^loompont_/.test(String(nom))) return reponsepont(d);
     var corps = String(d.get('body') || '');
     var rep;
     try { rep = JSON.parse(corps); } catch (e) { dire('IA : réponse illisible (' + (d.get('http_status') || '?') + ')'); return; }
@@ -222,8 +223,87 @@ function voix() {
     cuire();
 }
 
-// la fenêtre Loom (la page web) vient de s'ouvrir : on lui donne le code du morceau
+// ---- la fenêtre Loom : le vrai Loom web, servi par le pont local ----
+// Avant de charger la page, le device vérifie que c'est bien NOTRE pont qui écoute sur 7410 :
+// il envoie un nombre neuf, le pont doit répondre sha256(jeton:nombre), et seul le pont connaît
+// le jeton (fichier 0600). Un autre programme qui prendrait le port n'aurait ni la page ni le jeton.
+var URL_PONT = 'http://127.0.0.1:7410';
+var pont = { nonce: '', ok: false, jeton: '' };
+
+function sha256(m) {
+    var K = [], H = [], i, j;
+    function premier(n) { for (var d = 2; d * d <= n; d++) if (n % d === 0) return false; return true; }
+    function frac(x) { return ((x - Math.floor(x)) * 4294967296) | 0; }
+    for (i = 2, j = 0; j < 64; i++) if (premier(i)) { if (j < 8) H[j] = frac(Math.pow(i, 1 / 2)); K[j++] = frac(Math.pow(i, 1 / 3)); }
+    var o = unescape(encodeURIComponent(m)), l = o.length, w = [];
+    for (i = 0; i < l; i++) w[i >> 2] |= o.charCodeAt(i) << (24 - (i % 4) * 8);
+    w[l >> 2] |= 0x80 << (24 - (l % 4) * 8);
+    w[((l + 8) >> 6) * 16 + 15] = l * 8;
+    function r(x, n) { return (x >>> n) | (x << (32 - n)); }
+    for (j = 0; j < w.length; j += 16) {
+        var a = H.slice(0), W = [];
+        for (i = 0; i < 64; i++) {
+            if (i < 16) W[i] = w[j + i] | 0;
+            else W[i] = (W[i - 16] + (r(W[i - 15], 7) ^ r(W[i - 15], 18) ^ (W[i - 15] >>> 3)) + W[i - 7] +
+                (r(W[i - 2], 17) ^ r(W[i - 2], 19) ^ (W[i - 2] >>> 10))) | 0;
+            var t1 = (a[7] + (r(a[4], 6) ^ r(a[4], 11) ^ r(a[4], 25)) + ((a[4] & a[5]) ^ (~a[4] & a[6])) + K[i] + W[i]) | 0;
+            var t2 = ((r(a[0], 2) ^ r(a[0], 13) ^ r(a[0], 22)) + ((a[0] & a[1]) ^ (a[0] & a[2]) ^ (a[1] & a[2]))) | 0;
+            a = [(t1 + t2) | 0, a[0], a[1], a[2], (a[3] + t1) | 0, a[4], a[5], a[6]];
+        }
+        for (i = 0; i < 8; i++) H[i] = (H[i] + a[i]) | 0;
+    }
+    return H.map(function (x) { return ('00000000' + (x >>> 0).toString(16)).slice(-8); }).join('');
+}
+
+function lisJetonPont() {
+    var h = maison();
+    if (!h) return '';
+    var f = new File(h + '/Library/Preferences/loom_pont_jeton', 'read');
+    if (!f.isopen) return '';
+    var t = f.eof > 0 ? f.readstring(f.eof) : '';
+    f.close();
+    return String(t || '').replace(/\s/g, '');
+}
+
+function pageErreur(texte) {
+    return 'data:text/html;charset=utf-8,' + encodeURIComponent('<body style="background:#0b0f0b;color:#9dff8a;' +
+        'font:16px ui-monospace,monospace;padding:40px">LOOM<br><br>' + texte + '</body>');
+}
+
+// la fenêtre s'ouvre : on demande au pont de prouver qui il est
+function ouvre() {
+    var n = '';
+    for (var i = 0; i < 4; i++) n += ('00000000' + Math.floor(Math.random() * 4294967296).toString(16)).slice(-8);
+    pont.nonce = n; pont.ok = false; pont.jeton = '';
+    var id = idDevice(), d = new Dict('loompont_req_' + id);
+    d.clear();
+    d.set('url', URL_PONT + '/preuve?n=' + n);
+    d.set('http_method', 'get');
+    d.set('response_dict', 'loompont_rep_' + id);
+    d.set('timeout', 5);
+    d.set('parse_type', 'none');
+    outlet(5, 'dictionary', 'loompont_req_' + id);
+}
+
+function reponsepont(d) {
+    var rep = null, j = lisJetonPont();
+    try { rep = JSON.parse(String(d.get('body') || '')); } catch (e) { rep = null; }
+    if (j && rep && pont.nonce && rep.preuve === sha256(j + ':' + pont.nonce)) {
+        pont.ok = true; pont.jeton = j;
+        outlet(4, 'url', URL_PONT + '/?live=1');
+        dire('fenêtre Loom ouverte');
+    } else {
+        outlet(4, 'url', pageErreur(j ? 'Le pont Loom ne répond pas, ou ce n\'est pas lui.<br>Lance : python3 tools/loom_pont_ia.py<br>puis referme et rouvre cette fenêtre.'
+            : 'Le pont Loom n\'a jamais été lancé sur ce Mac.<br>Lance : python3 tools/loom_pont_ia.py<br>puis referme et rouvre cette fenêtre.'));
+        dire('pont Loom absent');
+    }
+    pont.nonce = '';
+}
+
+// la page vient de se charger : elle reçoit le jeton du pont (seulement si le pont a prouvé
+// qui il est) et le code du morceau
 function pret() {
+    if (pont.ok) outlet(4, 'jeton', pont.jeton);
     if (etat.source) outlet(4, 'set', etat.source);
 }
 
@@ -240,6 +320,7 @@ function anything() {
     else if (m === 'arreter') arreter();
     else if (m === 'cuire') cuire();
     else if (m === 'pret') pret();
+    else if (m === 'ouvre') ouvre();
 }
 
 // ---- le son : lancer les clips Loom de tout le set, ou tout arrêter ----

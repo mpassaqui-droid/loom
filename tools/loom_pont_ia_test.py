@@ -26,6 +26,7 @@ with open(faux, 'w') as f:
 os.chmod(faux, 0o755)
 
 os.environ['ANTHROPIC_API_KEY'] = 'sk-ne-doit-pas-passer'
+pont.JETON_FICHIER = os.path.join(tempfile.mkdtemp(), 'loom_pont_jeton')   # jamais le vrai jeton du Mac
 s = pont.serveur(faux, port=0)
 threading.Thread(target=s.serve_forever, daemon=True).start()
 url = f'http://127.0.0.1:{s.server_port}/v1/messages'
@@ -76,10 +77,19 @@ ok(code == 200 and typ == 'application/wasm', 'sert le moteur WASM en applicatio
 code, _, _ = get('/../tools/loom_pont_ia.py')
 code2, _, _ = get('/%2e%2e/tools/loom_pont_ia.py')
 ok(code == 404 and code2 == 404, 'rien hors de web/ (../ refusé)')
-code, _, corps = get('/jeton')
-ok(code == 200 and json.loads(corps)['jeton'] == jeton, 'jeton donné à la page de même origine')
-code, _, _ = get('/jeton', hote='evil.example:7410')
+code, _, _ = get('/jeton')
+ok(code == 404, 'le jeton ne sort jamais par HTTP (/jeton : 404)')
+import hashlib  # noqa: E402
+code, _, corps = get('/preuve?n=0123456789abcdef0123456789abcdef')
+ok(code == 200 and json.loads(corps)['preuve'] == hashlib.sha256(f'{jeton}:0123456789abcdef0123456789abcdef'.encode()).hexdigest(),
+   'preuve = sha256(jeton:nombre), sans livrer le jeton')
+code, _, _ = get('/preuve?n=zz')
+ok(code == 400, 'preuve sans nombre valable : 400')
+code, _, _ = get('/preuve?n=0123456789abcdef', hote='evil.example:7410')
 ok(code == 403, 'autre hôte (DNS rebinding) : 403')
+s2 = pont.serveur(faux, port=0)
+ok(open(pont.JETON_FICHIER).read().strip() != jeton, 'jeton neuf à chaque lancement')
+s2.server_close()
 s.shutdown()
 print(f'{echecs} échec(s)' if echecs else 'pont : tout passe')
 sys.exit(1 if echecs else 0)
