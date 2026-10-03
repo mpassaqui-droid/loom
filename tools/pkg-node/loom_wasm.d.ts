@@ -105,6 +105,11 @@ export function render_json(src: string, bars: number, sr: number): Float32Array
 export function render_wav(src: string, bars: number, sr: number): Uint8Array;
 
 /**
+ * Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
+ */
+export function scala_key_line(scl: string, tonic: string): string;
+
+/**
  * Schedule one bar and return its events as JSON for the JS audio layer.
  */
 export function schedule_bar_json(src: string, bar: number): string;

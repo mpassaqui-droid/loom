@@ -305,6 +305,29 @@ export function render_wav(src, bars, sr) {
 }
 
 /**
+ * Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
+ * @param {string} scl
+ * @param {string} tonic
+ * @returns {string}
+ */
+export function scala_key_line(scl, tonic) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(scl, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(tonic, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.scala_key_line(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Schedule one bar and return its events as JSON for the JS audio layer.
  * @param {string} src
  * @param {number} bar

@@ -16,6 +16,7 @@ export const reharm: (a: number, b: number, c: number, d: number) => [number, nu
 export const render_fx_json: (a: number, b: number, c: number, d: number) => [number, number];
 export const render_json: (a: number, b: number, c: number, d: number) => [number, number];
 export const render_wav: (a: number, b: number, c: number, d: number) => [number, number];
+export const scala_key_line: (a: number, b: number, c: number, d: number) => [number, number];
 export const schedule_bar_json: (a: number, b: number, c: number) => [number, number];
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __wbindgen_malloc: (a: number, b: number) => number;

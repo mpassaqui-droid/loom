@@ -472,6 +472,23 @@ for (const k of rn_keys) for (const tok of rn_toks) {
   if (js !== rs) { rn_bad++; if (rn_bad <= 8) console.log(`  ROMAN DIFF [${k} ${tok}]  JS: ${js}  Rust: ${rs}`); }
 }
 console.log(`\nROMAN parity (chiffrage romain, hauteurs): ${rn_total - rn_bad}/${rn_total}  ${rn_bad === 0 ? '✅' : '⚠️ ' + rn_bad + ' diffs'}`);
+// ── TUNE parity : degrés × gammes × accordages, fréquence Rust (e.freq) <-> JS (degreeToMidi), en cents ──
+const tu_keys = ['c major', 'a minor', 'd bayati', 'c rast', 'c 19edo 0 3 6 8 11 14 17', 'c 24edo', 'd scala 9/8 5/4 4/3 3/2 5/3 15/8 2/1', 'e scl 150.0 350.0 500.0 700.0 850.0 1050.0 1200.0', 'c 0 1.5 3 5 7 8.5 10'];
+const tu_tunes = ['', 'tune: just', 'tune: pyth', 'tune: 19edo', 'tune: 31 edo', 'tune: meantone', 'tune: werck'];
+const tu_toks = ['1', '2', '3', '4#', '5', '6b', '7', "1'", '3,', '2#', '7b'];
+let tu_total = 0, tu_bad = 0, tu_worst = 0;
+for (const k of tu_keys) for (const t of tu_tunes) for (const tok of tu_toks) {
+  const src = 'key: ' + k + '\n' + t + '\nl: ' + tok;
+  const key = L.parseKey(src); L.setTuning(L.parseTune(src));
+  const js = L.tokenToFreq(tok, key);
+  const ev = JSON.parse(W.schedule_bar_json(src, 0)).find(e => e.voice === 'l');
+  tu_total++;
+  const c = ev && ev.freq && js ? Math.abs(1200 * Math.log2(ev.freq / js)) : Infinity;
+  tu_worst = Math.max(tu_worst, c);
+  if (!(c < 0.05)) { tu_bad++; if (tu_bad <= 8) console.log(`  TUNE DIFF [${k} | ${t || 'equal'} | ${tok}]  JS: ${js}  Rust: ${ev && ev.freq}`); }
+}
+L.setTuning('equal');
+console.log(`\nTUNE parity (degrés × gammes EDO/Scala/maqâm × accordages, cents): ${tu_total - tu_bad}/${tu_total}  pire ${tu_worst.toFixed(4)} cent  ${tu_bad === 0 ? '✅' : '⚠️ ' + tu_bad + ' diffs'}`);
 console.log(`\nSTEP parity (pas-programmes =(EXPR), onset + jeton): ${sp_total - sp_bad}/${sp_total} voice×bar  ${sp_bad === 0 ? '✅' : '⚠️ ' + sp_bad + ' diffs'}`);
 console.log(`\nSYNC parity (| sync AUTRE, onset + jeton): ${sy_total - sy_bad}/${sy_total} voice×bar  ${sy_bad === 0 ? '✅' : '⚠️ ' + sy_bad + ' diffs'}`);
 

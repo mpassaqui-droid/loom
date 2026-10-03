@@ -1335,10 +1335,23 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
       else if(name==="scale"){if(words.length)scaleSpec=words.slice();}}
     if(tonic===null&&scaleSpec===null)return null;
     // custom scale: numeric semitone offsets, e.g. scale: 0 2 3 5 7 9 10  (microtonal ok: 0 1.5 3 5 7 8 10)
-    let scale=null;
-    if(scaleSpec){if(/^-?[\d.]+$/.test(scaleSpec[0])){const arr=scaleSpec.map(parseFloat).filter(x=>!isNaN(x));if(arr.length>=2)scale=arr;}if(!scale)scale=SCALES[scaleSpec[0]];}
+    let scale=null,edo=null;
+    if(scaleSpec&&isSpecialScale(scaleSpec[0])){const sp=specialScale(scaleSpec);if(sp){scale=sp[0];edo=sp[1];}else scale=SCALES.major.slice();}
+    else if(scaleSpec){if(/^-?[\d.]+$/.test(scaleSpec[0])){const arr=scaleSpec.map(parseFloat).filter(x=>!isNaN(x));if(arr.length>=2)scale=arr;}if(!scale)scale=SCALES[scaleSpec[0]];}
     scale=scale||SCALES.major;
-    return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE};}
+    return{tonic:tonic===null?0:tonic,scale,octave:DEFAULT_OCTAVE,edo};}
+  // `19edo [pas…]` (gamme en pas d'EDO ; # et b = un pas) et `scala p1 … période` (miroir de loom-core)
+  function isSpecialScale(w){return w==="scala"||w==="scl"||/^\d+edo$/.test(w);}
+  function scalaSemitones(w){let v;
+    if(w.includes(".")){const c=Number(w);if(w.trim()===""||!isFinite(c))return null;v=c/100;}
+    else if(w.includes("/")){const k=w.indexOf("/"),a=Number(w.slice(0,k)),b=Number(w.slice(k+1));if(w.slice(0,k)===""||w.slice(k+1)===""||!(a>0)||!(b>0))return null;v=12*Math.log2(a/b);}
+    else{const n=Number(w);if(w.trim()===""||!(n>0))return null;v=12*Math.log2(n);}
+    return isFinite(v)?v:null;}
+  function specialScale(words){const f=words[0],m=/^(\d+)edo$/.exec(f);
+    if(m){const n=Math.max(3,Math.min(96,+m[1])),u=12/n;const st=words.slice(1).filter(w=>w.trim()!=="").map(Number).filter(x=>isFinite(x));
+      return[st.length?st.map(k=>k*u):Array.from({length:n},(_,k)=>k*u),n];}
+    if(f==="scala"||f==="scl"){const p=words.slice(1).map(scalaSemitones).filter(x=>x!=null);if(p.length>=2)p.pop();return[[0].concat(p),null];}
+    return null;}
   // KNOWLEDGE layer: the story/mood of each scale — shown on RUN, so you learn while you make
   const SCALE_LORE={
     major:"le mode joyeux, lumineux, stable — la base de la musique occidentale",
@@ -1479,13 +1492,15 @@ lead:  1 . 3 5 . 1' . 5 . 3 . 1 . 7 . . | pluck 0.7 | echo 6 0.4 | reverb 0.3 | 
   const WERCK=[0,-10,-8,-6,-10,-2,-12,-4,-8,-12,-4,-8];   // Werckmeister III (1691) well-temperament
   const KIRN=[0,-10,-7,-6,-14,-2,-10,-3,-8,-10,-4,-12];   // Kirnberger III well-temperament
   const MEAN=[0,-24,-7,10,-14,3,-21,-3,-28,-10,7,-17];    // quarter-comma meantone (pure major thirds)
-  function tuneCents(iv){iv=((iv%12)+12)%12;return tuning==="just"?JI[iv]:tuning==="pyth"?PYTH[iv]:tuning==="werck"?WERCK[iv]:tuning==="kirn"?KIRN[iv]:tuning==="meantone"?MEAN[iv]:0;}
+  // les tables ne valent que pour les demi-tons entiers (un quart de ton reste tel quel)
+  function tuneCents(iv){if(iv%1!==0)return 0;iv=((iv%12)+12)%12;return tuning==="just"?JI[iv]:tuning==="pyth"?PYTH[iv]:tuning==="werck"?WERCK[iv]:tuning==="kirn"?KIRN[iv]:tuning==="meantone"?MEAN[iv]:0;}
   function degreeToMidi(tok,key){const d=parseInt(tok[0],10);let i=1,acc=0;
     if(tok[1]==="#"){acc=1;i=2;}else if(tok[1]==="b"){acc=-1;i=2;}
     let oct=0;for(const c of tok.slice(i)){if(c==="'")oct++;else if(c===",")oct--;else return null;}
     const len=key.scale.length,idx=d-1;const wrap=Math.floor(idx/len);
     const step=key.scale[((idx%len)+len)%len];
     const oct12=12*(key.octave+oct+wrap+1)+key.tonic;
+    if(key.edo)acc=acc*12/key.edo;  // gamme N-EDO : une altération = un pas
     if(typeof tuning==="number"){const semis=step+acc,edoSteps=Math.round(semis*tuning/12);return oct12+edoSteps*(12/tuning);}  // N-EDO (pure octaves)
     const m=oct12+step+acc;
     return tuning==="equal"?m:m+tuneCents(step+acc)/100;}  // microtuning: add cents (as fractional semitone)
@@ -6216,6 +6231,8 @@ air:    1 . . . . . . . | sine | noise 0.5 | hp 1000 | wow 0.2 | reverb 0.6 | ga
     ["Théorie","| chord NAME","harmoniseur : chaque note devient un accord (maj min sus dim aug fifth oct maj7 min7 dom7 add9)"],
     ["Théorie","tune: werck|kirn|meantone","tempéraments historiques : Werckmeister III, Kirnberger III, méantone (1/4 de comma)"],
     ["Théorie","tune: just|pyth|Nedo|equal","accordage : juste intonation / Pythagore / N-EDO (ex. 19edo, 31edo) /tempérament égal"],
+    ["Micro-tons","key: c 19edo 0 3 6 8 11 14 17","gamme écrite en pas de 19-EDO ; 2# = un pas d'EDO plus haut (les 19 hauteurs joignables)"],
+    ["Micro-tons","key: d scala 9/8 5/4 4/3 3/2 5/3 15/8 2/1","accordage Scala en ligne (rapports, cents avec un point ; la dernière = l'octave). Glisse un fichier .scl sur l'éditeur, ou loom scala f.scl"],
     ["Tempo","bpm: 128","fixe le tempo du morceau (BPM, dans le fichier) — sinon le bouton BPM"],
     ["Tempo","tempo: intro 120 drop 140","tempo PAR SECTION (paires nom/bpm) — accélère/ralentit selon le morceau"],
     ["Tempo","meter: 7/8","MESURE impaire : N/D temps par barre (7/8, 5/4, 3/4…) — change la longueur de la barre"],
@@ -6656,6 +6673,7 @@ const THEME_AA={
     "- Accelerando/ritardando: accel: 120 160 ramps the tempo from 120 to 160 across the whole piece (accel: 160 90 8 = slow down over 8 bars). For a build-up or a tape-stop ending.",
     "- Live morphing: morph: N (bars) makes live edits CROSSFADE — when a voice's line changes while playing, the old version fades out and the new fades in over N bars (equal-power) instead of switching abruptly. morph: 4 is musical for performance. Omit (or 0) for instant switching.",
     "- Voice-leading: | voicing lead keeps each chord close to the previous one (smooth, no big register jumps) — lovely on a prog: pad. (Also open/drop2/wide for spacing.)",
+    "- True N-EDO and Scala: key: c 19edo 0 3 6 8 11 14 17 writes a scale in steps of 19-EDO (degrees land exactly on that grid, and # / b move ONE EDO step, so every one of the 19 pitches is reachable); key: c 24edo alone = all 24 quarter-tone steps. key: d scala 9/8 5/4 4/3 3/2 5/3 15/8 2/1 takes a Scala pitch list (ratios like 5/4, cents with a dot like 386.3, last value = the octave). tune: just|pyth|werck|kirn|meantone|Nedo retunes the degrees of any key. Maqams bayati rast saba sikah huzam jiharkah play their true quarter tones.",
     "- Custom scales: scale: 0 2 3 5 7 9 10 defines ANY scale as semitone offsets from the tonic — microtonal allowed (scale: 0 1.5 3 5 7 8 10 for quarter-tones). key: c 0 2 3 5 7 9 10 works too. Lets you invent scales beyond the named ones.",
     "- Note ties: a _ token EXTENDS the previous note across that step (sustained/held notes, legato phrasing), e.g. lead: 1 _ _ 3 . 5 _ _ holds 1 for 3 steps then 3, rest, 5 for 2. Different from gate (which scales every note's length).",
     "- Chord voicing: | voicing open|drop2|wide|close re-arranges a chord's notes for a more open/lush spacing, e.g. keys: Cmaj7 . Fmaj7 . | voicing open. Lovely on pads/keys.",
@@ -7432,6 +7450,16 @@ const THEME_AA={
   document.addEventListener("drop",e=>{const fl=e.dataTransfer&&e.dataTransfer.files;if(!fl||!fl.length)return;e.preventDefault();
     const aud=[...fl].filter(f=>/audio/i.test(f.type)||/\.(wav|mp3|ogg|m4a|aac|flac|aif|aiff)$/i.test(f.name));
     if(aud.length){addCustomFiles(aud);return;}
+    // un accordage Scala (.scl) devient la ligne key: (même tonique si le morceau en a une)
+    const scl=[...fl].find(f=>/\.scl$/i.test(f.name));
+    if(scl){const r=new FileReader();r.onload=()=>{const W=window.__loomRustMod;
+      if(!W||!W.scala_key_line){log("[ scala ] il faut le moteur Rust (WASM) pour lire un .scl","err");return;}
+      const lines=editor.value.split("\n"),ki=lines.findIndex(l=>/^\s*key\s*:/i.test(l));
+      const tonic=ki>=0?(lines[ki].split(":")[1]||"").trim().split(/\s+/)[0]||"c":"c";
+      const kl=W.scala_key_line(String(r.result||""),tonic);
+      if(kl.startsWith("ERR:")){log("[ scala ] "+kl.slice(4),"err");return;}
+      pushUndo();if(ki>=0)lines[ki]=kl;else lines.unshift(kl);editor.value=lines.join("\n");liveEdit();if(playing)recompile();
+      log("[ scala ] « "+scl.name+" » : "+kl+" · les degrés 1 2 3… suivent cet accordage · ↩ annule","ai");};r.readAsText(scl);return;}
     const tf=[...fl].find(f=>/\.loom$|\.txt$|text/i.test(f.name+f.type));
     if(tf){const r=new FileReader();r.onload=()=>{editor.value=String(r.result||"");run();log("[ fichier ] « "+tf.name+" » chargé","ai");};r.readAsText(tf);}});
   $("clearSamples").addEventListener("click",clearCustomSamples);
@@ -8075,7 +8103,7 @@ const THEME_AA={
     return bytes;
   }
 
-    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
+    try{if(typeof window!=="undefined")window.__loom={scheduleBar:scheduleBarCapture,parse,exprCompile,exprEval,bytebeatFill,bytebeatSplit,renderPCM,renderFX,wavBytes,analyzePiece,noveltyReport,chordRoughness,transposeDeg,tokenizeWithCols,tokenMods,midiToName,parseProg,parseTempoMap,parseMeter,parseKeyMap,parseAccel,parseSends,buildMidiBytes,encShare,decShare,generateSong,progRoman,expandWalk,expandDrunk,expandLsys,expandXys,expandEvolve,expandPi,expandRecaman,expandLogistic,expandPerlin,expandTrib,expandBin,expand1f,applyOne,degreeToMidi,parseChord,romanToChord,parseTune,tokenToFreq,rampF,parseKey,midiToToken,setSeed:v=>{seed=v;},setTuning:v=>{tuning=v;},setKey:v=>{key=v;},setProg:v=>{prog=v;}};}catch(_){}
   animate();
 })();
 </script>

@@ -357,3 +357,9 @@ pub fn reharm(src: &str, how: &str) -> String {
         Err(e) => format!("ERR:{e}"),
     }
 }
+
+/// Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
+#[wasm_bindgen]
+pub fn scala_key_line(scl: &str, tonic: &str) -> String {
+    loom_core::scala_to_key_line(scl, tonic).unwrap_or_else(|e| format!("ERR:{e}"))
+}

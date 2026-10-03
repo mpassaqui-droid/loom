@@ -105,6 +105,11 @@ export function render_json(src: string, bars: number, sr: number): Float32Array
 export function render_wav(src: string, bars: number, sr: number): Uint8Array;
 
 /**
+ * Un fichier `.scl` (Scala) → la ligne `key:` LOOM (`ERR:` + raison si illisible).
+ */
+export function scala_key_line(scl: string, tonic: string): string;
+
+/**
  * Schedule one bar and return its events as JSON for the JS audio layer.
  */
 export function schedule_bar_json(src: string, bar: number): string;
@@ -128,6 +133,7 @@ export interface InitOutput {
     readonly render_fx_json: (a: number, b: number, c: number, d: number) => [number, number];
     readonly render_json: (a: number, b: number, c: number, d: number) => [number, number];
     readonly render_wav: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly scala_key_line: (a: number, b: number, c: number, d: number) => [number, number];
     readonly schedule_bar_json: (a: number, b: number, c: number) => [number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;

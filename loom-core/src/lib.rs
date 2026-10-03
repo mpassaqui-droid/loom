@@ -1375,7 +1375,7 @@ fn sched_prog(voices: &[Voice], key: Option<&Key>, prog: &[String], bar: i64, se
         }
         // Effective key for this voice: a `| oct N` overrides the key's octave.
         let voice_key: Option<Key> = key.map(|k| match v.octave {
-            Some(o) => Key { tonic: k.tonic, scale: k.scale.clone(), octave: o },
+            Some(o) => Key { octave: o, ..k.clone() },
             None => k.clone(),
         });
         let base_oct = voice_key.as_ref().map(|k| k.octave).or(v.octave).unwrap_or(DEFAULT_OCTAVE);
@@ -1689,6 +1689,29 @@ pub enum Tuning {
     Meantone,
 }
 
+impl Tuning {
+    /// Le `tune:` d'un morceau, lu comme le web (`parseTune`) ; `adaptive` et
+    /// l'inconnu jouent en tempérament égal sur les degrés.
+    pub fn of_source(src: &str) -> Tuning {
+        for raw in src.lines() {
+            let line = raw.trim();
+            let Some(i) = line.find(':') else { continue };
+            if !line[..i].trim().eq_ignore_ascii_case("tune") { continue; }
+            let w = line[i + 1..].trim().to_lowercase();
+            if let Some(n) = w.strip_suffix("edo").map(str::trim).and_then(|d| d.parse::<u32>().ok()) {
+                return Tuning::Edo(n.clamp(3, 96));
+            }
+            return if w.starts_with("just") || w == "ji" { Tuning::Just }
+                else if w.starts_with("pyth") { Tuning::Pyth }
+                else if w.starts_with("werck") { Tuning::Werck }
+                else if w.starts_with("kirn") { Tuning::Kirn }
+                else if w.starts_with("mean") || w.starts_with("quart") { Tuning::Meantone }
+                else { Tuning::Equal };
+        }
+        Tuning::Equal
+    }
+}
+
 /// Cents deviation from 12-TET for a semitone interval (0..=11) from the tonic.
 /// 5-limit JI and Pythagorean tables match the web engine exactly.
 pub fn tune_cents(interval: i32, tuning: Tuning) -> f32 {
@@ -1743,6 +1766,11 @@ pub struct Key {
     pub scale: Vec<f64>,
     /// Octave that degree 1 sounds in (c in this octave = degree 1 of a C key).
     pub octave: i32,
+    /// L'accordage du morceau (`tune:`), appliqué aux degrés comme le moteur web.
+    pub tuning: Tuning,
+    /// `key: c 19edo …` : une gamme écrite en pas de N-EDO ; `#`/`b` montent ou
+    /// descendent d'UN pas de l'EDO (toutes les N hauteurs sont joignables).
+    pub edo: Option<u32>,
 }
 
 /// Default reference octave for degree 1 (C3 region — sits between bass and lead).
@@ -1849,7 +1877,9 @@ pub fn parse_key_map(src: &str) -> Vec<(String, Key)> {
         let head = line[..colon].trim().to_lowercase();
         if let Some(sec) = head.strip_prefix("key@") {
             let rest = line[colon + 1..].trim();
-            if let Some(k) = parse_key(&format!("key: {}", rest)) {
+            if let Some(mut k) = parse_key(&format!("key: {}", rest)) {
+                // une modulation garde l'accordage du morceau
+                k.tuning = Tuning::of_source(src);
                 out.push((sec.trim().to_string(), k));
             }
         }
@@ -1862,10 +1892,15 @@ pub fn parse_key_map(src: &str) -> Vec<(String, Key)> {
 ///
 /// - `key: <tonic> [scale]`  e.g. `key: c minor`, `key: f# dorian`, `key: a`
 /// - `scale: <name>`         overrides just the scale, tonic defaults to c
+fn is_special_scale(w: &str) -> bool {
+    w == "scala" || w == "scl" || w.strip_suffix("edo").is_some_and(|d| !d.is_empty() && d.chars().all(|c| c.is_ascii_digit()))
+}
+
 pub fn parse_key(src: &str) -> Option<Key> {
     let mut tonic: Option<i32> = None;
     let mut scale_name: Option<String> = None;
     let mut scale_nums: Option<Vec<f64>> = None; // custom numeric (possibly microtonal) scale
+    let mut scale_special: Option<Vec<String>> = None; // `19edo …` / `scala …`
 
     for raw in src.lines() {
         let line = raw.trim();
@@ -1877,15 +1912,23 @@ pub fn parse_key(src: &str) -> Option<Key> {
         match name.as_str() {
             "key" => {
                 if let Some(t) = words.next().and_then(tonic_pc) { tonic = Some(t); }
+                if matches!(words.peek(), Some(w) if is_special_scale(w)) {
+                    scale_special = Some(words.map(str::to_string).collect());
+                    scale_nums = None; scale_name = None;
+                }
                 // `key: c 0 2 3.5 5 ...` -> custom numeric scale (microtonal allowed)
-                if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
+                else if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
                     scale_nums = Some(words.filter_map(|w| w.parse::<f64>().ok()).collect());
                 } else if let Some(s) = words.next() {
                     scale_name = Some(s.to_string());
                 }
             }
             "scale" => {
-                if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
+                if matches!(words.peek(), Some(w) if is_special_scale(w)) {
+                    scale_special = Some(words.map(str::to_string).collect());
+                    scale_nums = None; scale_name = None;
+                }
+                else if matches!(words.peek(), Some(w) if w.parse::<f64>().is_ok()) {
                     scale_nums = Some(words.filter_map(|w| w.parse::<f64>().ok()).collect());
                 } else if let Some(s) = words.next() {
                     scale_name = Some(s.to_string());
@@ -1895,18 +1938,86 @@ pub fn parse_key(src: &str) -> Option<Key> {
         }
     }
 
-    if tonic.is_none() && scale_name.is_none() && scale_nums.is_none() { return None; }
-    let scale: Vec<f64> = match scale_nums {
-        Some(nums) if !nums.is_empty() => nums,
-        _ => scale_name
-            .as_deref()
-            .and_then(scale_intervals)
-            .unwrap_or_else(|| scale_intervals("major").unwrap())
-            .into_iter()
-            .map(|x| x as f64)
-            .collect(),
+    if tonic.is_none() && scale_name.is_none() && scale_nums.is_none() && scale_special.is_none() { return None; }
+    let mut edo = None;
+    let scale: Vec<f64> = match (scale_special, scale_nums) {
+        (Some(words), _) => match special_scale(&words) {
+            Some((sc, e)) => { edo = e; sc }
+            None => major_f64(),
+        },
+        (None, Some(nums)) if !nums.is_empty() => nums,
+        _ => scale_name.as_deref().and_then(scale_steps).unwrap_or_else(major_f64),
     };
-    Some(Key { tonic: tonic.unwrap_or(0), scale, octave: DEFAULT_OCTAVE })
+    Some(Key { tonic: tonic.unwrap_or(0), scale, octave: DEFAULT_OCTAVE, tuning: Tuning::of_source(src), edo })
+}
+
+fn major_f64() -> Vec<f64> { vec![0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 11.0] }
+
+/// Une gamme nommée, en demi-tons (f64) : les maqâms à quarts de ton sonnent
+/// vrai, comme dans le moteur web (`SCALES`). Les autres = `scale_intervals`.
+pub fn scale_steps(name: &str) -> Option<Vec<f64>> {
+    let q: &[f64] = match name {
+        "bayati" => &[0.0, 1.5, 3.0, 5.0, 7.0, 8.0, 10.0],
+        "rast" => &[0.0, 2.0, 3.5, 5.0, 7.0, 9.0, 10.5],
+        "saba" => &[0.0, 1.5, 3.0, 4.0, 7.0, 8.0, 10.0],
+        "sikah" => &[0.0, 1.5, 3.5, 5.5, 7.0, 8.5, 10.5],
+        "huzam" => &[0.0, 1.5, 3.5, 5.0, 6.5, 8.5, 10.0],
+        "jiharkah" => &[0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 10.5],
+        _ => return scale_intervals(name).map(|v| v.into_iter().map(|x| x as f64).collect()),
+    };
+    Some(q.to_vec())
+}
+
+/// `19edo [pas…]` ou `scala p1 p2 … période` : la gamme en demi-tons, et l'EDO s'il y en a un.
+fn special_scale(words: &[String]) -> Option<(Vec<f64>, Option<u32>)> {
+    let first = words.first()?;
+    if let Some(n) = first.strip_suffix("edo").and_then(|d| d.parse::<u32>().ok()) {
+        let n = n.clamp(3, 96);
+        let unit = 12.0 / n as f64;
+        let steps: Vec<f64> = words[1..].iter().filter_map(|w| w.parse::<f64>().ok()).filter(|x| x.is_finite()).collect();
+        let scale = if steps.is_empty() { (0..n).map(|k| k as f64 * unit).collect() } else { steps.iter().map(|k| k * unit).collect() };
+        return Some((scale, Some(n)));
+    }
+    if first == "scala" || first == "scl" {
+        let mut pitches: Vec<f64> = words[1..].iter().filter_map(|w| scala_semitones(w)).collect();
+        // la dernière valeur d'un .scl est la période (l'octave) : elle ne fait pas un degré
+        if pitches.len() >= 2 { pitches.pop(); }
+        let mut scale = vec![0.0];
+        scale.extend(pitches);
+        return Some((scale, None));
+    }
+    None
+}
+
+/// Une hauteur Scala : `386.31` (cents, avec un point), `5/4` (rapport), `2` (rapport n/1).
+pub fn scala_semitones(w: &str) -> Option<f64> {
+    let v = if w.contains('.') {
+        w.parse::<f64>().ok()? / 100.0
+    } else if let Some((a, b)) = w.split_once('/') {
+        let (a, b) = (a.parse::<f64>().ok()?, b.parse::<f64>().ok()?);
+        if a <= 0.0 || b <= 0.0 { return None; }
+        12.0 * (a / b).log2()
+    } else {
+        let n = w.parse::<f64>().ok()?;
+        if n <= 0.0 { return None; }
+        12.0 * n.log2()
+    };
+    v.is_finite().then_some(v)
+}
+
+/// Un fichier `.scl` (Scala) → la ligne `key:` LOOM équivalente.
+pub fn scala_to_key_line(scl: &str, tonic: &str) -> Result<String, String> {
+    let lines: Vec<&str> = scl.lines().map(str::trim).filter(|l| !l.starts_with('!')).collect();
+    let desc = lines.first().copied().unwrap_or("");
+    let count: usize = lines.get(1).and_then(|l| l.split_whitespace().next()).and_then(|n| n.parse().ok())
+        .ok_or("fichier .scl invalide : la 2e ligne doit donner le nombre de notes")?;
+    let pitches: Vec<String> = lines.iter().skip(2).take(count)
+        .filter_map(|l| l.split_whitespace().next()).map(str::to_string).collect();
+    if pitches.len() != count || pitches.iter().any(|p| scala_semitones(p).is_none()) {
+        return Err(format!("fichier .scl invalide : {count} hauteurs annoncées, {} lisibles", pitches.iter().filter(|p| scala_semitones(p).is_some()).count()));
+    }
+    let comment = if desc.is_empty() { String::new() } else { format!("  # {desc}") };
+    Ok(format!("key: {tonic} scala {}{comment}", pitches.join(" ")))
 }
 
 /// Is this token a scale degree? Form: a digit 1..7, an optional chromatic
@@ -1946,7 +2057,26 @@ fn degree_to_midi(token: &str, key: &Key) -> Option<f64> {
     let wrap = idx.div_euclid(len);
     let step = key.scale[idx.rem_euclid(len) as usize]; // f64: may be a quarter-tone
     let octave = key.octave + oct_marks + wrap;
-    Some((12 * (octave + 1) + key.tonic + acc) as f64 + step)
+    Some(tuned_midi(12 * (octave + 1) + key.tonic, step, acc, key))
+}
+
+/// La hauteur d'un degré : base de l'octave + pas de la gamme + altération, puis
+/// l'accordage. Miroir exact du `degreeToMidi` du web.
+fn tuned_midi(oct12: i32, step: f64, acc: i32, key: &Key) -> f64 {
+    // dans une gamme N-EDO, une altération vaut un pas de l'EDO
+    let acc = match key.edo { Some(n) => acc as f64 * 12.0 / n as f64, None => acc as f64 };
+    let semis = step + acc;
+    match key.tuning {
+        Tuning::Edo(n) => {
+            let n = n as f64;
+            oct12 as f64 + (semis * n / 12.0).round() * (12.0 / n)
+        }
+        t => {
+            // les tables ne valent que pour les demi-tons entiers (pas les quarts de ton)
+            let cents = if semis.fract() == 0.0 { tune_cents(semis as i32, t) as f64 } else { 0.0 };
+            oct12 as f64 + semis + cents / 100.0
+        }
+    }
 }
 
 /// Resolve a token to a frequency: a scale degree if a key is given and the
@@ -3874,5 +4004,42 @@ mod tests {
     fn seed_ignores_trailing_comment() {
         assert_eq!(parse_seed("seed: 41 # graine du refrain"), 41);
         assert_eq!(parse_seed("seed:  24          # graine"), 24);
+    }
+
+    #[test]
+    fn accordage_edo_scala_et_maqam_vrais() {
+        let f = |src: &str, tok: &str| token_to_freq(tok, parse_key(src).as_ref()).unwrap();
+        let cents = |a: f32, b: f32| 1200.0 * (a / b).log2();
+        // tune: s'applique enfin aux degrés (le web le faisait, pas le moteur Rust)
+        assert!((cents(f("key: c major\ntune: just", "3"), f("key: c major", "3")) - (-13.69)).abs() < 0.05);
+        assert!((cents(f("key: c major\ntune: 19edo", "3"), f("key: c major", "3")) - (6.0 * 1200.0 / 19.0 - 400.0)).abs() < 0.05);
+        // la modulation garde l'accordage
+        let km = parse_key_map("tune: just\nkey@b: g major");
+        assert_eq!(km[0].1.tuning, Tuning::Just);
+        // gamme N-EDO : pas de 19-EDO, et # monte d'un pas de 19-EDO
+        let k = parse_key("key: c 19edo 0 3 6 8 11 14 17").unwrap();
+        assert_eq!(k.edo, Some(19));
+        assert!((cents(f("key: c 19edo 0 3 6 8 11 14 17", "2"), f("key: c major", "1")) - 3.0 * 1200.0 / 19.0).abs() < 0.05);
+        assert!((cents(f("key: c 19edo 0 3 6 8 11 14 17", "2#"), f("key: c major", "1")) - 4.0 * 1200.0 / 19.0).abs() < 0.05);
+        // sans pas : les N notes de l'EDO
+        assert_eq!(parse_key("key: c 24edo").unwrap().scale.len(), 24);
+        // Scala en ligne : rapports, cents, période retirée
+        let sk = parse_key("key: d scala 9/8 5/4 4/3 3/2 5/3 15/8 2/1").unwrap();
+        assert_eq!(sk.scale.len(), 7);
+        assert!((sk.scale[2] - 12.0 * 1.25f64.log2()).abs() < 1e-9);
+        let ck = parse_key("scale: scl 100.0 386.314 700. 1200.0").unwrap();
+        assert_eq!(ck.scale.len(), 4);
+        assert!((ck.scale[2] - 3.86314).abs() < 1e-9);
+        // les maqâms à quarts de ton sonnent comme sur le web (plus d'arrondi)
+        assert_eq!(parse_key("key: d bayati").unwrap().scale[1], 1.5);
+        // quart de ton + tune: just : pas de NaN, le quart de ton reste juste
+        assert!(f("key: d bayati\ntune: just", "2").is_finite());
+    }
+
+    #[test]
+    fn scala_fichier_vers_ligne_key() {
+        let scl = "! meantone.scl\n!\nQuarter-comma meantone\n 3\n!\n 193.157\n 5/4\n 2/1\n";
+        assert_eq!(scala_to_key_line(scl, "c").unwrap(), "key: c scala 193.157 5/4 2/1  # Quarter-comma meantone");
+        assert!(scala_to_key_line("x\n3\n1/1\n", "c").is_err());
     }
 }

@@ -40,6 +40,7 @@ usage :
                                                .ly pour LilyPond)
   loom loudness son.wav [cible]                LUFS intégré, LRA, crête vraie
                                                (cibles : spotify youtube apple deezer club)
+  loom scala accordage.scl [tonique]           un fichier Scala → la ligne key: à coller
   loom contrepoint morceau.loom                 quintes/octaves parallèles, croisements, sauts
   loom reharm morceau.loom [jazz|tritone|iiv]  réharmonise prog: (ii-V, substitution de
                                                triton) et écrit le résultat sur la sortie
@@ -78,6 +79,7 @@ enum Command {
     Loudness { file: String, target: Option<String> },
     Reharm { file: String, how: String },
     Counterpoint { file: String },
+    Scala { file: String, tonic: String },
     /// MIDI notes per voice, tempo, sections and tuning as JSON (for a DAW).
     Bake { file: String, out: String, bars: Option<u32> },
     Tui(Option<PathBuf>),
@@ -137,6 +139,8 @@ fn parse(args: &[&str]) -> Result<Command, String> {
         },
         ["loudness", file] => Command::Loudness { file: file.to_string(), target: None },
         ["loudness", file, t] => Command::Loudness { file: file.to_string(), target: Some(t.to_string()) },
+        ["scala", file] => Command::Scala { file: file.to_string(), tonic: "c".into() },
+        ["scala", file, tonic] => Command::Scala { file: file.to_string(), tonic: tonic.to_string() },
         ["contrepoint" | "counterpoint", file] => Command::Counterpoint { file: file.to_string() },
         ["reharm", file] => Command::Reharm { file: file.to_string(), how: "jazz".into() },
         ["reharm", file, how] => Command::Reharm { file: file.to_string(), how: how.to_string() },
@@ -161,6 +165,11 @@ fn main() -> ExitCode {
         }
         Command::Loudness { file, target } => loudness(&file, target.as_deref()),
         Command::Reharm { file, how } => reharm(&file, &how),
+        Command::Scala { file, tonic } => {
+            let scl = std::fs::read_to_string(&file).map_err(|e| format!("{file} : {e}"))?;
+            println!("{}", loom_core::scala_to_key_line(&scl, &tonic)?);
+            Ok(())
+        }
         Command::Counterpoint { file } => {
             let src = std::fs::read_to_string(&file).map_err(|e| format!("{file} : {e}"))?;
             let lines = loom_core::prof::counterpoint_report(&src);
