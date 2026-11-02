@@ -208,6 +208,48 @@ pub fn render_json(src: &str, bars: u32, sr: f32) -> Vec<f32> {
     loom_core::render::render_program(src, bars as usize, sr)
 }
 
+/// The whole native engine in the browser: drums, tone models, inserts, buses and
+/// mastering, stereo, 24 bits, with the tail. The web build ships no samples: `| sample`
+/// voices fall back to their synth, see `missing_samples_json`.
+#[wasm_bindgen]
+pub fn render_engine_wav(src: &str, bars: u32, sr: u32) -> Vec<u8> {
+    loom_audio::wavout::wav_bytes(&loom_audio::render(src, bars, sr), sr, loom_audio::WavFormat::Pcm24)
+}
+
+/// Same engine, cut to exactly the bars with the tail folded onto the start, for looped playback.
+#[wasm_bindgen]
+pub fn render_loop_wav(src: &str, bars: u32, sr: u32) -> Vec<u8> {
+    loom_audio::wavout::wav_bytes(&loom_audio::render_loop(src, bars, sr), sr, loom_audio::WavFormat::Pcm24)
+}
+
+/// One voice alone, through the same master chain.
+#[wasm_bindgen]
+pub fn render_stem_wav(src: &str, name: &str, bars: u32, sr: u32) -> Vec<u8> {
+    loom_audio::wavout::wav_bytes(&loom_audio::render_stem(src, name, bars, sr), sr, loom_audio::WavFormat::Pcm24)
+}
+
+/// The voice names `render_stem_wav` takes, in order, as a JSON array.
+#[wasm_bindgen]
+pub fn stem_names_json(src: &str) -> String {
+    let mut names: Vec<String> = Vec::new();
+    for v in loom_core::Program::parse(src).voices {
+        if !names.contains(&v.name) { names.push(v.name); }
+    }
+    serde_json::to_string(&names).unwrap_or_else(|_| "[]".to_string())
+}
+
+/// The voices whose `| sample` is not in the bank, so they play on their synth, as a JSON array.
+#[wasm_bindgen]
+pub fn missing_samples_json(src: &str) -> String {
+    let bank = loom_audio::default_bank();
+    let mut names: Vec<String> = Vec::new();
+    for v in loom_core::Program::parse(src).voices {
+        let gone = v.synth.sample.as_deref().is_some_and(|i| bank.resolve(i, None, 1.0, 0).is_none());
+        if gone && !names.contains(&v.name) { names.push(v.name); }
+    }
+    serde_json::to_string(&names).unwrap_or_else(|_| "[]".to_string())
+}
+
 /// The resolved mix directives both engines share for a piece (P6-2): duck
 /// depth, master warmth drive and the master reverb algorithm. Defaults are
 /// applied Rust-side so the JS `renderFX` mirror reads plain numbers.

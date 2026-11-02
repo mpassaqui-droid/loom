@@ -99,14 +99,19 @@ impl Encoder {
     pub fn bytes_per_sample(&self) -> u32 { self.format.bytes() as u32 }
 }
 
-/// Write interleaved stereo f32 samples as a WAV file in `format`.
-pub fn write_wav_as(path: &std::path::Path, samples: &[f32], sample_rate: u32, format: WavFormat) -> std::io::Result<()> {
+/// Interleaved stereo f32 samples as the bytes of a WAV file in `format`.
+pub fn wav_bytes(samples: &[f32], sample_rate: u32, format: WavFormat) -> Vec<u8> {
     let mut enc = Encoder::new(format);
     let data_len = samples.len() as u32 * enc.bytes_per_sample();
     let mut b = format.header(sample_rate, data_len);
     b.reserve(data_len as usize);
     for s in samples { enc.push(*s, &mut b); }
-    std::fs::write(path, b)
+    b
+}
+
+/// Write interleaved stereo f32 samples as a WAV file in `format`.
+pub fn write_wav_as(path: &std::path::Path, samples: &[f32], sample_rate: u32, format: WavFormat) -> std::io::Result<()> {
+    std::fs::write(path, wav_bytes(samples, sample_rate, format))
 }
 
 #[cfg(test)]

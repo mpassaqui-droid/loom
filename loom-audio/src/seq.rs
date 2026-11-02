@@ -635,12 +635,14 @@ impl Sequencer {
                 }
                 continue;
             }
-            if s.sample.is_some() && (s.warp || s.freeze) {
+            // a sample the bank does not hold falls back to the voice's oscillator, like drums to their synth
+            let sample = s.sample.as_deref().filter(|i| self.bank.resolve(i, None, vm, 0).is_some());
+            if sample.is_some() && (s.warp || s.freeze) {
                 // JS `playSampleWarp`: one stretched hit per step at gain × velocity,
                 // whatever the chord or pitch. `| loopAt N` stretches it over N bars.
                 let wdur = s.loop_at.map_or(dur, |n| n * bar_sec);
                 let spec = self.spec(ev, freqs[0], wdur, ev.gain * vm, bar_sec);
-                let inst = s.sample.as_deref().unwrap_or_default();
+                let inst = sample.unwrap_or_default();
                 let midi = 69.0 + 12.0 * (freqs[0] / 440.0).log2();
                 let name = self.bank.resolve(inst, Some(midi), vm, 0).map_or(inst, |r| r.0);
                 if let Some(v) = SampleVoice::new_named(&self.bank, name, &spec, ev.gain * vm, 1.0, 0) {
@@ -649,7 +651,7 @@ impl Sequencer {
                 }
                 continue;
             }
-            if let Some(inst) = s.sample.as_deref() {
+            if let Some(inst) = sample {
                 let root = s.root.as_deref().and_then(note_to_freq).or_else(|| note_to_freq("c3")).unwrap_or(130.81);
                 let gain = (ev.gain * 3.0 * vm).min(1.0);
                 for f in &freqs {
