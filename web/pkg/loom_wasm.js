@@ -223,6 +223,26 @@ export function live_json(src, bars) {
 }
 
 /**
+ * The voices whose `| sample` is not in the bank, so they play on their synth, as a JSON array.
+ * @param {string} src
+ * @returns {string}
+ */
+export function missing_samples_json(src) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.missing_samples_json(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
  * consumes these on top of the `schedule_bar_json` events — same Rust defaults.
  * @param {string} src
@@ -288,6 +308,24 @@ export function reharm(src, how) {
 }
 
 /**
+ * The whole native engine in the browser: drums, tone models, inserts, buses and
+ * mastering, stereo, 24 bits, with the tail. The web build ships no samples: `| sample`
+ * voices fall back to their synth, see `missing_samples_json`.
+ * @param {string} src
+ * @param {number} bars
+ * @param {number} sr
+ * @returns {Uint8Array}
+ */
+export function render_engine_wav(src, bars, sr) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.render_engine_wav(ptr0, len0, bars, sr);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
  * P6-1 note engine (dry) + note inserts (`| echo/flange/phaser`) + sends
  * (`| reverb`/`| delay`) into the master reverb + ping-pong + duck + warmth
@@ -328,6 +366,41 @@ export function render_json(src, bars, sr) {
     var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v2;
+}
+
+/**
+ * Same engine, cut to exactly the bars with the tail folded onto the start, for looped playback.
+ * @param {string} src
+ * @param {number} bars
+ * @param {number} sr
+ * @returns {Uint8Array}
+ */
+export function render_loop_wav(src, bars, sr) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.render_loop_wav(ptr0, len0, bars, sr);
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * One voice alone, through the same master chain.
+ * @param {string} src
+ * @param {string} name
+ * @param {number} bars
+ * @param {number} sr
+ * @returns {Uint8Array}
+ */
+export function render_stem_wav(src, name, bars, sr) {
+    const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.render_stem_wav(ptr0, len0, ptr1, len1, bars, sr);
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
@@ -412,6 +485,26 @@ export function schedule_bar_json(src, bar) {
         const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.schedule_bar_json(ptr0, len0, bar);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
+ * The voice names `render_stem_wav` takes, in order, as a JSON array.
+ * @param {string} src
+ * @returns {string}
+ */
+export function stem_names_json(src) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(src, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.stem_names_json(ptr0, len0);
         deferred2_0 = ret[0];
         deferred2_1 = ret[1];
         return getStringFromWasm0(ret[0], ret[1]);

@@ -71,6 +71,11 @@ export function layout_take(_new: Float32Array, new_bars: number, first_bar: num
 export function live_json(src: string, bars: number): string;
 
 /**
+ * The voices whose `| sample` is not in the bank, so they play on their synth, as a JSON array.
+ */
+export function missing_samples_json(src: string): string;
+
+/**
  * Serialize one piece's resolved mix settings (P6-2). The JS `renderFX` mirror
  * consumes these on top of the `schedule_bar_json` events — same Rust defaults.
  */
@@ -86,6 +91,13 @@ export function program_info_json(src: string): string;
  * réécrit, ou `ERR:` suivi de la raison.
  */
 export function reharm(src: string, how: string): string;
+
+/**
+ * The whole native engine in the browser: drums, tone models, inserts, buses and
+ * mastering, stereo, 24 bits, with the tail. The web build ships no samples: `| sample`
+ * voices fall back to their synth, see `missing_samples_json`.
+ */
+export function render_engine_wav(src: string, bars: number, sr: number): Uint8Array;
 
 /**
  * Render `bars` bars of `src` through the **full P6-2 mono pipeline**: the
@@ -107,6 +119,16 @@ export function render_fx_json(src: string, bars: number, sr: number): Float32Ar
  * numeric DSP parity. Returns a `Float32Array`.
  */
 export function render_json(src: string, bars: number, sr: number): Float32Array;
+
+/**
+ * Same engine, cut to exactly the bars with the tail folded onto the start, for looped playback.
+ */
+export function render_loop_wav(src: string, bars: number, sr: number): Uint8Array;
+
+/**
+ * One voice alone, through the same master chain.
+ */
+export function render_stem_wav(src: string, name: string, bars: number, sr: number): Uint8Array;
 
 /**
  * Render through the full pipeline and encode as a 16-bit mono WAV (normalized
@@ -131,6 +153,11 @@ export function scala_key_line(scl: string, tonic: string): string;
  * Schedule one bar and return its events as JSON for the JS audio layer.
  */
 export function schedule_bar_json(src: string, bar: number): string;
+
+/**
+ * The voice names `render_stem_wav` takes, in order, as a JSON array.
+ */
+export function stem_names_json(src: string): string;
 
 /**
  * `| stretch` : `left` (et `right`, vide en mono) étirés à `out_len` trames, hauteur
