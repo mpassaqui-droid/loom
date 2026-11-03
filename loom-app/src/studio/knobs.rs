@@ -4,8 +4,8 @@
 //! |-----------|------------|---------|------------------------------|
 //! | VOL       | 0..150     | 80      | `set_volume(v / 100)`        |
 //! | SWING     | 0..60      | 0       | `set_swing(v / 100)`         |
-//! | ECHO      | 0..100     | 15      | `set_echo(v)`                |
-//! | SPACE     | 0..100     | 20      | `set_space(v)`               |
+//! | ECHO      | 0..100     | 0       | `set_echo(v)`                |
+//! | SPACE     | 0..100     | 0       | `set_space(v)`               |
 //! | EQ ×3     | -12..12 dB | 0, 0, 2 | `set_eq(low, mid, high)`     |
 //!
 //! (The browser's VOL stops at 100; the native engine allows up to 150 %.)
@@ -73,8 +73,8 @@ impl Knob {
         match self {
             Knob::Volume => 80.0,
             Knob::Swing => 0.0,
-            Knob::Echo => 15.0,
-            Knob::Space => 20.0,
+            Knob::Echo => 0.0,
+            Knob::Space => 0.0,
             Knob::EqLow | Knob::EqMid => 0.0,
             Knob::EqHigh => 2.0,
         }
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn defaults_and_ranges_match_the_browser() {
         let k = Knobs::default();
-        assert_eq!((k.swing, k.echo, k.space, k.eq_low, k.eq_mid, k.eq_high), (0.0, 15.0, 20.0, 0.0, 0.0, 2.0));
+        assert_eq!((k.swing, k.echo, k.space, k.eq_low, k.eq_mid, k.eq_high), (0.0, 0.0, 0.0, 0.0, 0.0, 2.0));
         assert_eq!(Knob::Swing.range(), (0.0, 60.0, 1.0));
         assert_eq!(Knob::EqMid.range(), (-12.0, 12.0, 0.5));
     }
@@ -206,10 +206,10 @@ mod tests {
         assert_eq!(k.eq_low, -1.5);
         k.set(Knob::Swing, 99.0);
         assert_eq!(k.swing, 60.0);
-        k.nudge(Knob::Echo, -1.0);
-        assert_eq!(k.echo, 14.0);
+        k.nudge(Knob::Echo, 1.0);
+        assert_eq!(k.echo, 1.0);
         assert_eq!(Knob::EqLow.format(-1.5), "-1.5");
-        assert_eq!(k.text(Knob::Space), "SPACE 20");
+        assert_eq!(k.text(Knob::Space), "SPACE 0");
     }
 
     #[test]

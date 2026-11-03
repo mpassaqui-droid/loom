@@ -116,6 +116,35 @@ pub fn write_wav(path: &std::path::Path, samples: &[f32], sample_rate: u32) -> s
 mod tests {
     fn peak(x: &[f32]) -> f32 { x.iter().fold(0f32, |m, s| m.max(s.abs())) }
 
+    /// Loudest sample of a one-hit bar from `from` seconds to the end of the bar.
+    fn tail(src: &str, from: f32) -> f32 {
+        let x = super::render(src, 1, 22050);
+        peak(&x[(from * 22050.0) as usize * 2..4 * 22050 * 2])
+    }
+
+    #[test]
+    fn a_voice_with_no_send_has_no_room_around_it() {
+        for line in ["bass: c3 . . . . . . . . . . . . . . . | sine | gate 0.1", "hat: x . . . . . . . . . . . . . . .", "snare: x . . . . . . . . . . . . . . .", "kick: x . . . . . . . . . . . . . . ."] {
+            let t = tail(&format!("bpm: 60\n{line}\n"), 1.5);
+            assert!(t < 1e-4, "{line}: {t} left 1.5 s later");
+        }
+    }
+
+    #[test]
+    fn a_reverb_send_is_heard_and_scales() {
+        let on = |v: &str, r: &str| tail(&format!("bpm: 60\n{v} | {r}\n"), 0.8);
+        for v in ["bass: c3 . . . . . . . . . . . . . . . | sine | gate 0.1", "snare: x . . . . . . . . . . . . . . ."] {
+            let (none, half, full) = (on(v, "gain 0.2"), on(v, "reverb 0.5"), on(v, "reverb 1"));
+            assert!(half > none * 4.0 && full > half * 1.3, "{v}: {none} {half} {full}");
+        }
+    }
+
+    #[test]
+    fn a_delay_send_is_heard_and_a_dry_voice_has_none() {
+        let t = |r: &str| tail(&format!("bpm: 60\nbass: c3 . . . . . . . . . . . . . . . | sine | gate 0.1{r}\n"), 0.6);
+        assert!(t(" | delay 0.8") > t("") * 4.0, "{} {}", t(" | delay 0.8"), t(""));
+    }
+
     #[test]
     fn a_missing_sample_falls_back_to_the_oscillator() {
         let src = "bpm: 120\nlead: c3 e3 g3 c4 | sample does_not_exist | gain 0.3\n";

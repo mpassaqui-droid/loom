@@ -603,7 +603,7 @@ impl Sequencer {
                 // The browser's synth drums ignore `| gain` (meant for samples);
                 // natively it may only turn a drum DOWN from the 0.22 default.
                 if let Some(d) = Drum::new(&ev.voice, self.sr, vm * (ev.gain / 0.22).min(1.0), self.seed) {
-                    self.queue.push(Queued { start, note: Note::drum(d, &ev.voice, ev.pan, Route { reverb: 0.0, delay: 0.0, ..route.clone() }) });
+                    self.queue.push(Queued { start, note: Note::drum(d, &ev.voice, ev.pan, route.clone()) });
                 }
             }
             return;

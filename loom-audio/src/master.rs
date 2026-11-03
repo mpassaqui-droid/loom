@@ -2,7 +2,7 @@
 //! chain — the port of the browser's `buildGraph()` and `busFor()`.
 //!
 //! ```text
-//! voices ─► bus: submixes (gain → lp/hp) ─┐        ┌─ reverb send ─► SPACE reverb ─ ×0.18 ─┐
+//! voices ─► bus: submixes (gain → lp/hp) ─┐        ┌─ reverb send ─► SPACE reverb ─ ×0.36 ─┐
 //!           main bus ◄────────────────────┴────────┼─ full ────────► ECHO ping-pong ─ ×0.15 ─┤
 //! voice `| reverb` / `| delay` sends ───────────────┘                                        │
 //!           main bus ─► duck (scGain) ───────────────────────────────────────────────────────┤
@@ -22,10 +22,11 @@ use dynamics::{Compressor, Limiter, Saturator};
 use loom_core::{BusConfig, MixSettings, Room};
 use reverb::{PingPong, Reverb};
 
-/// The SPACE slider's default (20) → `space/100*0.9`.
-const SPACE_SEND: f32 = 0.20 * 0.9;
-/// The ECHO slider's default (15) → `echo/100`.
-const ECHO_SEND: f32 = 0.15;
+/// How loud the reverb comes back: a voice at `| reverb 1` is as wet as it was when
+/// the whole mix also fed the room.
+const SPACE_WET: f32 = 0.36;
+/// How loud the delay comes back, same idea.
+const ECHO_WET: f32 = 0.30;
 /// The master EQ sliders' defaults (dB). The browser's high shelf reads the
 /// `eqHigh` slider (default 2); its 2.5 dB fallback only applies without the slider.
 const EQ_LOW_DB: f32 = 0.0;
@@ -306,8 +307,8 @@ impl Master {
             auto_gain: 1.0,
             auto_coef: 1.0 - (-1.0 / (0.01 * sr)).exp(),
             auto_tick: 0,
-            space_send: SPACE_SEND,
-            echo_send: ECHO_SEND,
+            space_send: 0.0,
+            echo_send: 0.0,
             eq_db: [EQ_LOW_DB, EQ_MID_DB, EQ_HIGH_DB],
             hpf: [hpf.clone(), hpf],
             glue: Compressor::new(sr, -14.0, 8.0, 3.5, 0.004, 0.22),
@@ -436,17 +437,18 @@ impl Master {
             bus.add(y);
             if b.reverb > 0.0 { reverb_in.add(y.scale(b.reverb)); }
         }
-        // the whole bus feeds both effects at full level; voices add their sends
-        reverb_in.add(bus);
+        // Only what asks for space gets it: the voices' sends, and the whole bus only if
+        // the SPACE or ECHO knob is turned up. At rest the mix stays dry.
+        if self.space_send > 0.0 { reverb_in.add(bus.scale(self.space_send / SPACE_WET)); }
         let mut delay_in = clean(input.delay);
-        delay_in.add(bus);
+        if self.echo_send > 0.0 { delay_in.add(bus.scale(self.echo_send / ECHO_WET)); }
         let space = self.reverb.process(reverb_in);
         let echo = self.delay.process(delay_in);
 
         self.duck_gain += (1.0 - self.duck_gain) * self.duck_coef;
         let mut mix = bus.scale(self.duck_gain);
-        mix.add(echo.scale(self.echo_send));
-        mix.add(space.scale(self.space_send));
+        mix.add(echo.scale(ECHO_WET));
+        mix.add(space.scale(SPACE_WET));
         // each `send:` return processes its accumulated stream and its wet output
         // comes back in parallel (the dry bus is untouched)
         let k = self.auto_coef;

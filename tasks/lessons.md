@@ -38,3 +38,5 @@ J'ai annoncé « la page suit la fenêtre » sans l'avoir vue : le `expr $i3-$i1
 PUIS remettre le build de vente. Munay ne doit pas servir de testeur.
 
 - 03/10/2026 : un test « silencieux » dans le navigateur jouait vraiment. Les batteries ignorent `| gain 0`, et j'ai laissé la lecture tourner (Munay : « is loom sounding ? »). Règle : tester avec une voix mélodique à gain 0 (jamais une batterie), et cliquer STOP dans le même appel que RUN.
+
+- 03/11/2026 : Munay a entendu une réverbe partout. Le maître envoyait tout le bus dans la réverbe et le délai par défaut (SPACE 20, ECHO 15), hérités des curseurs du navigateur, et `| reverb 1` changeait à peine le son. Aucun test ne le voyait car ils coupaient SPACE et ECHO pour avoir des silences propres. Règle : un test de son mesure aussi les réglages par défaut, et un effet n'est actif que si le code le demande.
